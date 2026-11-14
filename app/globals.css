@@ -1,299 +1,816 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Design tokens derived from Langfuse (MIT) web/src/styles/globals.css, Copyright (c) 2023-2026 ClickHouse, Inc. */
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
-:root{--background:#fff;--foreground:#09090b;--muted:#71717a;--subtle:#a1a1aa;--border:#e4e4e7;--soft:#f4f4f5;--soft-2:#fafafa;--accent:#18181b;--radius:10px}
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:var(--background);color:var(--foreground);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px}
-button,input,textarea{font:inherit}
-button{color:inherit}
-.app-shell{min-height:100vh;display:grid;grid-template-columns:238px minmax(0,1fr)}
-.sidebar{height:100vh;position:sticky;top:0;border-right:1px solid var(--border);padding:22px 15px 14px;display:flex;flex-direction:column;background:#fff}
-.brand{display:flex;align-items:center;gap:10px;padding:0 10px 34px;text-decoration:none;color:#09090b;font-weight:800;font-size:15px;letter-spacing:1.8px}
-.brand-mark{width:27px;height:27px;border-radius:7px;background:#09090b;color:white;display:grid;place-items:center}
-.workspace-label,.overline{font-size:9px;letter-spacing:1.5px;font-weight:700;color:var(--muted)}
-.workspace-label{padding:0 11px 10px}
-.nav-item{width:100%;display:flex;align-items:center;gap:10px;padding:10px 11px;border:0;border-radius:7px;background:transparent;color:#52525b;text-align:left;font-size:12px;cursor:pointer;margin-bottom:3px}
-.nav-item.active{background:#f4f4f5;color:#09090b;font-weight:600}
-.nav-count{margin-left:auto;font-size:10px;color:#71717a}
-.sidebar-bottom{margin-top:auto}
-.secure-card{border:1px solid var(--border);border-radius:9px;padding:13px;margin:0 2px 16px}
-.secure-icon{width:28px;height:28px;border:1px solid var(--border);border-radius:7px;display:grid;place-items:center;margin-bottom:12px}
-.secure-card>b{font-size:11px}
-.secure-card p{font-size:10px;color:var(--muted);line-height:1.55;margin:5px 0 12px}
-.secure-card>span{font-size:8px;letter-spacing:1px;color:var(--muted);display:flex;align-items:center;gap:7px}
-.secure-card i,.demo-pill i{width:6px;height:6px;border-radius:50%;background:#a1a1aa;display:inline-block}
-.profile{border-top:1px solid var(--border);padding:14px 4px 0;display:flex;align-items:center;gap:9px}
-.avatar{width:29px;height:29px;border-radius:50%;background:#f4f4f5;border:1px solid var(--border);display:grid;place-items:center;font-size:9px;font-weight:700}
-.profile>div:nth-child(2){display:grid;gap:3px;flex:1}
-.profile b{font-size:10px}.profile small{font-size:9px;color:var(--muted)}
-.profile>svg{color:var(--muted)}
-.main-area{min-width:0}
-.topbar{height:61px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 38px}
-.breadcrumbs{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted)}
-.breadcrumbs .slash{color:#d4d4d8}.breadcrumbs b{color:#18181b;font-weight:600}
-.top-actions{display:flex;align-items:center;gap:14px}
-.demo-pill{display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:20px;padding:6px 10px;color:#52525b;font-size:9px}
-.icon-button{width:29px;height:29px;border:1px solid var(--border);border-radius:7px;background:white;display:grid;place-items:center;color:#71717a}
-.content{max-width:1440px;margin:0 auto;padding:35px 38px 24px}
-.page-heading{display:flex;justify-content:space-between;align-items:end;margin-bottom:23px}
-.page-heading h1{font-size:27px;letter-spacing:-1.2px;margin:7px 0 5px;font-weight:700}
-.page-heading p,.card-heading p{margin:0;color:var(--muted);font-size:11px}
-.button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:7px;padding:9px 12px;font-size:10px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
-.button-dark{background:#09090b;color:#fff;border:1px solid #09090b}
-.button-dark:hover{background:#27272a}
-.button-outline{background:#fff;color:#18181b;border:1px solid var(--border)}
-.button-outline:hover{background:var(--soft)}
-.button:disabled{opacity:.4;cursor:not-allowed}
-.notice{display:flex;align-items:center;gap:10px;background:#fafafa;border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:17px;color:#52525b;font-size:10px;line-height:1.5}
-.notice>svg{flex:none;color:#71717a}.notice b{color:#18181b}
-.notice button{margin-left:auto;border:0;background:transparent;color:#a1a1aa;padding:2px;display:grid;place-items:center}
-.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:17px}
-.metric-card,.card{background:white;border:1px solid var(--border);border-radius:var(--radius)}
-.metric-card{padding:14px 16px}
-.metric-top{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600;color:#3f3f46}
-.level-dot{width:7px;height:7px;border-radius:50%;background:#18181b}
-.level-dot.critical{background:#18181b}.level-dot.grey{background:#a1a1aa}.level-dot.uncritical{background:#d4d4d8}
-.metric-context{margin-left:auto;font-size:9px;font-weight:400;color:#a1a1aa}
-.metric-number{font-size:25px;font-weight:600;letter-spacing:-1px;margin-top:10px}
-.workspace-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(290px,.85fr);gap:15px;align-items:start}
-.left-column{display:grid;gap:15px;min-width:0}
-.card{padding:18px}
-.card-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
-.card-heading h2{font-size:13px;letter-spacing:-.2px;margin:0 0 5px;font-weight:650}
-.card-heading p{font-size:10px}
-.step-label{font-size:8px;color:#a1a1aa;letter-spacing:1px;font-weight:600}
-.upload-zone{width:100%;min-height:132px;border:1px dashed #d4d4d8;border-radius:8px;background:#fafafa;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:#52525b}
-.upload-zone:hover{border-color:#a1a1aa;background:#f8f8f8}
-.upload-icon{width:31px;height:31px;border:1px solid var(--border);border-radius:8px;background:white;display:grid;place-items:center;color:#52525b}
-.upload-zone>b{font-size:10px;color:#27272a}.upload-zone>b span{font-weight:400;color:#71717a}
-.upload-zone small{font-size:9px;color:#a1a1aa}
-.separator{display:flex;align-items:center;gap:11px;margin:15px 0;color:#a1a1aa;font-size:8px;letter-spacing:1px}
-.separator span{height:1px;background:#eeeef0;flex:1}
-textarea{width:100%;border:1px solid var(--border);border-radius:7px;padding:10px 11px;resize:vertical;outline:none;font-size:10px;color:#18181b;background:white;min-height:88px}
-textarea::placeholder{color:#a1a1aa}
-textarea:focus,.search-box:focus-within{border-color:#a1a1aa;box-shadow:0 0 0 2px #f4f4f5}
-.card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
-.card-footer>span{display:flex;align-items:center;gap:6px;color:#a1a1aa;font-size:9px}
-.library-card{padding-bottom:7px}
-.count-badge{display:inline-grid;place-items:center;min-width:19px;height:19px;border:1px solid var(--border);border-radius:5px;font-size:9px;font-weight:500;color:#71717a;margin-left:5px;vertical-align:1px}
-.search-box{height:29px;display:flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:6px;padding:0 8px;color:#a1a1aa}
-.search-box input{width:120px;border:0;outline:0;font-size:9px;background:transparent;color:#18181b}
-.search-box input::placeholder{color:#a1a1aa}
-.table-head,.document-row{display:grid;grid-template-columns:minmax(160px,1.8fr) .55fr .65fr .8fr 16px;align-items:center;gap:10px}
-.table-head{padding:9px 8px;border-bottom:1px solid var(--border);font-size:8px;letter-spacing:.8px;color:#a1a1aa;font-weight:600}
-.document-row{width:100%;padding:11px 8px;border:0;border-bottom:1px solid #f0f0f1;background:white;text-align:left;cursor:pointer}
-.document-row:last-of-type{border-bottom:0}
-.document-row:hover,.document-row.selected{background:#fafafa}
-.file-name{display:flex;align-items:center;gap:9px;min-width:0}
-.file-icon{width:29px;height:29px;border:1px solid var(--border);border-radius:6px;display:grid;place-items:center;color:#71717a;flex:none}
-.file-name>span:last-child{display:grid;gap:4px;min-width:0}
-.file-name b{font-size:9px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.file-name small{font-size:8px;color:#a1a1aa}
-.file-type,.file-size{font-size:9px;color:#71717a}
-.status{display:inline-flex;padding:4px 7px;border-radius:5px;font-size:8px;font-weight:500}
-.status.analysed{background:#f4f4f5;color:#3f3f46}.status.pending{background:#fafafa;border:1px solid #eeeef0;color:#a1a1aa}
-.row-chevron{color:#a1a1aa;transform:rotate(-90deg)}
-.analysis-card{min-width:0}
-.analysis-icon{width:29px;height:29px;border:1px solid var(--border);border-radius:7px;display:grid;place-items:center;color:#52525b}
-.active-document{display:flex;align-items:center;gap:8px;padding:10px;background:#fafafa;border:1px solid #f0f0f1;border-radius:7px;color:#71717a;margin-bottom:4px;min-width:0}
-.active-document b{font-size:9px;color:#3f3f46;overflow-wrap:anywhere}
-.finding{padding:13px 1px;border-bottom:1px solid #eeeef0}
-.finding-head{display:flex;align-items:center;gap:8px;color:#a1a1aa;font-size:9px;margin-bottom:7px}
-.level-tag{font-size:8px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#3f3f46}
-.level-tag.grey{color:#71717a}.level-tag.uncritical{color:#a1a1aa}
-.finding-value{font-size:11px;font-weight:600}
-.finding p{margin:5px 0 0;color:#a1a1aa;font-size:9px}
-.consent-row{display:flex;align-items:center;gap:7px;margin-top:10px;color:#52525b;font-size:9px;cursor:pointer}
-.consent-row input{width:13px;height:13px;accent-color:#18181b}
-.blocked-row,.allowed-row{display:flex;align-items:center;gap:6px;margin-top:9px;font-size:9px;color:#52525b}
-.allowed-row{color:#71717a}
-.policy-note{display:flex;gap:9px;padding:11px;background:#fafafa;border:1px solid #eeeef0;border-radius:7px;margin-top:14px;color:#71717a;font-size:9px;line-height:1.55}
-.policy-note svg{flex:none;color:#52525b}.policy-note b{color:#27272a;font-size:9px}
-.full-button{width:100%;margin-top:14px}
-.empty-analysis,.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:35px 10px;color:#a1a1aa;text-align:center;font-size:10px}
-.empty-analysis svg{color:#d4d4d8}.empty-analysis b{color:#52525b;font-size:10px}.empty-analysis span{font-size:9px}
-.footer{display:flex;justify-content:space-between;gap:14px;margin-top:19px;color:#a1a1aa;font-size:8px;letter-spacing:.6px}
-.footer span:nth-child(2){letter-spacing:0;text-align:center}
-@media(max-width:1000px){.app-shell{grid-template-columns:200px minmax(0,1fr)}.content{padding:28px 22px}.topbar{padding:0 22px}.workspace-grid{grid-template-columns:minmax(0,1fr)}.analysis-card{order:2}}
-@media(max-width:650px){.app-shell{display:block}.sidebar{height:auto;position:relative;border-right:0;border-bottom:1px solid var(--border);padding:13px 16px;display:block}.brand{padding:0}.workspace-label,.nav-item,.sidebar-bottom{display:none}.topbar{height:49px;padding:0 16px}.content{padding:24px 15px}.page-heading{align-items:flex-start;gap:12px}.page-heading h1{font-size:24px}.page-heading p{max-width:230px;line-height:1.5}.page-heading>.button{white-space:nowrap;padding:9px}.metrics{gap:7px}.metric-card{padding:11px 9px}.metric-top{font-size:9px;gap:5px}.metric-context{display:none}.metric-number{font-size:22px;margin-top:9px}.card{padding:14px}.workspace-grid{gap:12px}.table-head,.document-row{grid-template-columns:minmax(130px,1.7fr) .5fr .65fr 16px;gap:6px}.table-head span:nth-child(4),.document-row>span:nth-child(4){display:none}.search-box input{width:85px}.footer{font-size:7px}.footer span:nth-child(2){display:none}}
+@theme static {
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    var(--font-plex-mono, "IBM Plex Mono"), ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
+  /* Weight ROLES — three weights exist in this app: regular, medium and bold.
+     All are font-relative, so components never hardcode numbers.
+     `--font-weight-bold` deliberately overrides Tailwind's built-in bold
+     (700): the `font-bold` utility IS the bold role. Medium is for names that
+     identify an entity, e.g. the org and project switchers. font-semibold /
+     raw numbers are drift. */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 600;
+}
 
-/* Simplified overview with compact sub-navigation */
-.app-shell{display:block;min-height:100vh;background:#fff}
-.sidebar{display:none}
-.main-area{width:100%}
-.topbar{height:58px;padding:0 max(22px,calc((100vw - 1040px)/2));}
-.breadcrumbs{font-size:10px}
-.content{max-width:1040px;padding:38px 24px 26px}
-.simple-app{min-height:100vh;background:#fff}
-.simple-header{height:58px;border-bottom:1px solid #e4e4e7;display:flex;align-items:center;justify-content:space-between;padding:0 max(22px,calc((100vw - 1040px)/2))}
-.simple-brand{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;letter-spacing:1.5px}
-.simple-brand>span{width:27px;height:27px;background:#09090b;color:white;border-radius:7px;display:grid;place-items:center}
-.simple-env{display:flex;align-items:center;gap:7px;font-size:8px;letter-spacing:1px;color:#71717a}
-.simple-env i{width:6px;height:6px;border-radius:50%;background:#a1a1aa}
-.simple-content{max-width:1040px;margin:0 auto;padding:40px 24px 25px}
-.simple-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:23px}
-.simple-title p{font-size:9px;letter-spacing:1.4px;color:#a1a1aa;font-weight:700;margin:0 0 7px}
-.simple-title h1{font-size:27px;letter-spacing:-1px;margin:0;font-weight:700}
-.subtabs{display:flex;gap:23px;border-bottom:1px solid #e4e4e7;margin-bottom:18px}
-.subtab{border:0;background:transparent;padding:0 1px 12px;font-size:11px;color:#71717a;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-.subtab.active{color:#09090b;font-weight:600;border-bottom-color:#09090b}
-.subtab span{margin-left:7px;font-size:9px;color:#71717a;background:#f4f4f5;border-radius:10px;padding:2px 6px}
-.simple-notice{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#fafafa;border:1px solid #e4e4e7;border-radius:7px;color:#71717a;font-size:9px;margin-bottom:17px}
-.simple-notice svg{flex:none}.simple-notice b{color:#27272a}
-.simple-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
-.simple-stats>div,.simple-card{border:1px solid #e4e4e7;border-radius:9px;background:white}
-.simple-stats>div{padding:14px 16px;display:grid;grid-template-columns:1fr auto;align-items:center}
-.simple-stats span{font-size:9px;font-weight:600;letter-spacing:.7px;color:#52525b}
-.simple-stats b{grid-column:2;grid-row:1/3;font-size:24px;font-weight:600;letter-spacing:-1px}
-.simple-stats small{font-size:9px;color:#a1a1aa;margin-top:5px}
-.simple-card{padding:17px;margin-bottom:13px}
-.simple-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
-.simple-card-head h2{font-size:12px;margin:0 0 4px;font-weight:650}
-.simple-card-head p{font-size:9px;color:#a1a1aa;margin:0}
-.simple-card-head>svg{color:#71717a}
-.text-button{border:0;background:transparent;color:#52525b;font-size:9px;cursor:pointer}
-.simple-doc-row{width:100%;display:grid;grid-template-columns:20px minmax(0,1fr) 90px 65px;gap:10px;align-items:center;text-align:left;padding:11px 4px;border:0;border-top:1px solid #f0f0f1;background:white;cursor:pointer}
-.simple-doc-row:hover,.simple-doc-row.chosen{background:#fafafa}
-.simple-doc-row>svg{color:#71717a}
-.simple-doc-row>b{font-size:10px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.simple-doc-row>small{font-size:9px;color:#a1a1aa}
-.simple-doc-row>span{font-size:9px;color:#71717a;text-align:right}
-.policy-summary .simple-card-head{margin-bottom:6px}
-.policy-line{display:flex;justify-content:space-between;gap:16px;padding:11px 2px;border-top:1px solid #f0f0f1;font-size:10px}
-.policy-line>b{font-weight:600}.policy-line>span{color:#71717a;text-align:right}
-.simple-documents{display:grid;grid-template-columns:1fr 1fr;gap:13px;align-items:start}
-.simple-documents>.simple-card:last-child{grid-column:1/-1}
-.simple-upload{width:100%;min-height:100px;border:1px dashed #d4d4d8;border-radius:7px;background:#fafafa;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:#52525b;cursor:pointer;margin-bottom:12px}
-.simple-upload b{font-size:10px}.simple-upload small{font-size:9px;color:#a1a1aa}
-.simple-documents textarea{min-height:76px}
-.simple-form-foot{display:flex;justify-content:space-between;align-items:center;margin-top:9px}
-.simple-form-foot small{font-size:9px;color:#a1a1aa}
-.simple-search{height:28px;border:1px solid #e4e4e7;border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;color:#a1a1aa}
-.simple-search input{width:100px;border:0;outline:0;font-size:9px}
-.simple-finding{padding:11px 0;border-top:1px solid #f0f0f1}
-.simple-finding>div{display:flex;gap:10px;margin-bottom:6px;font-size:8px;color:#71717a}
-.simple-finding>div b{font-size:8px;color:#52525b}
-.simple-finding>strong{font-size:10px}.simple-finding p{font-size:9px;color:#a1a1aa;margin:4px 0}
-.simple-finding>small{font-size:8px;color:#71717a}
-.simple-empty{font-size:10px;color:#a1a1aa;padding:20px 5px;text-align:center}
-.rules-card{max-width:760px}
-.rules-footnote{font-size:9px;color:#a1a1aa;margin:13px 0 0}
-.simple-footer{display:flex;justify-content:space-between;gap:15px;margin-top:18px;color:#a1a1aa;font-size:8px}
-.simple-footer span:last-child{text-align:right}
-@media(max-width:700px){.simple-content{padding:27px 15px}.simple-header{padding:0 15px}.simple-title h1{font-size:24px}.simple-stats{gap:7px}.simple-stats>div{padding:11px 9px}.simple-stats b{font-size:20px}.simple-stats span{font-size:8px}.simple-stats small{font-size:8px}.simple-documents{grid-template-columns:1fr}.simple-documents>.simple-card:last-child{grid-column:auto}.simple-doc-row{grid-template-columns:20px minmax(0,1fr) 70px 55px}.simple-footer{font-size:7px}.simple-notice{align-items:flex-start;line-height:1.5}.subtabs{gap:18px}}
+@theme inline {
+  /* Disable unused built-in Tailwind color palettes. */
+  --color-lime-*: initial;
+  --color-cyan-*: initial;
+  --color-sky-*: initial;
+  --color-fuchsia-*: initial;
+  --color-rose-*: initial;
+  --color-neutral-*: initial;
+  --color-stone-*: initial;
+  --color-slate-*: initial;
+  --color-zinc-*: initial;
+  --color-indigo-*: initial;
 
+  /* TODO: Disable the remaining default palettes: red, orange, amber, yellow,
+     green, emerald, teal, blue, violet, purple, pink, gray. */
 
-/* Cato minimal interface */
-html,body{background:#fff;color:#171717;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px}
-.cato-shell{min-height:100vh;background:#fff}
-.cato-header{height:62px;border-bottom:1px solid #e7e7e7;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:0 max(24px,calc((100vw - 1120px)/2));gap:30px}
-.cato-logo{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;letter-spacing:-.6px;color:#171717;text-decoration:none}
-.cato-logo>span{display:grid;place-items:center;width:25px;height:25px;border:1px solid #dedede;border-radius:6px}
-.top-tabs{height:100%;display:flex;align-items:center;gap:25px}
-.top-tab{height:100%;position:relative;border:0;background:transparent;color:#777;font-size:12px;cursor:pointer;padding:0 1px}
-.top-tab.active{color:#171717;font-weight:600}
-.top-tab.active:after{content:"";position:absolute;bottom:-1px;left:0;right:0;height:2px;background:#171717}
-.top-tab small{font-size:9px;margin-left:6px;color:#888}
-.environment{justify-self:end;display:flex;align-items:center;gap:7px;color:#777;font-size:9px;letter-spacing:1px}
-.environment i{width:6px;height:6px;border-radius:50%;background:#aaa}
-.cato-content{max-width:1120px;margin:0 auto;padding:66px 28px 35px}
-.page-intro{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:27px}
-.eyebrow{font-size:9px;letter-spacing:1.5px;color:#999;font-weight:600;margin-bottom:10px}
-.page-intro h1{font-size:32px;line-height:1.1;letter-spacing:-1.5px;font-weight:600;margin:0 0 8px}
-.page-intro p{margin:0;color:#777;font-size:13px}
-.primary-action{height:35px;padding:0 12px;border:1px solid #222;border-radius:4px;background:#171717;color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:550;cursor:pointer;white-space:nowrap}
-.primary-action:hover{background:#333}
-.primary-action:disabled{opacity:.4;cursor:not-allowed}
-.prototype-note{display:flex;align-items:center;gap:9px;padding:11px 0;border-top:1px solid #e9e9e9;border-bottom:1px solid #e9e9e9;color:#777;font-size:10px;margin-bottom:34px}
-.prototype-note svg{flex:none;color:#888}
-.prototype-note b{color:#333;font-weight:600}
-.overview-counts{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e7e7e7;border-bottom:1px solid #e7e7e7;margin-bottom:43px}
-.overview-counts>div{padding:17px 20px 17px 0;display:grid;grid-template-columns:1fr auto;align-items:center}
-.overview-counts>div+div{border-left:1px solid #e7e7e7;padding-left:22px}
-.overview-counts span{font-size:9px;letter-spacing:1px;font-weight:600;color:#777}
-.overview-counts strong{grid-column:2;grid-row:1/3;font-size:25px;line-height:1;font-weight:550;letter-spacing:-1px}
-.overview-counts small{font-size:10px;color:#999;margin-top:5px}
-.plain-section{margin:0 0 42px}
-.section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:14px}
-.section-heading h2{font-size:15px;font-weight:600;letter-spacing:-.3px;margin:0 0 5px}
-.section-heading p{font-size:11px;color:#999;margin:0}
-.subtle-link{display:flex;align-items:center;gap:5px;border:0;background:transparent;color:#666;font-size:10px;cursor:pointer;padding:4px 0}
-.doc-table-head,.doc-table-row{display:grid;grid-template-columns:minmax(0,1fr) 100px 110px 120px;gap:14px;align-items:center}
-.doc-table-head{padding:10px 12px;border-top:1px solid #e7e7e7;border-bottom:1px solid #e7e7e7;color:#999;font-size:8px;letter-spacing:1px;font-weight:600}
-.doc-table-row{width:100%;text-align:left;padding:13px 12px;border:0;border-bottom:1px solid #eee;background:#fff;color:#777;font-size:10px;cursor:pointer}
-.doc-table-row:hover,.doc-table-row.selected{background:#fafafa}
-.doc-title{display:flex;align-items:center;gap:10px;min-width:0;color:#555}
-.doc-title svg{flex:none;color:#999}
-.doc-title b{font-size:11px;color:#333;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.doc-status{color:#888}
-.empty-line{padding:22px 12px;border-bottom:1px solid #eee;color:#999;font-size:11px}
-.policy-overview{margin-top:2px}
-.policy-columns{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e7e7e7}
-.policy-columns>div{padding:16px 18px 5px 0}
-.policy-columns>div+div{border-left:1px solid #e7e7e7;padding-left:20px}
-.policy-columns b{font-size:11px;font-weight:600}
-.policy-columns p{font-size:10px;color:#888;line-height:1.5;margin:6px 0 0}
-.minimal-drop{width:100%;height:112px;border:1px dashed #ccc;border-radius:3px;background:#fdfdfd;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#555;cursor:pointer;margin-bottom:14px}
-.minimal-drop:hover{border-color:#777;background:#fafafa}
-.minimal-drop svg{color:#888}
-.minimal-drop b{font-size:11px;font-weight:550}
-.minimal-drop small{font-size:9px;color:#999}
-.minimal-drop u{text-underline-offset:2px}
-.paste-row{display:flex;align-items:flex-end;gap:12px}
-.paste-row textarea{flex:1;min-height:78px;border:1px solid #e3e3e3;border-radius:3px;padding:10px;font-size:11px;outline:none}
-.paste-row textarea:focus{border-color:#aaa;box-shadow:none}
-.minimal-search{height:29px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #ddd;color:#999;padding:0 5px}
-.minimal-search input{width:140px;border:0;outline:0;font-size:10px}
-.finding-line{display:grid;grid-template-columns:115px minmax(120px,.7fr) 1fr;align-items:center;gap:14px;padding:13px 10px;border-top:1px solid #eee;font-size:10px}
-.finding-level{font-size:8px;letter-spacing:.7px;font-weight:650;color:#555}
-.finding-level.grey{color:#777}.finding-level.uncritical{color:#999}
-.finding-line>b{font-weight:550;color:#333}
-.finding-line>small{font-size:9px;color:#999}
-.rules-list{max-width:850px}
-.rule-row{display:grid;grid-template-columns:150px minmax(0,1fr) 150px;align-items:center;gap:15px;padding:17px 5px;border-top:1px solid #e8e8e8}
-.rule-row>div{display:flex;align-items:center;gap:9px;font-size:11px}
-.rule-marker{width:7px;height:7px;border-radius:50%;background:#222}
-.rule-marker.grey{background:#888}.rule-marker.uncritical{background:#c5c5c5}
-.rule-row p{font-size:10px;color:#777;margin:0}
-.rule-row>small{font-size:8px;letter-spacing:.8px;text-align:right;color:#999}
-.rules-disclaimer{margin-top:18px;color:#999;font-size:10px}
-.cato-footer{display:flex;justify-content:space-between;gap:15px;padding-top:15px;border-top:1px solid #e8e8e8;color:#aaa;font-size:8px;letter-spacing:.5px}
-.cato-footer span:nth-child(2){letter-spacing:0;text-align:center}
-@media(max-width:700px){
- .cato-header{height:56px;grid-template-columns:auto 1fr auto;padding:0 15px;gap:13px}
- .cato-logo{font-size:14px;gap:6px}.cato-logo>span{width:23px;height:23px}
- .top-tabs{justify-content:center;gap:13px}
- .top-tab{font-size:10px}.top-tab small{display:none}
- .environment{font-size:7px;letter-spacing:.6px}
- .cato-content{padding:42px 17px 24px}
- .page-intro{align-items:flex-start;gap:10px}
- .page-intro h1{font-size:27px}
- .page-intro p{font-size:11px;line-height:1.45;max-width:220px}
- .primary-action{height:33px;padding:0 9px;font-size:10px}
- .prototype-note{font-size:9px;line-height:1.5;align-items:flex-start;margin-bottom:27px}
- .overview-counts{margin-bottom:34px}
- .overview-counts>div{padding:13px 8px 13px 0}
- .overview-counts>div+div{padding-left:10px}
- .overview-counts span{font-size:8px;letter-spacing:.5px}
- .overview-counts strong{font-size:21px}
- .overview-counts small{font-size:8px}
- .doc-table-head,.doc-table-row{grid-template-columns:minmax(0,1fr) 48px 65px;gap:7px}
- .doc-table-head span:nth-child(4),.doc-table-row>.doc-status{display:none}
- .doc-table-head{padding:9px 5px}
- .doc-table-row{padding:12px 5px}
- .doc-title{gap:7px}.doc-title b{font-size:10px}
- .policy-columns{grid-template-columns:1fr}
- .policy-columns>div{padding:12px 0}
- .policy-columns>div+div{border-left:0;border-top:1px solid #eee;padding-left:0}
- .policy-columns p{margin-top:4px}
- .section-heading h2{font-size:14px}
- .simple-documents{grid-template-columns:1fr}
- .paste-row{align-items:stretch;flex-direction:column}
- .paste-row .primary-action{align-self:flex-end}
- .finding-line{grid-template-columns:78px 1fr;gap:6px 10px}
- .finding-line>small{grid-column:2}
- .rule-row{grid-template-columns:1fr auto;gap:6px}
- .rule-row p{grid-column:1/-1;grid-row:2}
- .rule-row>small{grid-column:2;grid-row:1}
- .cato-footer{font-size:7px}.cato-footer span:nth-child(2){display:none}
+  --spacing-banner-offset: var(--banner-offset);
+  --spacing-screen-with-banner: calc(100svh - var(--banner-offset));
+
+  --color-primary-accent: hsl(var(--primary-accent));
+  --color-primary-accent-fill: var(--primary-accent-fill);
+  --color-link: hsl(var(--link));
+  --color-link-hover: hsl(var(--link-hover));
+  --color-preview-banner: hsl(var(--preview-banner));
+  --color-preview-banner-foreground: hsl(var(--preview-banner-foreground));
+  --color-preview-banner-border: hsl(var(--preview-banner-border));
+  --color-preview-banner-link: hsl(var(--preview-banner-link));
+  --color-preview-banner-link-hover: hsl(var(--preview-banner-link-hover));
+  --color-customer-data-banner: hsl(var(--customer-data-banner));
+  --color-customer-data-banner-foreground: hsl(
+    var(--customer-data-banner-foreground)
+  );
+  --color-customer-data-banner-border: hsl(var(--customer-data-banner-border));
+  --color-control-fill: hsl(var(--control-fill));
+  --color-control-track: hsl(var(--control-track));
+  --color-control-border: hsl(var(--control-border));
+  --color-foreground-tertiary: hsl(var(--foreground-tertiary));
+  --color-foreground-secondary: hsl(var(--foreground-secondary));
+  --color-icon-foreground: hsl(var(--icon-foreground));
+  --color-surface-code: hsl(var(--surface-code));
+  --color-surface-code-header: hsl(var(--surface-code-header));
+  --color-surface-sunken: hsl(var(--surface-sunken));
+  --color-surface-section: hsl(var(--surface-section));
+  /* Sticky table chrome; hosts on another surface set --surface-context. */
+  --color-surface: var(--surface-context, hsl(var(--background)));
+  --color-muted-magenta: hsl(var(--muted-magenta));
+  --color-muted-blue: hsl(var(--muted-blue));
+  --color-muted-green: hsl(var(--muted-green));
+  --color-muted-gray: hsl(var(--muted-gray));
+
+  --color-observation-trace: var(--observation-trace);
+  --color-observation-trace-line: var(--observation-trace-line);
+  --color-observation-trace-fill: var(--observation-trace-fill);
+  --color-observation-span: var(--observation-span);
+  --color-observation-span-line: var(--observation-span-line);
+  --color-observation-span-fill: var(--observation-span-fill);
+  --color-observation-generation: var(--observation-generation);
+  --color-observation-generation-line: var(--observation-generation-line);
+  --color-observation-generation-fill: var(--observation-generation-fill);
+  --color-observation-event: var(--observation-event);
+  --color-observation-event-line: var(--observation-event-line);
+  --color-observation-event-fill: var(--observation-event-fill);
+  --color-observation-agent: var(--observation-agent);
+  --color-observation-agent-line: var(--observation-agent-line);
+  --color-observation-agent-fill: var(--observation-agent-fill);
+  --color-observation-evaluator: var(--observation-evaluator);
+  --color-observation-evaluator-line: var(--observation-evaluator-line);
+  --color-observation-evaluator-fill: var(--observation-evaluator-fill);
+  --color-observation-tool: var(--observation-tool);
+  --color-observation-tool-line: var(--observation-tool-line);
+  --color-observation-tool-fill: var(--observation-tool-fill);
+  --color-observation-chain: var(--observation-chain);
+  --color-observation-chain-line: var(--observation-chain-line);
+  --color-observation-chain-fill: var(--observation-chain-fill);
+  --color-observation-retriever: var(--observation-retriever);
+  --color-observation-retriever-line: var(--observation-retriever-line);
+  --color-observation-retriever-fill: var(--observation-retriever-fill);
+  --color-observation-embedding: var(--observation-embedding);
+  --color-observation-embedding-line: var(--observation-embedding-line);
+  --color-observation-embedding-fill: var(--observation-embedding-fill);
+  --color-observation-guardrail: var(--observation-guardrail);
+  --color-observation-guardrail-line: var(--observation-guardrail-line);
+  --color-observation-guardrail-fill: var(--observation-guardrail-fill);
+  --color-accent-light-green: hsl(var(--accent-light-green));
+  --color-accent-dark-green: hsl(var(--accent-dark-green));
+  /* These six status tokens hold complete oklch colors (tints carry baked
+     alpha), unlike the hsl-triplet tokens around them — do not wrap in hsl(). */
+  --color-light-red: var(--light-red);
+  --color-dark-red: var(--dark-red);
+  --color-light-yellow: var(--light-yellow);
+  --color-dark-yellow: var(--dark-yellow);
+  --color-light-green: var(--light-green);
+  --color-dark-green: var(--dark-green);
+  --color-light-blue: hsl(var(--light-blue));
+  --color-dark-blue: hsl(var(--dark-blue));
+  --color-accent-light-blue: hsl(var(--accent-light-blue));
+  --color-accent-dark-blue: hsl(var(--accent-dark-blue));
+  --color-light-violet: hsl(var(--light-violet));
+  --color-dark-violet: hsl(var(--dark-violet));
+  --color-light-teal: hsl(var(--light-teal));
+  --color-dark-teal: hsl(var(--dark-teal));
+
+  /* Match the canvas palette in features/topics/topic-map-colors.ts. */
+  --color-category-violet: #7c3aed;
+  --color-category-sky: #0284c7;
+  --color-category-emerald: #059669;
+  --color-category-amber: #d97706;
+  --color-category-pink: #db2777;
+  --color-category-indigo: #4f46e5;
+  --color-category-teal: #0d9488;
+  --color-category-orange: #c2410c;
+  --color-category-lime: #65a30d;
+  --color-category-fuchsia: #a21caf;
+  /* Six category hues at one OKLCH lightness per role: highlight (fills,
+     borders, treemap tiles) and foreground (text). Chroma is 0.11, or the
+     sRGB maximum where a hue cannot reach it. */
+  --color-category-violet-highlight: var(--category-violet-highlight);
+  --color-category-blue-highlight: var(--category-blue-highlight);
+  --color-category-teal-highlight: var(--category-teal-highlight);
+  --color-category-green-highlight: var(--category-green-highlight);
+  --color-category-amber-highlight: var(--category-amber-highlight);
+  --color-category-pink-highlight: var(--category-pink-highlight);
+  --color-category-violet-foreground: var(--category-violet-foreground);
+  --color-category-blue-foreground: var(--category-blue-foreground);
+  --color-category-teal-foreground: var(--category-teal-foreground);
+  --color-category-green-foreground: var(--category-green-foreground);
+  --color-category-amber-foreground: var(--category-amber-foreground);
+  --color-category-pink-foreground: var(--category-pink-foreground);
+  --color-category-neutral-tint: var(--category-neutral-tint);
+  --color-category-neutral-highlight: var(--category-neutral-highlight);
+
+  /* Search-bar query syntax highlighting (key:value token parts). Operators
+     (`:` `-` `(` `)`) reuse muted-foreground, so no token for them here. */
+  --color-qlang-field: hsl(var(--qlang-field));
+  --color-qlang-value: hsl(var(--qlang-value));
+  --color-qlang-number: hsl(var(--qlang-number));
+  --color-qlang-keyword: hsl(var(--qlang-keyword));
+
+  --color-json-value-string: var(--json-value-string);
+  --color-json-value-number: var(--json-value-number);
+  --color-json-value-boolean: var(--json-value-boolean);
+  --color-json-value-nullish: var(--json-value-nullish);
+
+  --color-border: hsl(var(--border));
+  --color-border-contrast: hsl(var(--border-contrast));
+  --color-line-dotted: hsl(var(--line-dotted));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-tertiary: hsl(var(--tertiary));
+  --color-tertiary-foreground: hsl(var(--tertiary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-modal: hsl(var(--modal));
+  --color-modal-foreground: hsl(var(--modal-foreground));
+  --color-header: hsl(var(--header));
+  --color-header-foreground: hsl(var(--header-foreground));
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --color-find-match-background: hsl(var(--find-match-background));
+  --color-find-match-selected-background: hsl(
+    var(--find-match-selected-background)
+  );
+  --color-find-match-selected-foreground: hsl(
+    var(--find-match-selected-foreground)
+  );
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+
+  /* Text styles: each size token carries its size (whole pixels at a 16px
+     root), line-height and canonical weight, so `text-*` alone yields a
+     complete style. Heavier text opts in via `font-bold`, never a raw number. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: calc(16 / 11);
+  --text-2xs--font-weight: var(--font-weight-regular);
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(18 / 12);
+  --text-xs--font-weight: var(--font-weight-regular);
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: calc(20 / 13);
+  --text-sm--font-weight: var(--font-weight-regular);
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.5;
+  --text-base--font-weight: var(--font-weight-regular);
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.35;
+  --text-lg--font-weight: var(--font-weight-regular);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.3;
+  --text-xl--font-weight: var(--font-weight-regular);
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.25;
+  --text-2xl--font-weight: var(--font-weight-regular);
+  --text-3xl: 1.5rem;
+  --text-3xl--line-height: 1.25;
+  --text-3xl--font-weight: var(--font-weight-regular);
+
+  --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-appear: appear 0.2s ease-out forwards;
+  --animate-appear-delayed: appear 0s linear 150ms forwards;
+  /* Cycle length comes from REFETCH_SWEEP_MS in components/table/data-table.tsx,
+     which sets --table-refetch-cycle on the element: the same number also
+     releases the busy flag on a whole sweep, so the two must not drift. */
+  --animate-table-refetch: table-refetch var(--table-refetch-cycle, 1.4s) linear
+    infinite;
+  --animate-table-refetch-in: table-refetch-fade-in 200ms ease-out;
+
+  /* Sweeps the highlight of the table's refetch bar across its track. It starts
+     and ends fully outside the (clipped) track, so the jump back to the start is
+     never visible — inside the track it reads as a blink every cycle. Linear,
+     because eased motion makes that wrap even more obvious. The highlight is a
+     third of the track wide, hence -100%/300% of its own width. */
+  @keyframes table-refetch {
+    from {
+      transform: translateX(-100%);
+    }
+
+    to {
+      transform: translateX(300%);
+    }
+  }
+
+  @keyframes table-refetch-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes rainbow {
+    0% {
+      background-position: 0%;
+    }
+
+    100% {
+      background-position: 200%;
+    }
+  }
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes appear {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: hsl(var(--border));
+  }
+}
+
+@layer base {
+  :root {
+    --category-violet-highlight: oklch(0.82 0.099 293);
+    --category-blue-highlight: oklch(0.82 0.092 252);
+    --category-teal-highlight: oklch(0.82 0.11 190);
+    --category-green-highlight: oklch(0.82 0.11 135);
+    --category-amber-highlight: oklch(0.82 0.11 70);
+    --category-pink-highlight: oklch(0.82 0.11 350);
+    --category-violet-foreground: oklch(0.45 0.11 293);
+    --category-blue-foreground: oklch(0.45 0.11 252);
+    --category-teal-foreground: oklch(0.45 0.11 190);
+    --category-green-foreground: oklch(0.45 0.11 135);
+    --category-amber-foreground: oklch(0.45 0.11 70);
+    --category-pink-foreground: oklch(0.45 0.11 350);
+    --category-neutral-tint: oklch(0.92 0 0);
+    --category-neutral-highlight: oklch(0.82 0 0);
+    --background: 0 0% 100%;
+    --foreground: 240 3.7% 15.9%; /* zinc-800 */
+
+    --muted: 240 4.8% 95.9%; /* zinc-100 */
+    --muted-foreground: 240 3.8% 46.1%; /* zinc-500 */
+    /* Text between body and muted: content that is not a heading or label. */
+    --foreground-secondary: 240 5.2% 33.9%; /* zinc-600 */
+    /* Faintest text tier: placeholders, disabled, hints — one step below
+       muted-foreground (langfuse.com/docs has the same 4th step). NOTE: ~2.8:1
+       on white — flagged in review, kept per design preference for now. */
+    --foreground-tertiary: 240 5% 64.9%; /* zinc-400 */
+    /* Icon glyphs next to text: same tier as muted-foreground. */
+    --icon-foreground: 240 3.8% 46.1%; /* zinc-500 */
+    /* Code blocks sit a step BELOW their surrounding surface ("code is a
+         well"), matching the docs site's --surface-code convention. */
+    --surface-code: 0 0% 92%;
+    --surface-code-header: 0 0% 86%;
+    --surface-sunken: 0 0% 99%; /* between white and zinc-50 */
+    --surface-section: 240 4.8% 96.5%; /* a hair lighter than zinc-100 */
+
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--foreground);
+
+    --card: 0 0% 100%;
+    --card-foreground: var(--foreground);
+
+    /* Blocking overlay surfaces (Dialog/AlertDialog/Sheet/Drawer/peek).
+       Light themes keep the alternating white model (Carbon: light layers
+       alternate, dark layers step lighter), so this matches --background. */
+    --modal: 0 0% 100%;
+    --modal-foreground: var(--foreground);
+
+    --header: 0 0% 98%; /* zinc-50 */
+    --header-foreground: var(--foreground);
+
+    --border: 240 5.9% 90%; /* zinc-200 */
+    /* Structural/viz lines (tree connectors, timeline grid + bar outlines):
+       one clear step stronger than the hairline --border. */
+    --border-contrast: 240 4.9% 83.9%; /* zinc-300 */
+    --line-dotted: 240 5.2% 33.9%; /* zinc-600 */
+    --input: 240 5.9% 90%; /* zinc-200 */
+
+    --primary: 240 5.9% 10%; /* zinc-900 */
+    --primary-foreground: 0 0% 98%; /* zinc-50 */
+
+    --secondary: 240 4.8% 95.9%; /* zinc-100 */
+    --secondary-foreground: 240 5.9% 10%; /* zinc-900 */
+
+    --tertiary: 240 5.9% 90%; /* zinc-200 */
+    --tertiary-foreground: 240 5.9% 10%; /* zinc-900 */
+
+    --accent: 240 4.8% 95.9%; /* zinc-100 */
+    --accent-foreground: 240 3.7% 15.9%; /* zinc-800 */
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%; /* zinc-50 */
+
+    --ring: 240 5% 64.9%; /* zinc-400 */
+
+    --primary-accent: 243 75.4% 58.6%;
+    --primary-accent-fill: hsl(var(--primary-accent));
+    /* Hyperlinks get their own pair (tabs/selection stay on primary-accent):
+       same lavender family as dark, but muted — links shouldn't be the
+       loudest thing on a light page — with a clearly darker hover step. */
+    --link: 246 40% 50%;
+    --link-hover: 246 55% 36%;
+    /* Preview-deployment strip (PR previews only): soft blue tint with text
+       darker than the fill, links a step brighter than body text. Values are
+       the blue-100/950/200/700/800 ramp. */
+    --preview-banner: 214 95% 93%;
+    --preview-banner-foreground: 226 57% 21%;
+    --preview-banner-border: 213 97% 87%;
+    --preview-banner-link: 224 76% 48%;
+    --preview-banner-link-hover: 226 71% 40%;
+    /* Staff customer-data strip (Cloud only): amber-100 / amber-950 / amber-200,
+       so it cannot be read as the blue preview-deployment strip. */
+    --customer-data-banner: 48 96% 89%;
+    --customer-data-banner-foreground: 21 92% 14%;
+    --customer-data-banner-border: 48 97% 77%;
+    /* Checked selection controls (checkbox/switch): monochrome in BOTH
+       modes — dark fill + light glyph in light, muted-white fill + dark
+       glyph in dark. Deliberately dimmer than --primary in dark so checked
+       controls don't outshine content (fills read louder than text).
+       --control-track is the switch's off-state track. */
+    --control-fill: 240 5.9% 10%; /* zinc-900 */
+    --control-track: 240 5.9% 90%; /* zinc-200 */
+    /* Unchecked control boundary — quieter than the near-black fill in light,
+       a touch above --input in dark so the box still reads on the canvas. */
+    --control-border: 240 5% 64.9%; /* zinc-400 */
+
+    --muted-green: 84 81% 44%;
+    --muted-magenta: 330 90% 70%;
+    --muted-blue: 239 84% 67%;
+    --muted-gray: 240 5.9% 90%; /* zinc-200 */
+
+    /* Observation type hues: one lightness and chroma so no type outweighs another */
+    /* -line: stroked icons and borders. -fill: tiles and bars under white icons. */
+    --observation-trace: oklch(68% 0.18 163);
+    --observation-trace-line: oklch(55% 0.21 163);
+    --observation-trace-fill: oklch(61% 0.2 163);
+    --observation-span: oklch(68% 0.18 265);
+    --observation-span-line: oklch(55% 0.21 265);
+    --observation-span-fill: oklch(61% 0.2 265);
+    --observation-generation: oklch(68% 0.18 335);
+    --observation-generation-line: oklch(55% 0.21 335);
+    --observation-generation-fill: oklch(61% 0.2 335);
+    --observation-event: oklch(68% 0.18 115);
+    --observation-event-line: oklch(55% 0.21 115);
+    --observation-event-fill: oklch(61% 0.2 115);
+    --observation-agent: oklch(68% 0.18 310);
+    --observation-agent-line: oklch(55% 0.21 310);
+    --observation-agent-fill: oklch(61% 0.2 310);
+    --observation-evaluator: oklch(68% 0.18 285);
+    --observation-evaluator-line: oklch(55% 0.21 285);
+    --observation-evaluator-fill: oklch(61% 0.2 285);
+    --observation-tool: oklch(68% 0.18 55);
+    --observation-tool-line: oklch(55% 0.21 55);
+    --observation-tool-fill: oklch(61% 0.2 55);
+    --observation-chain: oklch(68% 0.18 0);
+    --observation-chain-line: oklch(55% 0.21 0);
+    --observation-chain-fill: oklch(61% 0.2 0);
+    --observation-retriever: oklch(68% 0.18 145);
+    --observation-retriever-line: oklch(55% 0.21 145);
+    --observation-retriever-fill: oklch(61% 0.2 145);
+    --observation-embedding: oklch(68% 0.18 85);
+    --observation-embedding-line: oklch(55% 0.21 85);
+    --observation-embedding-fill: oklch(61% 0.2 85);
+    --observation-guardrail: oklch(68% 0.18 25);
+    --observation-guardrail-line: oklch(55% 0.21 25);
+    --observation-guardrail-fill: oklch(61% 0.2 25);
+
+    --accent-light-green: 138 76.5% 98%;
+    --accent-dark-green: 112 100% 32%;
+
+    /* Status pairs: light-* tinted fills (alpha baked in), dark-* the
+       readable text/icon color on them. */
+    --light-red: oklch(93.6% 0.032 17.717 / 0.7);
+    --dark-red: oklch(63.7% 0.237 25.331);
+
+    --light-yellow: oklch(97.3% 0.071 103.193 / 0.7);
+    --dark-yellow: oklch(47.6% 0.114 61.907);
+
+    --light-green: oklch(95% 0.052 163.051 / 0.7);
+    --dark-green: oklch(43.2% 0.095 166.913);
+
+    --light-blue: 214 94.6% 92.7%;
+    --dark-blue: 227.1 75.7% 41.1%;
+
+    --accent-light-blue: 251 95.2% 91.8%;
+    --accent-dark-blue: 224 76.3% 38%;
+
+    /* Violet + teal hue pairs, same bg/fg recipe as the light-X/dark-X pairs
+       above. Added for the score-level color coding (ScoreTag, LFE-10596):
+       observation=blue, trace=violet, session=teal, experiment=yellow — the
+       blue and yellow pairs are reused from above. */
+    --light-violet: 251 91% 95.5%;
+    --dark-violet: 262 72% 54%;
+
+    --light-teal: 167 85% 89%;
+    --dark-teal: 175 84% 28%;
+
+    /* Search-bar query syntax highlighting — a DELIBERATE editor-style syntax
+       theme (like a code editor's theme), intentionally its own thing rather
+       than the app palette: field=violet, value=green, number=orange,
+       keyword=blue. Scoped to the filter grammar (key:value pills); retune
+       freely, a designer can own these later. Operators reuse muted-foreground.
+       Values from the langfuse-search-bar prototype. */
+    --qlang-field: 263.4 69.3% 42.2%; /* violet-800 */
+    --qlang-value: 162.9 93.5% 24.3%; /* emerald-700 */
+    --qlang-number: 17.5 88.3% 40.4%; /* orange-700 */
+    --qlang-keyword: 224.3 76.3% 48%; /* blue-700 */
+
+    --json-value-string: var(--color-green-800);
+    --json-value-number: var(--color-blue-800);
+    --json-value-boolean: var(--color-orange-800);
+    --json-value-nullish: var(--color-gray-500);
+
+    --radius: 0.5rem;
+    --sidebar-background: var(--surface-sunken);
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 5.2% 93.5%; /* between zinc-100 and zinc-200 */
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 5.9% 90%; /* zinc-200 */
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --find-match-background: 60 60% 85%;
+    --find-match-selected-background: 60 100% 50%;
+    --find-match-selected-foreground: 0 0% 0%;
+
+    --chart-1: 237 60% 61%; /* indigo */
+    --chart-2: 28 100% 41%; /* orange */
+    --chart-3: 171 100% 29%; /* teal */
+    --chart-4: 271 48% 55%; /* violet */
+    --chart-5: 38 100% 36%; /* amber */
+    --chart-6: 213 80% 55%; /* blue */
+    --chart-7: 115 63% 34%; /* green */
+    --chart-8: 322 46% 49%; /* magenta */
+    --chart-fill-1: 234 90% 77%;
+    --chart-fill-2: 25 87% 64%;
+    --chart-fill-3: 173 100% 37%;
+    --chart-fill-4: 269 68% 73%;
+    --chart-fill-5: 40 72% 54%;
+    --chart-fill-6: 212 100% 72%;
+    --chart-fill-7: 115 38% 56%;
+    --chart-fill-8: 325 61% 68%;
+    --chart-grid: var(--muted-gray);
+    --color-1: oklch(66.2% 0.225 25.9);
+    --color-2: oklch(60.4% 0.26 302);
+    --color-3: oklch(69.6% 0.165 251);
+    --color-4: oklch(80.2% 0.134 225);
+    --color-5: oklch(90.7% 0.231 133);
+
+    /* Banner height system for fixed/sticky positioning
+       Banner components dynamically update --banner-height via JS */
+    --banner-height: 0px;
+    --banner-offset: calc(
+      env(safe-area-inset-top, 0px) + var(--banner-height, 0px)
+    );
+
+    /* `env()` is CSS-only, so mirror the insets into custom properties that JS
+       can read (getComputedStyle resolves them to px). Non-zero only because
+       the viewport meta sets `viewport-fit=cover` — see pages/_app.tsx. */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  }
+
+  .dark {
+    --category-violet-highlight: oklch(0.45 0.11 293);
+    --category-blue-highlight: oklch(0.45 0.11 252);
+    --category-teal-highlight: oklch(0.45 0.077 190);
+    --category-green-highlight: oklch(0.45 0.11 135);
+    --category-amber-highlight: oklch(0.45 0.097 70);
+    --category-pink-highlight: oklch(0.45 0.11 350);
+    --category-violet-foreground: oklch(0.8 0.11 293);
+    --category-blue-foreground: oklch(0.8 0.103 252);
+    --category-teal-foreground: oklch(0.8 0.11 190);
+    --category-green-foreground: oklch(0.8 0.11 135);
+    --category-amber-foreground: oklch(0.8 0.11 70);
+    --category-pink-foreground: oklch(0.8 0.11 350);
+    --category-neutral-tint: oklch(0.3 0 0);
+    --category-neutral-highlight: oklch(0.45 0 0);
+    /* Surface ladder — "layers become one step lighter with each added
+       layer" (Carbon's dark-theme layering model; Hex and Cloudflare Kumo
+       follow the same structure). The GLOBAL FRAME (header/sidebar chrome)
+       is the darkest tier; the content canvas sits one step above it, and
+       every stacked layer steps up from there:
+         chrome 2% < canvas 6% < card 7.5% < modal 9% < popover 12%.
+       The bottom step is the widest (chrome→canvas) — equal pp steps read
+       smaller near black, and the frame/content split carries the layout.
+       Popovers outrank modals because menus/tooltips open on top of dialogs.
+       Never paint a surface darker than what it floats above (Carbon rule).
+       --surface-code stays BELOW its surroundings — it is the one recessed
+       tier ("code is a well"). Elevation is carried by these lightness steps
+       plus hairline borders, not shadows. */
+    /* Neutral (zero-saturation) ladder — de-tinted per Trang's call after a
+       cool/neutral/warm A-B. Text hierarchy comes from the WIDE GAP between
+       tiers: emphasis 91% > body 70% > meta 54% > faint 40% (body tuned live 2026-07-16), with sidebar nav
+       dimmer than content until active. Bright tiers cap near 91% (the docs
+       site caps at 90%) — never near-white. Don't compress the ramp — the
+       gap is the hierarchy. */
+    --background: 0 0% 6%;
+    --foreground: 0 0% 70%;
+
+    --muted: 0 0% 11.6%;
+    --muted-foreground: 0 0% 54%;
+    --foreground-secondary: 0 0% 62%;
+    --foreground-tertiary: 0 0% 40%;
+    --icon-foreground: 0 0% 54%;
+    --surface-code: 0 0% 2.3%;
+    --surface-code-header: 0 0% 8.2%;
+    --surface-sunken: 0 0% 8%; /* one step below the modal */
+    --surface-section: 0 0% 11%; /* a hair quieter than the popover */
+
+    --popover: 0 0% 12%;
+    --popover-foreground: var(--foreground);
+
+    --card: 0 0% 7.5%;
+    --card-foreground: var(--foreground);
+
+    --modal: 0 0% 9%;
+    --modal-foreground: var(--foreground);
+
+    --header: 0 0% 2%;
+    --header-foreground: var(--foreground);
+
+    /* Hairline must read on EVERY surface tier, including popover (12%). */
+    --border: 0 0% 20%;
+    --border-contrast: 0 0% 26%;
+    --line-dotted: 0 0% 42%;
+    --input: 0 0% 18%;
+
+    --primary: 0 0% 90%;
+    --primary-foreground: 0 0% 3.5%;
+
+    --secondary: 0 0% 11.6%;
+    --secondary-foreground: 0 0% 88%;
+
+    --tertiary: 0 0% 16.5%;
+    --tertiary-foreground: 0 0% 88%;
+
+    /* One clear step above --popover (12%) — focus:bg-accent is the only
+       focus cue in menus/selects/⌘K, and 14.3% was a near-invisible ~1.13:1. */
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 70%;
+
+    --destructive: 0 78.7% 63.1%;
+    --destructive-foreground: 0 0% 100%;
+
+    --ring: 246 55% 70%;
+
+    --primary-accent: 246 55% 70%;
+    --primary-accent-fill: oklch(50% 0.11 287);
+    --link: 246 55% 70%;
+    --link-hover: 246 95% 85%;
+    /* Preview-deployment strip: fill is blue-500/25 precomposed over the 6%
+       canvas, border is blue-300/20 precomposed over that fill — the strip
+       needs opaque colors. Body text stays on the neutral foreground tier;
+       links are blue-400/300. */
+    --preview-banner: 217 47% 19%;
+    --preview-banner-foreground: 0 0% 70%;
+    --preview-banner-border: 215 37% 31%;
+    --preview-banner-link: 213 94% 68%;
+    --preview-banner-link-hover: 212 96% 78%;
+    /* Staff customer-data strip: amber fill over the dark canvas, warm light
+       text, a step-lighter border. Distinct from the blue preview strip. */
+    --customer-data-banner: 32 40% 16%;
+    --customer-data-banner-foreground: 48 96% 89%;
+    --customer-data-banner-border: 36 35% 28%;
+    --control-fill: 0 0% 78%;
+    --control-track: 0 0% 24%;
+    /* Matches --border-contrast: unchecked checkboxes/radios read by their
+       border alone; 20% was ~1.58:1 on the canvas. */
+    --control-border: 0 0% 26%;
+
+    --muted-blue: 215 95% 73.1%;
+    --muted-green: 142 76.7% 73.1%;
+    --muted-magenta: 330 76.7% 73.1%;
+
+    --observation-trace: oklch(75% 0.12 163);
+    --observation-trace-line: oklch(76% 0.11 163);
+    --observation-trace-fill: oklch(50% 0.11 163);
+    --observation-span: oklch(75% 0.12 265);
+    --observation-span-line: oklch(76% 0.11 265);
+    --observation-span-fill: oklch(50% 0.11 265);
+    --observation-generation: oklch(75% 0.12 335);
+    --observation-generation-line: oklch(76% 0.11 335);
+    --observation-generation-fill: oklch(50% 0.11 335);
+    --observation-event: oklch(75% 0.12 115);
+    --observation-event-line: oklch(76% 0.11 115);
+    --observation-event-fill: oklch(50% 0.11 115);
+    --observation-agent: oklch(75% 0.12 310);
+    --observation-agent-line: oklch(76% 0.11 310);
+    --observation-agent-fill: oklch(50% 0.11 310);
+    --observation-evaluator: oklch(75% 0.12 285);
+    --observation-evaluator-line: oklch(76% 0.11 285);
+    --observation-evaluator-fill: oklch(50% 0.11 285);
+    --observation-tool: oklch(75% 0.12 55);
+    --observation-tool-line: oklch(76% 0.11 55);
+    --observation-tool-fill: oklch(50% 0.11 55);
+    --observation-chain: oklch(75% 0.12 0);
+    --observation-chain-line: oklch(76% 0.11 0);
+    --observation-chain-fill: oklch(50% 0.11 0);
+    --observation-retriever: oklch(75% 0.12 145);
+    --observation-retriever-line: oklch(76% 0.11 145);
+    --observation-retriever-fill: oklch(50% 0.11 145);
+    --observation-embedding: oklch(75% 0.12 85);
+    --observation-embedding-line: oklch(76% 0.11 85);
+    --observation-embedding-fill: oklch(50% 0.11 85);
+    --observation-guardrail: oklch(75% 0.12 25);
+    --observation-guardrail-line: oklch(76% 0.11 25);
+    --observation-guardrail-fill: oklch(50% 0.11 25);
+    /* Stays clearly above --card so chart grids (--chart-grid) and disabled
+       badge fills stay discernible on elevated surfaces, without the harshness
+       of --border-contrast (26%). */
+    --muted-gray: 0 0% 16%;
+
+    /* Status pairs: light-* are dark tinted backgrounds (alpha baked in),
+       dark-* the readable text/icon color on them. */
+    --light-red: oklch(39.6% 0.141 25.723 / 0.7);
+    /* Lightened for dark mode like its green and yellow siblings below — left
+       at the light-mode step it was darker than the fill it sits on (2.74:1;
+       5.35:1 here, against green's 6.49 and yellow's 6.43). */
+    --dark-red: oklch(76.5% 0.177 27.325);
+
+    --light-yellow: oklch(55.4% 0.135 66.442 / 0.4);
+    --dark-yellow: oklch(79.5% 0.184 86.047);
+
+    --light-green: oklch(37.8% 0.077 168.94 / 0.7);
+    --dark-green: oklch(76.5% 0.177 163.223);
+
+    --light-blue: 209 45% 15%;
+    --dark-blue: 209 88% 60%;
+
+    /* accent-light-green doubles as a full-height output/diff surface
+       (PrettyJsonView), so it stays a whisper above --card, not chip-strength. */
+    --accent-light-green: 134 15% 9%;
+    --accent-dark-green: 134 50% 55%;
+
+    --accent-light-blue: 240 32.4% 13.9%;
+    --accent-dark-blue: 246 70% 76%;
+
+    /* Score-level violet + teal (see :root): dark tinted bg + bright fg. */
+    --light-violet: 258 40% 16%;
+    --dark-violet: 255 92% 76%;
+
+    --light-teal: 175 40% 12%;
+    --dark-teal: 172 66% 50%;
+
+    /* Search-bar query syntax highlighting (dark). Brighter than light so the
+       key/value read against the dark surface. See :root for the contract. */
+    --qlang-field: 255 92% 76%;
+    --qlang-value: 158 64% 52%;
+    --qlang-number: 27 96% 61%;
+    --qlang-keyword: 213 94% 68%;
+
+    --json-value-string: hsl(142 40% 60%);
+    --json-value-number: hsl(213 50% 68%);
+    --json-value-boolean: hsl(27 50% 61%);
+    --json-value-nullish: var(--color-gray-400);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 4%; /* one step below the page */
+    --sidebar-foreground: 0 0% 60%;
+    --sidebar-primary: 0 0% 90%;
+    --sidebar-primary-foreground: 0 0% 3.5%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 91%;
+    --sidebar-border: 0 0% 12%;
+    --sidebar-ring: 246 55% 70%;
+
+    --find-match-background: 60 100% 20%;
+    --find-match-selected-background: 60 100% 50%;
+    --find-match-selected-foreground: 0 0% 0%;
+
+    --chart-1: 236 75% 68%; /* indigo */
+    --chart-2: 30 100% 43%; /* orange */
+    --chart-3: 172 100% 32%; /* teal */
+    --chart-4: 270 59% 62%; /* violet */
+    --chart-5: 39 100% 39%; /* amber */
+    --chart-6: 213 90% 60%; /* blue */
+    --chart-7: 115 50% 41%; /* green */
+    --chart-8: 323 53% 56%; /* magenta */
+    --chart-fill-1: 235 44% 56%;
+    --chart-fill-2: 30 97% 36%;
+    --chart-fill-3: 172 100% 27%;
+    --chart-fill-4: 269 37% 52%;
+    --chart-fill-5: 40 100% 32%;
+    --chart-fill-6: 213 57% 50%;
+    --chart-fill-7: 115 46% 35%;
+    --chart-fill-8: 323 39% 47%;
+    --chart-grid: var(--muted-gray);
+    --color-1: oklch(66.2% 0.225 25.9);
+    --color-2: oklch(60.4% 0.26 302);
+    --color-3: oklch(69.6% 0.165 251);
+    --color-4: oklch(80.2% 0.134 225);
+    --color-5: oklch(90.7% 0.231 133);
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  html, body { height: 100%; }
+  button:not(:disabled) { cursor: pointer; }
 }

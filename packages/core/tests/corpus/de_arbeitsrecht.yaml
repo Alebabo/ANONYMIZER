@@ -1,0 +1,40 @@
+id: de_arbeitsrecht
+language: de
+text: |
+  Kündigungsschutzklage
+
+  des Herrn Jonas Beispielmann, Am Rosengarten 7a, 50667 Köln,
+  – Kläger –
+
+  gegen
+
+  die Rheinwerk Systeme GmbH & Co. KG, vertreten durch den Geschäftsführer Herrn Paul Fiktiv,
+  – Beklagte –
+
+  Der Kläger ist seit dem 1. April 2015 bei der Beklagten beschäftigt. Sein Bruttogehalt beträgt
+  monatlich 5.200 EUR. Sozialversicherungsnummer: 12 150385 M 012. Der Kläger ist schwerbehindert
+  mit einem Grad der Behinderung von 50 und Gewerkschaftsmitglied.
+
+  Die Kündigung vom 30.06.2024 verstößt gegen § 1 Abs. 2 KSchG und § 168 SGB IX.
+  Zuständig ist das Arbeitsgericht Köln. E-Mail: j.beispielmann@mail.example
+expected_risk: critical
+expected_signals: [employment, litigation]
+expected:
+  - {type: person, text: Jonas Beispielmann, role: plaintiff}
+  - {type: organization, text: Rheinwerk Systeme GmbH & Co. KG}
+  - {type: person, text: Paul Fiktiv}
+  - {type: date, text: 1. April 2015}
+  - {type: money, text: 5.200 EUR, risk: sensitive}
+  - {type: social_security_number, text: 12 150385 M 012}
+  - {type: health_data, text: Grad der Behinderung}
+  - {type: special_category, text: Gewerkschaftsmitglied}
+  - {type: date, text: 30.06.2024}
+  - {type: legal_citation, text: § 1 Abs. 2 KSchG}
+  - {type: legal_citation, text: § 168 SGB IX}
+  - {type: court, text: Arbeitsgericht Köln}
+  - {type: email, text: j.beispielmann@mail.example}
+must_not_detect:
+  - {type: person, text: Beklagten}
+known_false_negatives:
+  - {type: address, text: "Am Rosengarten 7a, 50667 Köln", note: "Streets without a street suffix (Am ..., An der ...) are not matched by the address pattern."}
+  - {type: health_data, text: schwerbehindert, note: "Adjective form missing from the health lexicon."}
