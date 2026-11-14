@@ -47,6 +47,6 @@ export function analyzeText(text: string) {
 export function redactText(text: string, findings: Finding[], consentedGreyIds: string[] = []) {
   const replacements = findings.filter(f => f.level === "CRITICAL" || (f.level === "GREY" && !consentedGreyIds.includes(f.id))).sort((a, b) => b.start - a.start);
   let output = text;
-  for (const f of replacements) output = output.slice(0, f.start) + \`[REDACTED:${f.type.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}}]\` + output.slice(f.end);
+  for (const f of replacements) output = output.slice(0, f.start) + "[REDACTED:" + f.type.toUpperCase().replace(/[^A-Z0-9]+/g, "_") + "]" + output.slice(f.end);
   return output;
 }
