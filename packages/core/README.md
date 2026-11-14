@@ -1,7 +1,7 @@
 # cato-core
 
 Privacy engine for legal AI: detection, classification, anonymization, policies.
-Status: steps 1–3 (detection, classification, anonymization + vault) are implemented.
+Status: steps 1–4 (detection, classification, anonymization + vault, policies) are implemented.
 
 ```bash
 pip install -e ".[dev]"
@@ -11,6 +11,7 @@ pytest
 cato scan document.txt           # detections as JSON, no raw values
 cato classify document.txt       # risk per entity and document
 cato anonymize document.txt      # transformed text (add --vault/--namespace for reversible)
+cato protect document.txt        # full pipeline with the built-in legal-default policy
 cato eval tests/corpus           # recall / false positives on the corpus
 ```
 
@@ -25,4 +26,4 @@ for d in result.detections:
 `Detection.text` contains the raw value. For logs and traces use only
 `Detection.redacted()`.
 
-Details: [docs/detection.md](../../docs/detection.md), [docs/classification.md](../../docs/classification.md), [docs/anonymization.md](../../docs/anonymization.md)
+Details: [docs/detection.md](../../docs/detection.md), [docs/classification.md](../../docs/classification.md), [docs/anonymization.md](../../docs/anonymization.md), [docs/policies.md](../../docs/policies.md)
