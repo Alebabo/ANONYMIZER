@@ -7,6 +7,12 @@ __all__ = ["Category", "Detection", "Detector", "DetectorConfig", "EntityType", 
 __version__ = "0.1.0"
 
 
+_default: Detector | None = None
+
+
 def scan(text: str, language: str | None = None) -> ScanResult:
-    """Convenience wrapper using the default configuration."""
-    return Detector().scan(text, language)
+    """Convenience wrapper using a shared detector with the default configuration."""
+    global _default
+    if _default is None:
+        _default = Detector()
+    return _default.scan(text, language)

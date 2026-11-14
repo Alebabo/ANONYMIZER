@@ -6,11 +6,14 @@ The engine lives in `packages/core/src/cato/detect/`. It's deterministic: the sa
 
 1. **Language**: a stopword heuristic decides between `de`, `en` and `unknown`. With `unknown`, all recognizers run.
 2. **Recognizers**: each recognizer produces candidates with a type, offsets, confidence and an optional checksum result (`validated`).
+   - Rule-based recognizers always run.
+   - spaCy NER runs by default (`de_core_news_lg`, `en_core_web_lg`). Its spans are cleaned up first: leading honorifics are cut off; spans across line breaks, role words and code fragments are dropped.
 3. **Overlap resolution** (`resolve_overlaps`): when candidates overlap, a greedy pass keeps the best one. Losers go into `ScanResult.suppressed` with the id of the winner, so they stay auditable. Candidates are ranked by these criteria, in order:
    1. A valid checksum.
-   2. How specific the type is.
-   3. Span length.
-   4. Confidence.
+   2. Rule-based before statistical (NER never overrides a rule-based detection).
+   3. How specific the type is.
+   4. Span length.
+   5. Confidence.
 4. **Mention linking** (`propagate_mentions`): once a person has been found, further mentions of the full name or the surname are marked too.
    - Surnames are linked only if no other person in the document has the same surname.
 5. **Refs** (`assign_refs`): mentions of the same person or organization get an opaque, document-local ref such as `person_1`, and roles are carried over. The ref is never derived from the raw value. This is the basis for consistent pseudonymization.
@@ -66,7 +69,8 @@ Signals don't decide anything. The classification engine (step 2) combines them 
 
 ## Known limitations (rule-only mode)
 
-- **Bare names without a cue** (no honorific, no role) are only found with spaCy NER (`pip install cato-core[ner]`, `DetectorConfig(enable_ner=True)`). If NER is enabled but not installed, the scan continues and puts a warning in `ScanResult.warnings`.
+- **Bare names without a cue** (no honorific, no role) are only found by spaCy NER. If the models are missing (`python -m spacy download de_core_news_lg en_core_web_lg`), the scan continues in rule-only mode and puts a warning in `ScanResult.warnings`. The API must surface this warning. Rule-only mode is not suitable for production.
+- **NER is statistical.** It isn't deterministic in the sense of a fixed rule set, and legal jargon is outside its training domain. That's why NER only adds detections and never removes or reclassifies a rule-based one.
 - **Capitalized German nouns after honorifics** ("Herr Ober") are recognized as names.
 - **Addresses without a street suffix** ("Am Rosengarten 7a") are not recognized.
 - **Lexicons are incomplete.** Adjective forms such as "schwerbehindert" are missing.
@@ -81,4 +85,4 @@ cd packages/core
 cato eval tests/corpus
 ```
 
-Current state, on synthetic data only: 7 documents, 78 labelled entities, recall 0.96, 0 hits on `must_not_detect`. These numbers are **not** a statement about quality on real legal documents. A validation on real, anonymized documents is still outstanding.
+Current state, on synthetic data only, with NER: 7 documents, 78 labelled entities, recall 0.97, 0 hits on `must_not_detect`. Without NER: recall 0.96. Entries marked `requires: ner` are skipped in rule-only mode. These numbers are **not** a statement about quality on real legal documents. A validation on real, anonymized documents is still outstanding.

@@ -16,5 +16,5 @@ expected:
   - {type: person, text: Mark Avery, role: counsel}
   - {type: criminal_record, text: criminal record}
   - {type: criminal_record, text: prior conviction}
-known_false_negatives:
-  - {type: person, text: Robert Hale, note: "Name without honorific or preceding role; requires spaCy NER (cato-core[ner])."}
+  # No honorific or preceding role: found by spaCy NER only.
+  - {type: person, text: Robert Hale, requires: ner}

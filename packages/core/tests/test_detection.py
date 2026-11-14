@@ -88,10 +88,34 @@ def test_spec_example_context_vs_client_context():
     assert "example_context" not in cl_person.signals
 
 
-def test_bare_name_without_cue_needs_ner():
-    """Documented limitation of rule-only mode."""
-    r = scan("Max Mustermann ist unser Mandant.", "de")
+RULES_ONLY = Detector(DetectorConfig(enable_ner=False))
+
+
+def ner_available() -> bool:
+    return not Detector().scan("Herr Max Mustermann", "de").warnings
+
+
+needs_ner = pytest.mark.skipif(not ner_available(), reason="spaCy models not installed")
+
+
+def test_bare_name_without_cue_is_missed_in_rules_only_mode():
+    r = RULES_ONLY.scan("Max Mustermann ist unser Mandant.", "de")
     assert not [d for d in r.detections if d.entity_type == "person"]
+
+
+@needs_ner
+def test_bare_name_found_by_ner():
+    r = scan("Robert Hale will testify. Later, Hale left the room.", "en")
+    persons = [d for d in r.detections if d.entity_type == "person"]
+    assert [p.text for p in persons] == ["Robert Hale", "Hale"]
+    assert len({p.attributes["ref"] for p in persons}) == 1
+
+
+@needs_ner
+def test_ner_never_overrides_rules():
+    r = scan("Das OLG Hamm hat entschieden. Streng vertraulich – Mandatsgeheimnis", "de")
+    assert ("court", "OLG Hamm") in types(r)
+    assert ("privilege_marker", "Mandatsgeheimnis") in types(r)
 
 
 def test_signal_words_inside_values_are_not_document_signals():
@@ -120,8 +144,11 @@ def test_ambiguous_surname_is_not_propagated():
     text = "Herr Max Mustermann und Frau Erika Mustermann sind verheiratet. Mustermann schweigt."
     r = scan(text, "de")
     persons = [d for d in r.detections if d.entity_type == "person"]
-    assert [p.text for p in persons] == ["Max Mustermann", "Erika Mustermann"]
-    assert persons[0].attributes["ref"] != persons[1].attributes["ref"]
+    assert [p.text for p in persons[:2]] == ["Max Mustermann", "Erika Mustermann"]
+    refs = [p.attributes["ref"] for p in persons]
+    # A bare "Mustermann" may be found by NER, but must not be linked to either person.
+    assert len(set(refs)) == len(refs)
+    assert not [p for p in persons if p.recognizer == "person_propagation"]
 
 
 def test_refs_never_contain_raw_values():
@@ -158,7 +185,7 @@ def test_custom_entity_type():
 
 
 def test_disable_recognizer():
-    r = Detector(DetectorConfig(disabled_recognizers=["email"])).scan("a@b.de")
+    r = Detector(DetectorConfig(disabled_recognizers=["email", "spacy_ner"])).scan("a@b.de")
     assert not r.detections
 
 
@@ -169,13 +196,8 @@ def test_min_confidence_moves_detections_to_suppressed():
 
 
 def test_ner_unavailable_degrades_with_warning():
-    pytest.importorskip("pytest")
-    try:
-        import spacy  # noqa: F401
-        pytest.skip("spaCy installed; covered by NER integration tests")
-    except ImportError:
-        pass
-    r = Detector(DetectorConfig(enable_ner=True)).scan("Herr Max Mustermann", "de")
+    det = Detector(DetectorConfig(ner_models={"de": "model_that_does_not_exist"}))
+    r = det.scan("Herr Max Mustermann", "de")
     assert r.warnings and "NER disabled" in r.warnings[0]
     assert r.detections
 

@@ -23,6 +23,14 @@ SPECIFICITY: dict[str, int] = {
     E.PRIVILEGE_MARKER: 30, E.BUSINESS_SECRET_MARKER: 30, E.LOCATION: 20,
 }
 CUSTOM_RANK = 88
+STATISTICAL_RECOGNIZERS = {"spacy_ner"}
+
+# Extra tokens that statistical NER mislabels in legal text.
+NER_STOPWORDS = {
+    "Az", "Tel", "Fax", "IBAN", "BIC", "NDA", "Mandatsgeheimnis", "Beklagten", "Klägerin", "Zeugin", "Sehr",
+    "Geehrte", "Damen", "Herren", "Kündigungsschutzklage", "Rubrum", "Anlage", "Schriftsatz", "Grüßen",
+    "PRIVILEGED", "CONFIDENTIAL", "Re", "Dear", "Sincerely",
+}
 
 # Entity types whose text is a value (name, address, ...). Context words
 # inside such values are not document cues.
@@ -46,7 +54,7 @@ def detect_language(text: str) -> str:
 class DetectorConfig(BaseModel):
     min_confidence: float = Field(0.3, ge=0.0, le=1.0)
     context_window: int = Field(150, ge=0)
-    enable_ner: bool = False
+    enable_ner: bool = True
     ner_models: dict[str, str] | None = None
     custom_entities: list[dict] = Field(default_factory=list)
     disabled_recognizers: list[str] = Field(default_factory=list)
@@ -58,7 +66,10 @@ class Detector:
         base = recognizers if recognizers is not None else builtin_recognizers()
         base = [r for r in base if r.name not in self.config.disabled_recognizers]
         base += [custom_recognizer(spec) for spec in self.config.custom_entities]
-        self._ner = SpacyRecognizer(self.config.ner_models) if self.config.enable_ner else None
+        self._ner = (
+            SpacyRecognizer(self.config.ner_models, NAME_STOPWORDS | NER_STOPWORDS)
+            if self.config.enable_ner and "spacy_ner" not in self.config.disabled_recognizers else None
+        )
         self.recognizers: list[Recognizer] = base
 
     # ------------------------------------------------------------------
@@ -100,7 +111,9 @@ class Detector:
 # ----------------------------------------------------------------------
 def _rank(det: Detection) -> tuple:
     rank = SPECIFICITY.get(det.entity_type, CUSTOM_RANK if det.recognizer.startswith("custom:") else 0)
-    return (det.validated is True, rank, det.end - det.start, det.confidence)
+    # Deterministic rules beat statistical NER on any overlap.
+    return (det.validated is True, det.recognizer not in STATISTICAL_RECOGNIZERS, rank, det.end - det.start,
+            det.confidence)
 
 
 def resolve_overlaps(candidates: list[Detection]) -> tuple[list[Detection], list[Suppressed]]:
@@ -154,7 +167,7 @@ def propagate_mentions(text: str, accepted: list[Detection]) -> list[Detection]:
             if (owner := next(iter(owners))) in roles:
                 roles.setdefault(surname, roles[owner])
     for d in persons:  # single-token anchors such as "Herr Mustermann"
-        if " " not in d.text and _surname(d.text):
+        if " " not in d.text and _surname(d.text) and len(surname_owners.get(d.text, ())) <= 1:
             targets.setdefault(d.text, 0.7)
     for value, confidence in targets.items():
         for m in re.finditer(rf"(?<![\w-]){re.escape(value)}(?![\w-])", text):

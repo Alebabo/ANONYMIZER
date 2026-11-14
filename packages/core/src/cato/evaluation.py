@@ -9,6 +9,7 @@ Corpus format (YAML, one document per file)::
       ...
     expected:              # must be detected (type + exact text, optional role)
       - {type: person, text: Max Mustermann, role: client}
+      - {type: person, text: Robert Hale, requires: ner}  # skipped without NER
     must_not_detect:       # type and/or text; any match is a false positive
       - {type: tax_id, text: "12345678901"}
     expected_signals: [criminal_proceeding]
@@ -42,6 +43,7 @@ class DocReport:
     fixed_false_negatives: list[dict] = field(default_factory=list)
     fixed_false_positives: list[dict] = field(default_factory=list)
     unlabelled: list[Detection] = field(default_factory=list)
+    skipped: list[dict] = field(default_factory=list)  # require NER, which is unavailable
     expected_count: int = 0
     known_fn_count: int = 0
     known_fp_count: int = 0
@@ -67,8 +69,12 @@ def evaluate_doc(doc: dict, detector: Detector) -> DocReport:
                        known_fp_count=len(doc.get("known_false_positives", [])))
     dets = result.detections
     matched: set[str] = set()
+    ner_active = detector.config.enable_ner and not any("NER disabled" in w for w in result.warnings)
 
     for spec in doc.get("expected", []):
+        if spec.get("requires") == "ner" and not ner_active:
+            report.skipped.append(spec)
+            continue
         hits = [d for d in dets if _matches(spec, d)]
         if not hits:
             report.missed.append(spec)
@@ -100,7 +106,7 @@ def evaluate_doc(doc: dict, detector: Detector) -> DocReport:
 
 
 def summarize(reports: list[DocReport]) -> dict:
-    expected = sum(r.expected_count for r in reports)
+    expected = sum(r.expected_count - len(r.skipped) for r in reports)
     missed = sum(len(r.missed) for r in reports)
     known_fn = sum(r.known_fn_count for r in reports)
     fps = sum(len(r.false_positives) for r in reports)
@@ -113,4 +119,5 @@ def summarize(reports: list[DocReport]) -> dict:
         "documented_false_negatives": known_fn,
         "documented_false_positives": sum(r.known_fp_count for r in reports),
         "unlabelled_detections": sum(len(r.unlabelled) for r in reports),
+        "skipped_requires_ner": sum(len(r.skipped) for r in reports),
     }

@@ -4,7 +4,9 @@ Privacy engine for legal AI: detection, classification, anonymization, policies.
 Status: step 1 (detection) is implemented.
 
 ```bash
-pip install -e ".[dev]"          # optional: ".[ner]" for spaCy
+pip install -e ".[dev]"
+python -m spacy download de_core_news_lg
+python -m spacy download en_core_web_lg
 pytest
 cato scan document.txt           # JSON without raw values
 cato eval tests/corpus           # recall / false positives on the corpus
