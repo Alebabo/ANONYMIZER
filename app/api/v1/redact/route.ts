@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { analyzeText, redactText } from "@/lib/privacy-engine";
+import { analyzeText, redactText } from "../../../../lib/privacy-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
