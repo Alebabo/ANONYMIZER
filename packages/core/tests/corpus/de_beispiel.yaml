@@ -8,13 +8,16 @@ text: |
 
   Herr Max Mustermann, Musterstraße 1, 12345 Musterstadt, schließt mit der Beispiel AG einen Kaufvertrag.
   Der Kaufpreis beträgt 1.000 Euro. Rechnungsnummer 12345678901.
+# The example heading is a separate paragraph, so it does not lower the
+# person (example context acts locally on purpose).
+expected_risk: sensitive
 expected_signals: [example_context]
 absent_signals: [client_relationship, criminal_proceeding]
 expected:
   - {type: person, text: Max Mustermann}
   - {type: address, text: "Musterstraße 1, 12345 Musterstadt"}
   - {type: organization, text: Beispiel AG}
-  - {type: money, text: 1.000 Euro}
+  - {type: money, text: 1.000 Euro, risk: low}
 must_not_detect:
   # 11 digits but invalid Steuer-ID checksum and no label -> not a tax id
   - {type: tax_id, text: "12345678901"}

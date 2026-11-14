@@ -6,6 +6,7 @@ text: |
   Bestellnummer 98765432109, Artikel 4711. Testkennung DE00 1234 5678 9012 3456 78 im Datensatz.
   Herr Ober, bitte zahlen! Die Kosten betragen 10000 Euro. Im Jahr 2024 stiegen die Preise um 3,5 %.
   Die Firma ist vertraulich mit dem Thema umgegangen.
+expected_risk: sensitive
 expected:
   - {type: money, text: 10000 Euro}
   - {type: business_secret_marker, text: vertraulich}

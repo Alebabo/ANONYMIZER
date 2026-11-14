@@ -8,10 +8,11 @@ Corpus format (YAML, one document per file)::
     text: |
       ...
     expected:              # must be detected (type + exact text, optional role)
-      - {type: person, text: Max Mustermann, role: client}
+      - {type: person, text: Max Mustermann, role: client, risk: critical}
       - {type: person, text: Robert Hale, requires: ner}  # skipped without NER
     must_not_detect:       # type and/or text; any match is a false positive
       - {type: tax_id, text: "12345678901"}
+    expected_risk: critical  # document-level classification
     expected_signals: [criminal_proceeding]
     absent_signals: [example_context]
     known_false_negatives: # documented misses; must currently be missed
@@ -27,6 +28,7 @@ from pathlib import Path
 
 import yaml
 
+from cato.classify import Classifier, DocumentClassification
 from cato.detect import Detector
 from cato.models import Detection, ScanResult
 
@@ -35,6 +37,9 @@ from cato.models import Detection, ScanResult
 class DocReport:
     id: str
     result: ScanResult
+    classification: DocumentClassification | None = None
+    wrong_document_risk: tuple[str, str] | None = None
+    wrong_risk: list[tuple[dict, str]] = field(default_factory=list)
     missed: list[dict] = field(default_factory=list)
     wrong_role: list[tuple[dict, Detection]] = field(default_factory=list)
     false_positives: list[tuple[dict, Detection]] = field(default_factory=list)
@@ -50,7 +55,7 @@ class DocReport:
 
     @property
     def ok(self) -> bool:
-        return not (self.missed or self.wrong_role or self.false_positives or self.missing_signals
+        return not (self.missed or self.wrong_role or self.wrong_risk or self.wrong_document_risk or self.false_positives or self.missing_signals
                     or self.unexpected_signals or self.fixed_false_negatives or self.fixed_false_positives)
 
 
@@ -62,11 +67,16 @@ def _matches(spec: dict, det: Detection) -> bool:
     return (spec.get("type") in (None, det.entity_type)) and (spec.get("text") in (None, det.text))
 
 
-def evaluate_doc(doc: dict, detector: Detector) -> DocReport:
+def evaluate_doc(doc: dict, detector: Detector, classifier: Classifier | None = None) -> DocReport:
     result = detector.scan(doc["text"], doc.get("language"))
+    classification = (classifier or Classifier()).classify_text(doc["text"], result)
+    risk_by_id = {e.detection_id: e.risk.value for e in classification.entities}
     report = DocReport(id=doc["id"], result=result, expected_count=len(doc.get("expected", [])),
                        known_fn_count=len(doc.get("known_false_negatives", [])),
                        known_fp_count=len(doc.get("known_false_positives", [])))
+    report.classification = classification
+    if (want := doc.get("expected_risk")) and want != classification.risk.value:
+        report.wrong_document_risk = (want, classification.risk.value)
     dets = result.detections
     matched: set[str] = set()
     ner_active = detector.config.enable_ner and not any("NER disabled" in w for w in result.warnings)
@@ -84,6 +94,10 @@ def evaluate_doc(doc: dict, detector: Detector) -> DocReport:
             for d in hits:
                 if d.attributes.get("role") != spec["role"]:
                     report.wrong_role.append((spec, d))
+        if "risk" in spec:
+            for d in hits:
+                if risk_by_id[d.id] != spec["risk"]:
+                    report.wrong_risk.append((spec, risk_by_id[d.id]))
 
     for spec in doc.get("must_not_detect", []):
         report.false_positives += [(spec, d) for d in dets if _matches(spec, d)]

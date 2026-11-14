@@ -1,14 +1,15 @@
 # cato-core
 
 Privacy engine for legal AI: detection, classification, anonymization, policies.
-Status: step 1 (detection) is implemented.
+Status: step 1 (detection) and step 2 (classification) are implemented.
 
 ```bash
 pip install -e ".[dev]"
 python -m spacy download de_core_news_lg
 python -m spacy download en_core_web_lg
 pytest
-cato scan document.txt           # JSON without raw values
+cato scan document.txt           # detections as JSON, no raw values
+cato classify document.txt       # risk per entity and document
 cato eval tests/corpus           # recall / false positives on the corpus
 ```
 
@@ -23,4 +24,4 @@ for d in result.detections:
 `Detection.text` contains the raw value. For logs and traces use only
 `Detection.redacted()`.
 
-Details: [docs/detection.md](../../docs/detection.md)
+Details: [docs/detection.md](../../docs/detection.md), [docs/classification.md](../../docs/classification.md)

@@ -14,6 +14,8 @@ def test_corpus_document(doc):
     r = evaluate_doc(doc, DETECTOR)
     assert not r.missed, f"missed: {r.missed}"
     assert not r.wrong_role, [(s, d.attributes) for s, d in r.wrong_role]
+    assert not r.wrong_risk, r.wrong_risk
+    assert r.wrong_document_risk is None, f"document risk expected/actual: {r.wrong_document_risk}"
     assert not r.false_positives, [(s, d.entity_type, d.text) for s, d in r.false_positives]
     assert not r.missing_signals, r.missing_signals
     assert not r.unexpected_signals, r.unexpected_signals

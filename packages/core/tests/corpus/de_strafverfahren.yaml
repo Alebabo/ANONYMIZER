@@ -21,22 +21,23 @@ text: |
 
   Mit freundlichen Grüßen
   Rechtsanwältin Dr. Anna Schmidt
+expected_risk: critical
 expected_signals: [client_relationship, criminal_proceeding, confidential]
 absent_signals: [example_context]
 expected:
   - {type: privilege_marker, text: Streng vertraulich}
   - {type: privilege_marker, text: Mandatsgeheimnis}
-  - {type: person, text: Max Mustermann, role: client}
+  - {type: person, text: Max Mustermann, role: client, risk: critical}
   - {type: person, text: Mustermann, role: client}
   - {type: date_of_birth, text: 15.03.1985}
-  - {type: address, text: "Lindenstraße 12, 10115 Berlin"}
+  - {type: address, text: "Lindenstraße 12, 10115 Berlin", risk: critical}
   - {type: case_number, text: 123 Js 4567/24}
   - {type: criminal_record, text: vorbestraft}
   - {type: health_data, text: Depression}
   - {type: health_data, text: psychotherapeutischer}
   - {type: health_data, text: arbeitsunfähig}
   - {type: date, text: 02.02.2024}
-  - {type: person, text: Erika Musterfrau, role: witness}
+  - {type: person, text: Erika Musterfrau, role: witness, risk: sensitive}
   - {type: phone, text: 030 12345678}
   - {type: email, text: erika.musterfrau@example.org}
   - {type: organization, text: Nordlicht Logistik GmbH}
@@ -46,7 +47,7 @@ expected:
   - {type: tax_id, text: "86095742719"}
   - {type: legal_citation, text: § 136 Abs. 1 StPO}
   - {type: legal_citation, text: Art. 6 EMRK}
-  - {type: court, text: Landgericht Berlin}
+  - {type: court, text: Landgericht Berlin, risk: low}
   - {type: case_number, text: 2 O 123/24}
   - {type: person, text: Anna Schmidt, role: counsel}
 must_not_detect:

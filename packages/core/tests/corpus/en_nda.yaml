@@ -12,6 +12,7 @@ text: |
   The settlement amount of $250,000.00 will be paid to the account GB82 WEST 1234 5698 7654 32.
   For identity verification we received SSN 123-45-6789 and card number 4111 1111 1111 1111.
   Case No. 1:23-cv-01234 is pending before the United States District Court for the Northern District of Illinois.
+expected_risk: critical
 expected_signals: [client_relationship, confidential]
 expected:
   - {type: privilege_marker, text: PRIVILEGED & CONFIDENTIAL}

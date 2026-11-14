@@ -6,9 +6,10 @@ text: |
   criminal record. Kingsley denies any prior conviction.
 
   Robert Hale, a former colleague, will testify as a witness.
+expected_risk: critical
 expected_signals: [litigation, employment]
 expected:
-  - {type: person, text: Laura Kingsley, role: plaintiff}
+  - {type: person, text: Laura Kingsley, role: plaintiff, risk: critical}
   - {type: person, text: Kingsley, role: plaintiff}
   - {type: health_data, text: diagnosed}
   - {type: health_data, text: cancer}

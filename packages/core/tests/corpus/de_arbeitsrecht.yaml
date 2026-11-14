@@ -17,13 +17,14 @@ text: |
 
   Die Kündigung vom 30.06.2024 verstößt gegen § 1 Abs. 2 KSchG und § 168 SGB IX.
   Zuständig ist das Arbeitsgericht Köln. E-Mail: j.beispielmann@mail.example
+expected_risk: critical
 expected_signals: [employment, litigation]
 expected:
   - {type: person, text: Jonas Beispielmann, role: plaintiff}
   - {type: organization, text: Rheinwerk Systeme GmbH & Co. KG}
   - {type: person, text: Paul Fiktiv}
   - {type: date, text: 1. April 2015}
-  - {type: money, text: 5.200 EUR}
+  - {type: money, text: 5.200 EUR, risk: sensitive}
   - {type: social_security_number, text: 12 150385 M 012}
   - {type: health_data, text: Grad der Behinderung}
   - {type: special_category, text: Gewerkschaftsmitglied}
