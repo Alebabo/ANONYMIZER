@@ -1,4 +1,4 @@
-"""Command line: ``cato scan``, ``cato classify`` (JSON, no raw values by default) and ``cato eval <dir>``."""
+"""Command line: ``cato scan | classify | anonymize | restore | protect | policy-validate | eval``."""
 
 from __future__ import annotations
 
@@ -21,6 +21,24 @@ def main(argv: list[str] | None = None) -> int:
     cl.add_argument("path", help="file path or '-' for stdin")
     cl.add_argument("--language", choices=["de", "en"])
     cl.add_argument("--config", help="classifier YAML config")
+    an = sub.add_parser("anonymize", help="detect and anonymize; prints the transformed text")
+    an.add_argument("path", help="file path or '-' for stdin")
+    an.add_argument("--language", choices=["de", "en"])
+    an.add_argument("--vault", help="vault file for reversible pseudonyms (key from CATO_VAULT_KEY)")
+    an.add_argument("--namespace", help="vault namespace, e.g. a matter id (required with --vault)")
+    an.add_argument("--json", action="store_true", help="print result metadata as JSON")
+    rs = sub.add_parser("restore", help="resolve placeholders using the vault (authorised use only)")
+    rs.add_argument("path", help="file path or '-' for stdin")
+    rs.add_argument("--vault", required=True)
+    rs.add_argument("--namespace", required=True)
+    pr = sub.add_parser("protect", help="full pipeline: detect, classify, apply policy, anonymize")
+    pr.add_argument("path", help="file path or '-' for stdin")
+    pr.add_argument("--policy", help="policy YAML (default: built-in legal-default)")
+    pr.add_argument("--destination", choices=["external", "local"], default="external")
+    pr.add_argument("--language", choices=["de", "en"])
+    pr.add_argument("--dry-run", action="store_true", help="evaluate and report without returning text")
+    pv = sub.add_parser("policy-validate", help="validate a policy YAML file")
+    pv.add_argument("path")
     ev = sub.add_parser("eval", help="evaluate detection against a YAML corpus directory")
     ev.add_argument("corpus", help="directory with *.yaml documents")
     args = parser.parse_args(argv)
@@ -29,6 +47,14 @@ def main(argv: list[str] | None = None) -> int:
         return _eval(args.corpus)
     if args.command == "classify":
         return _classify(args)
+    if args.command == "anonymize":
+        return _anonymize(args)
+    if args.command == "restore":
+        return _restore(args)
+    if args.command == "protect":
+        return _protect(args)
+    if args.command == "policy-validate":
+        return _policy_validate(args.path)
 
     text = sys.stdin.read() if args.path == "-" else open(args.path, encoding="utf-8").read()
     result = Detector(DetectorConfig(enable_ner=args.ner)).scan(text, args.language)
@@ -52,6 +78,70 @@ def _classify(args: argparse.Namespace) -> int:
     doc = Classifier(config).classify_text(text, result)
     json.dump(doc.model_dump(mode="json"), sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
+    return 0
+
+
+def _read(path: str) -> str:
+    return sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
+
+
+def _anonymize(args: argparse.Namespace) -> int:
+    from cato.anonymize import Anonymizer
+    from cato.vault import FileVault, VaultKey
+
+    text = _read(args.path)
+    vault = FileVault(args.vault, VaultKey.from_env()) if args.vault else None
+    result = Anonymizer(vault=vault).anonymize(text, Detector().scan(text, args.language), namespace=args.namespace)
+    if args.json:
+        json.dump(result.model_dump(mode="json"), sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    else:
+        sys.stdout.write(result.text)
+    return 0
+
+
+def _restore(args: argparse.Namespace) -> int:
+    from cato.anonymize import restore
+    from cato.vault import FileVault, VaultKey
+
+    result = restore(_read(args.path), FileVault(args.vault, VaultKey.from_env()), args.namespace)
+    sys.stdout.write(result.text)
+    if result.unresolved:
+        print(f"\nunresolved placeholders: {', '.join(result.unresolved)}", file=sys.stderr)
+    return 0
+
+
+def _protect(args: argparse.Namespace) -> int:
+    from cato.pipeline import Pipeline
+    from cato.policy import Policy
+
+    policy = Policy.from_file(args.policy) if args.policy else None
+    result = Pipeline(policy).protect(_read(args.path), args.destination, language=args.language,
+                                      dry_run=args.dry_run)
+    out = {
+        "outcome": result.decision.outcome.value,
+        "policy": result.decision.policy,
+        "policy_hash": result.decision.policy_hash,
+        "risk": result.classification.risk.value,
+        "reasons": result.decision.reasons,
+        "text": None if args.dry_run else result.text,
+    }
+    json.dump(out, sys.stdout, ensure_ascii=False, indent=2)
+    sys.stdout.write("\n")
+    return 0 if result.allowed else 2
+
+
+def _policy_validate(path: str) -> int:
+    from pydantic import ValidationError
+
+    from cato.policy import Policy
+
+    try:
+        policy = Policy.from_file(path)
+    except ValidationError as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    print(f"ok {policy.ref} {policy.content_hash} rules={len(policy.rules)} document_rules={len(policy.document_rules)}")
     return 0
 
 

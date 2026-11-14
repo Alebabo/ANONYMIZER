@@ -1,0 +1,28 @@
+# Cato self-hosting. Quickstart:
+#   cp .env.example .env   # set the keys (see comments there)
+#   docker compose up -d --build
+#   curl -s localhost:8080/health
+services:
+  api:
+    build: ./packages/core
+    image: cato-api:local
+    env_file: .env
+    environment:
+      CATO_HOST: 0.0.0.0
+    # Published on localhost only. Put a TLS-terminating reverse proxy in
+    # front before exposing it to a network.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - cato-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  cato-data:

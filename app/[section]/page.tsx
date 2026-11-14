@@ -6,5 +6,5 @@ const sections: Record<string, string> = { gateway: "Gateway", metrics: "Metrics
 export default async function Section({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;
   if (!sections[section]) notFound();
-  return (<><PageHeader title={sections[section]} /><p className="text-muted-foreground p-6 text-sm">Not implemented yet. Planned for a later phase.</p></>);
+  return (<><PageHeader title={sections[section]} /><p className="text-muted-foreground p-4 text-sm md:p-6">Not implemented yet. Planned for a later phase.</p></>);
 }
