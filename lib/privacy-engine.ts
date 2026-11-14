@@ -12,7 +12,7 @@ const RULES: Rule[] = [
 ];
 
 function stableId(type: string, start: number, end: number) {
-  return \`${type.toLowerCase().replace(/[^a-z0-9]+/g, "-")}}-${start}}-${end}}\`;
+  return type.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + start + "-" + end;
 }
 
 export function analyzeText(text: string) {
