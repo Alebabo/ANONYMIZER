@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from cato.anonymize import DEFAULT_METHODS, Anonymizer, Method
 from cato.detect import Detector
 from cato.evaluation import evaluate_doc, load_corpus, summarize
 
@@ -28,3 +29,12 @@ def test_corpus_summary_thresholds():
     summary = summarize([evaluate_doc(d, DETECTOR) for d in CORPUS])
     assert summary["false_positive_hits"] == 0
     assert summary["recall"] >= 0.9, summary
+
+
+@pytest.mark.parametrize("doc", CORPUS, ids=[d["id"] for d in CORPUS])
+def test_corpus_anonymization_leaves_no_protected_value(doc):
+    result = DETECTOR.scan(doc["text"], doc.get("language"))
+    out = Anonymizer().anonymize(doc["text"], result)  # strict: raises on residual values
+    for spec in doc.get("expected", []):
+        if DEFAULT_METHODS.get(spec["type"], Method.REDACT) != Method.KEEP and len(spec["text"]) >= 3:
+            assert spec["text"] not in out.text, spec

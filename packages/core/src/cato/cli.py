@@ -1,4 +1,4 @@
-"""Command line: ``cato scan``, ``cato classify`` (JSON, no raw values by default) and ``cato eval <dir>``."""
+"""Command line: ``cato scan | classify | anonymize | restore | eval``."""
 
 from __future__ import annotations
 
@@ -21,6 +21,16 @@ def main(argv: list[str] | None = None) -> int:
     cl.add_argument("path", help="file path or '-' for stdin")
     cl.add_argument("--language", choices=["de", "en"])
     cl.add_argument("--config", help="classifier YAML config")
+    an = sub.add_parser("anonymize", help="detect and anonymize; prints the transformed text")
+    an.add_argument("path", help="file path or '-' for stdin")
+    an.add_argument("--language", choices=["de", "en"])
+    an.add_argument("--vault", help="vault file for reversible pseudonyms (key from CATO_VAULT_KEY)")
+    an.add_argument("--namespace", help="vault namespace, e.g. a matter id (required with --vault)")
+    an.add_argument("--json", action="store_true", help="print result metadata as JSON")
+    rs = sub.add_parser("restore", help="resolve placeholders using the vault (authorised use only)")
+    rs.add_argument("path", help="file path or '-' for stdin")
+    rs.add_argument("--vault", required=True)
+    rs.add_argument("--namespace", required=True)
     ev = sub.add_parser("eval", help="evaluate detection against a YAML corpus directory")
     ev.add_argument("corpus", help="directory with *.yaml documents")
     args = parser.parse_args(argv)
@@ -29,6 +39,10 @@ def main(argv: list[str] | None = None) -> int:
         return _eval(args.corpus)
     if args.command == "classify":
         return _classify(args)
+    if args.command == "anonymize":
+        return _anonymize(args)
+    if args.command == "restore":
+        return _restore(args)
 
     text = sys.stdin.read() if args.path == "-" else open(args.path, encoding="utf-8").read()
     result = Detector(DetectorConfig(enable_ner=args.ner)).scan(text, args.language)
@@ -52,6 +66,36 @@ def _classify(args: argparse.Namespace) -> int:
     doc = Classifier(config).classify_text(text, result)
     json.dump(doc.model_dump(mode="json"), sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
+    return 0
+
+
+def _read(path: str) -> str:
+    return sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
+
+
+def _anonymize(args: argparse.Namespace) -> int:
+    from cato.anonymize import Anonymizer
+    from cato.vault import FileVault, VaultKey
+
+    text = _read(args.path)
+    vault = FileVault(args.vault, VaultKey.from_env()) if args.vault else None
+    result = Anonymizer(vault=vault).anonymize(text, Detector().scan(text, args.language), namespace=args.namespace)
+    if args.json:
+        json.dump(result.model_dump(mode="json"), sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    else:
+        sys.stdout.write(result.text)
+    return 0
+
+
+def _restore(args: argparse.Namespace) -> int:
+    from cato.anonymize import restore
+    from cato.vault import FileVault, VaultKey
+
+    result = restore(_read(args.path), FileVault(args.vault, VaultKey.from_env()), args.namespace)
+    sys.stdout.write(result.text)
+    if result.unresolved:
+        print(f"\nunresolved placeholders: {', '.join(result.unresolved)}", file=sys.stderr)
     return 0
 
 

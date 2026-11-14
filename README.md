@@ -3,7 +3,7 @@
 Cato detects, classifies, anonymizes and controls sensitive legal information before AI models or agents process it.
 
 ## Repository layout
-- `packages/core/` — Python privacy engine (`cato-core`). Implemented: detection ([docs/detection.md](docs/detection.md)) and classification ([docs/classification.md](docs/classification.md)).
+- `packages/core/` — Python privacy engine (`cato-core`). Implemented: detection ([docs/detection.md](docs/detection.md)), classification ([docs/classification.md](docs/classification.md)), anonymization + vault ([docs/anonymization.md](docs/anonymization.md)).
 - `app/`, `components/` — Next.js dashboard (Langfuse-derived design, example data only).
 - `app/api/v1/*` — legacy TypeScript prototype endpoints, to be replaced by the Python API.
 
