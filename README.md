@@ -7,7 +7,14 @@ Minimal Next.js frontend scaffold for a privacy gateway between legal documents 
 - Three classification levels: CRITICAL, GREY, UNCRITICAL.
 - Grey consent controls are UI-only and do not authorize any external transfer.
 - Demo findings are illustrative sample data.
-- Files are not uploaded, parsed, persisted, classified, or sent to an AI provider.
+- The browser UI is still a prototype; selected files are not uploaded or parsed.
+- Stateless text API: `POST /api/v1/analyze` and `POST /api/v1/redact`.
+- Initial rule-based detection for IBANs, German tax IDs, emails, phone numbers, postcodes and selected legal citations.
+- Critical matches are always redacted; Grey matches require explicit request-specific consent to remain.
+- API responses always require human review and set `safeToShare: false`.
+
+## API
+See [docs/API.md](docs/API.md) for request examples and limitations. The API accepts text only (max. 100,000 characters) and does not persist request bodies.
 
 ## Run
 ```bash
