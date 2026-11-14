@@ -1,7 +1,7 @@
 # cato-core
 
 Privacy engine for legal AI: detection, classification, anonymization, policies.
-Status: steps 1–4 (detection, classification, anonymization + vault, policies) are implemented.
+Status: Phase 1 complete (detection, classification, anonymization + vault, policies, REST API, Docker).
 
 ```bash
 pip install -e ".[dev]"
@@ -12,6 +12,7 @@ cato scan document.txt           # detections as JSON, no raw values
 cato classify document.txt       # risk per entity and document
 cato anonymize document.txt      # transformed text (add --vault/--namespace for reversible)
 cato protect document.txt        # full pipeline with the built-in legal-default policy
+CATO_API_KEYS=... cato-api       # REST API on 127.0.0.1:8080 (see docs/API.md)
 cato eval tests/corpus           # recall / false positives on the corpus
 ```
 
