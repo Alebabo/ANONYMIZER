@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { FileText, Fingerprint, LockKeyhole, Plus, Search, Shield, ShieldCheck, Upload } from "lucide-react";
+import { ArrowUpRight, FileText, LockKeyhole, Plus, Search, Shield, Upload } from "lucide-react";
 
 type Level = "CRITICAL" | "GREY" | "UNCRITICAL";
 type Finding = { id: string; value: string; category: string; level: Level; reason: string };
@@ -52,52 +52,74 @@ export default function Home() {
   }
 
   return (
-    <main className="simple-app">
-      <header className="simple-header">
-        <a className="simple-brand"><span><Shield size={16}/></span>CATO</a>
-        <div className="simple-env"><i/> DEMO ENVIRONMENT</div>
-      </header>
-      <div className="simple-content">
-        <div className="simple-title"><div><p>PRIVACY WORKSPACE</p><h1>Overview</h1></div><button className="button button-dark" onClick={() => input.current?.click()}><Plus size={15}/> Add document</button></div>
-        <nav className="subtabs" aria-label="Workspace sections">
-          {(["Overview", "Documents", "Privacy rules"] as Tab[]).map(t => <button key={t} className={tab === t ? "subtab active" : "subtab"} onClick={() => setTab(t)}>{t}{t === "Documents" && <span>{docs.length}</span>}</button>)}
+    <main className="cato-shell">
+      <header className="cato-header">
+        <a className="cato-logo"><span><Shield size={16}/></span>CATO</a>
+        <nav className="top-tabs" aria-label="Main navigation">
+          {(["Overview", "Documents", "Privacy rules"] as Tab[]).map(t => <button key={t} className={tab === t ? "top-tab active" : "top-tab"} onClick={() => setTab(t)}>{t}{t === "Documents" && <small>{docs.length}</small>}</button>)}
         </nav>
-        <div className="simple-notice"><LockKeyhole size={14}/><span><b>Prototype only.</b> No real detection, redaction or secure processing is active.</span></div>
+        <div className="environment"><i/> DEMO</div>
+      </header>
+
+      <div className="cato-content">
+        <div className="page-intro">
+          <div><div className="eyebrow">PRIVACY INFRASTRUCTURE FOR AI</div><h1>{tab}</h1><p>{tab === "Overview" ? "Control what your AI agents are allowed to see." : tab === "Documents" ? "Manage and inspect your source documents." : "Define how sensitive information is handled."}</p></div>
+          {tab !== "Privacy rules" && <button className="primary-action" onClick={() => input.current?.click()}><Plus size={15}/> Add document</button>}
+        </div>
+
+        <div className="prototype-note"><LockKeyhole size={13}/><span><b>Prototype.</b> Detection and redaction are not yet connected to document uploads. Do not use confidential files.</span></div>
 
         {tab === "Overview" && <>
-          <div className="simple-stats">
-            <div><span>CRITICAL</span><b>{counts.CRITICAL.toString().padStart(2, "0")}</b><small>Never shared</small></div>
-            <div><span>GREY</span><b>{counts.GREY.toString().padStart(2, "0")}</b><small>Consent required</small></div>
-            <div><span>UNCRITICAL</span><b>{counts.UNCRITICAL.toString().padStart(2, "0")}</b><small>Allowed by policy</small></div>
-          </div>
-          <section className="simple-card">
-            <div className="simple-card-head"><div><h2>Recent documents</h2><p>Your latest files and text snippets.</p></div><button className="text-button" onClick={() => setTab("Documents")}>View all →</button></div>
-            {docs.slice(0, 4).map(d => <button className="simple-doc-row" key={d.id} onClick={() => { setActive(d.id); setTab("Documents"); }}><FileText size={17}/><b>{d.name}</b><small>{d.date}</small><span>{d.findings.length ? "Analysed" : "Pending"}</span></button>)}
+          <section className="overview-counts">
+            <div><span>CRITICAL</span><strong>{counts.CRITICAL.toString().padStart(2, "0")}</strong><small>Never shared</small></div>
+            <div><span>GREY</span><strong>{counts.GREY.toString().padStart(2, "0")}</strong><small>Requires consent</small></div>
+            <div><span>UNCRITICAL</span><strong>{counts.UNCRITICAL.toString().padStart(2, "0")}</strong><small>Allowed by policy</small></div>
           </section>
-          <section className="simple-card policy-summary"><div className="simple-card-head"><div><h2>Privacy policy</h2><p>How Cato treats sensitive information.</p></div><ShieldCheck size={18}/></div><div className="policy-line"><b>Critical</b><span>Always blocked</span></div><div className="policy-line"><b>Grey</b><span>Requires explicit consent</span></div><div className="policy-line"><b>Uncritical</b><span>Allowed by policy</span></div></section>
+
+          <section className="plain-section">
+            <div className="section-heading"><div><h2>Recent documents</h2><p>Documents in this workspace</p></div><button className="subtle-link" onClick={() => setTab("Documents")}>View all <ArrowUpRight size={13}/></button></div>
+            <div className="doc-table-head"><span>DOCUMENT</span><span>TYPE</span><span>SIZE</span><span>STATUS</span></div>
+            {docs.slice(0, 5).map(d => <button className="doc-table-row" key={d.id} onClick={() => { setActive(d.id); setTab("Documents"); }}><span className="doc-title"><FileText size={15}/><b>{d.name}</b></span><span>{d.type}</span><span>{d.size}</span><span className="doc-status">{d.findings.length ? "Sample data" : "Not analysed"}</span></button>)}
+            {!docs.length && <div className="empty-line">No documents yet.</div>}
+          </section>
+
+          <section className="plain-section policy-overview">
+            <div className="section-heading"><div><h2>Privacy policy</h2><p>Default classification behaviour</p></div><button className="subtle-link" onClick={() => setTab("Privacy rules")}>View rules <ArrowUpRight size={13}/></button></div>
+            <div className="policy-columns">
+              <div><b>Critical</b><p>Never shared with an AI agent.</p></div>
+              <div><b>Grey</b><p>Requires explicit, request-specific consent.</p></div>
+              <div><b>Uncritical</b><p>May pass according to policy.</p></div>
+            </div>
+          </section>
         </>}
 
-        {tab === "Documents" && <div className="simple-documents">
-          <section className="simple-card">
-            <div className="simple-card-head"><div><h2>Add content</h2><p>Upload a file or paste legal text.</p></div></div>
-            <button className="simple-upload" onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Upload size={19}/><b>Choose a file or drag it here</b><small>PDF, DOCX, TXT</small></button>
+        {tab === "Documents" && <>
+          <section className="plain-section upload-section">
+            <div className="section-heading"><div><h2>Add content</h2><p>Upload a document or paste text for analysis.</p></div></div>
+            <button className="minimal-drop" onClick={() => input.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); addFiles(e.dataTransfer.files); }}><Upload size={17}/><b>Drop files here or <u>browse</u></b><small>PDF, DOCX, TXT · max 20 MB</small></button>
             <input ref={input} hidden type="file" multiple accept=".pdf,.docx,.txt" onChange={e => addFiles(e.target.files)}/>
-            <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Or paste text here…" rows={3}/>
-            <div className="simple-form-foot"><small>Temporary browser state only</small><button className="button button-dark" onClick={addText} disabled={!text.trim()}><Plus size={14}/> Add text</button></div>
+            <div className="paste-row"><textarea value={text} onChange={e => setText(e.target.value)} placeholder="Or paste text here…" rows={3}/><button className="primary-action" onClick={addText} disabled={!text.trim()}><Plus size={14}/> Add text</button></div>
           </section>
-          <section className="simple-card">
-            <div className="simple-card-head"><div><h2>All documents</h2><p>{docs.length} documents in this workspace.</p></div><label className="simple-search"><Search size={14}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search"/></label></div>
-            {visible.map(d => <button className={"simple-doc-row " + (active === d.id ? "chosen" : "")} key={d.id} onClick={() => setActive(d.id)}><FileText size={17}/><b>{d.name}</b><small>{d.size}</small><span>{d.findings.length ? "Analysed" : "Pending"}</span></button>)}
-            {!visible.length && <p className="simple-empty">No documents found.</p>}
+          <section className="plain-section">
+            <div className="section-heading"><div><h2>All documents</h2><p>{docs.length} items</p></div><label className="minimal-search"><Search size={14}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search documents"/></label></div>
+            <div className="doc-table-head"><span>DOCUMENT</span><span>TYPE</span><span>SIZE</span><span>STATUS</span></div>
+            {visible.map(d => <button className={"doc-table-row " + (active === d.id ? "selected" : "")} key={d.id} onClick={() => setActive(d.id)}><span className="doc-title"><FileText size={15}/><b>{d.name}</b></span><span>{d.type}</span><span>{d.size}</span><span className="doc-status">{d.findings.length ? "Sample data" : "Not analysed"}</span></button>)}
+            {!visible.length && <div className="empty-line">No documents found.</div>}
           </section>
-          {doc && <section className="simple-card"><div className="simple-card-head"><div><h2>Privacy analysis</h2><p>{doc.name}</p></div><Fingerprint size={18}/></div>
-            {doc.findings.length ? doc.findings.map(f => <div className="simple-finding" key={f.id}><div><b>{f.level}</b><small>{f.category}</small></div><strong>{f.value}</strong><p>{f.reason}</p>{f.level === "CRITICAL" && <small>Always blocked</small>}</div>) : <p className="simple-empty">No analysis available. The processing engine is not connected yet.</p>}
+          {doc && <section className="plain-section"><div className="section-heading"><div><h2>Privacy analysis</h2><p>{doc.name}</p></div></div>
+            {doc.findings.length ? doc.findings.map(f => <div className="finding-line" key={f.id}><span className={"finding-level " + f.level.toLowerCase()}>{f.level}</span><b>{f.value}</b><small>{f.category} · {f.reason}</small></div>) : <div className="empty-line">No analysis available. The processing engine is not connected to document uploads.</div>}
           </section>}
-        </div>}
+        </>}
 
-        {tab === "Privacy rules" && <section className="simple-card rules-card"><div className="simple-card-head"><div><h2>Privacy rules</h2><p>Default handling for detected information.</p></div></div><div className="policy-line"><b>Critical</b><span>Never shared with an AI agent. Consent cannot override this rule.</span></div><div className="policy-line"><b>Grey</b><span>Shared only after explicit, request-specific consent.</span></div><div className="policy-line"><b>Uncritical</b><span>May be shared according to the active policy.</span></div><p className="rules-footnote">Policy enforcement is a planned feature and is not active in this prototype.</p></section>}
+        {tab === "Privacy rules" && <section className="plain-section rules-list">
+          <div className="section-heading"><div><h2>Classification policy</h2><p>How information is handled before reaching an AI agent.</p></div></div>
+          <div className="rule-row"><div><span className="rule-marker critical"/> <b>Critical</b></div><p>Never shared. User consent cannot override this rule.</p><small>BLOCKED BY DEFAULT</small></div>
+          <div className="rule-row"><div><span className="rule-marker grey"/> <b>Grey</b></div><p>Shared only after explicit, request-specific user consent.</p><small>CONSENT REQUIRED</small></div>
+          <div className="rule-row"><div><span className="rule-marker uncritical"/> <b>Uncritical</b></div><p>May be shared according to the active policy.</p><small>POLICY CONTROLLED</small></div>
+          <p className="rules-disclaimer">These rules are product design principles. Enforcement is not yet active for uploaded documents.</p>
+        </section>}
 
-        <footer className="simple-footer"><span>© 2026 CATO</span><span>{notice}</span></footer>
+        <footer className="cato-footer"><span>© 2026 CATO</span><span>{notice}</span><span>PRIVACY LAYER FOR AI</span></footer>
       </div>
     </main>
   );
