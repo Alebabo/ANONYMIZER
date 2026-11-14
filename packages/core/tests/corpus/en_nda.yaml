@@ -1,0 +1,35 @@
+id: en_nda
+language: en
+text: |
+  PRIVILEGED & CONFIDENTIAL – ATTORNEY-CLIENT PRIVILEGE
+
+  Dear Mr. John Doe,
+
+  Our client, Harborline Analytics Inc., located at 742 Evergreen Terrace Drive, Springfield, IL 62704,
+  has asked us to review the internal pricing model and the trade secrets disclosed under the NDA dated
+  March 3, 2023. Please contact Ms. Jane Roe at (555) 123-4567 or jane.roe@harborline.example.
+
+  The settlement amount of $250,000.00 will be paid to the account GB82 WEST 1234 5698 7654 32.
+  For identity verification we received SSN 123-45-6789 and card number 4111 1111 1111 1111.
+  Case No. 1:23-cv-01234 is pending before the United States District Court for the Northern District of Illinois.
+expected_signals: [client_relationship, confidential]
+expected:
+  - {type: privilege_marker, text: PRIVILEGED & CONFIDENTIAL}
+  - {type: privilege_marker, text: ATTORNEY-CLIENT PRIVILEGE}
+  - {type: person, text: John Doe}
+  - {type: organization, text: Harborline Analytics Inc.}
+  - {type: address, text: "742 Evergreen Terrace Drive, Springfield, IL 62704"}
+  - {type: business_secret_marker, text: internal pricing}
+  - {type: business_secret_marker, text: trade secrets}
+  - {type: date, text: "March 3, 2023"}
+  - {type: person, text: Jane Roe}
+  - {type: phone, text: (555) 123-4567}
+  - {type: email, text: jane.roe@harborline.example}
+  - {type: money, text: "$250,000.00"}
+  - {type: iban, text: GB82 WEST 1234 5698 7654 32}
+  - {type: social_security_number, text: 123-45-6789}
+  - {type: credit_card, text: 4111 1111 1111 1111}
+  - {type: case_number, text: 1:23-cv-01234}
+  - {type: court, text: United States District Court for the Northern District of Illinois}
+must_not_detect:
+  - {type: person, text: Dear}

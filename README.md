@@ -1,8 +1,15 @@
-# Cato — Privacy Gateway MVP
+# Cato — Privacy Infrastructure for Legal AI
 
-Minimal Next.js frontend scaffold for a privacy gateway between legal documents and AI agents.
+Cato detects, classifies, anonymizes and controls sensitive legal information before AI models or agents process it.
 
-## Current implementation
+## Repository layout
+- `packages/core/` — Python privacy engine (`cato-core`). Step 1 (detection) is implemented: see [docs/detection.md](docs/detection.md).
+- `app/`, `components/` — Next.js dashboard (Langfuse-derived design, example data only).
+- `app/api/v1/*` — legacy TypeScript prototype endpoints, to be replaced by the Python API.
+
+License: Apache-2.0. Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Legacy TypeScript prototype
 - Minimal upload/text-entry interface and document list.
 - Three classification levels: CRITICAL, GREY, UNCRITICAL.
 - Grey consent controls are UI-only and do not authorize any external transfer.
