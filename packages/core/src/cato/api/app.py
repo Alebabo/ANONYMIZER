@@ -22,8 +22,11 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+import base64
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -41,6 +44,9 @@ from cato.pipeline import Pipeline
 from cato.policy import (
     DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
+from cato.documents import DocumentError, protect_document
+from cato.gateway import Gateway, GatewayConfig, GatewayError
+from cato.tracing import Trace, TraceStep, TraceStore, trace_from_protect
 from cato.vault import FileVault, VaultError, VaultKey
 
 log = logging.getLogger("cato.api")
@@ -50,8 +56,9 @@ _REQUEST_ID = re.compile(r"[\w.:-]{1,64}", re.ASCII)
 
 
 class State:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, gateway_transport=None) -> None:
         self.settings = settings
+        self.traces = TraceStore(settings.trace_db, settings.trace_retention_days)
         self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner))
         self.classifier = Classifier()
         self.vault = (FileVault(settings.vault_path, VaultKey.from_b64(settings.vault_key))
@@ -59,6 +66,11 @@ class State:
         self.policies = FilePolicyStore(settings.policy_dir)
         if "legal-default" not in self.policies.names():
             self.policies.save(builtin_policy())
+        self.gateway = Gateway(
+            lambda vault: Pipeline(self.policy_for(None, None, None, None), detector=self.detector,
+                                   classifier=self.classifier, vault=vault),
+            GatewayConfig.from_env(settings.env), transport=gateway_transport,
+        )
 
     def policy_for(self, name: str | None, version: int | None, tenant: str | None, team: str | None) -> Policy:
         if name:
@@ -75,9 +87,9 @@ def _key_from(request: Request) -> str | None:
     return request.headers.get("x-api-key")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, gateway_transport=None) -> FastAPI:
     settings = settings or Settings.from_env()
-    state = State(settings)
+    state = State(settings, gateway_transport)
     app = FastAPI(
         title="Cato API",
         version=cato.__version__,
@@ -103,6 +115,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # UTF-8 needs up to 4 bytes per character; the rest covers JSON framing and policy YAML.
     max_body_bytes = settings.max_chars * 4 + 512_000
+    # Document uploads have their own limit plus multipart framing.
+    max_upload_body_bytes = settings.max_upload_bytes + 65_536
 
     def check_size(text: str) -> None:
         if len(text) > settings.max_chars:
@@ -119,7 +133,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # before authentication). Chunked uploads carry no length; cap those
         # at the reverse proxy.
         length = request.headers.get("content-length", "0")
-        if not length.isdigit() or int(length) > max_body_bytes:
+        limit = max_upload_body_bytes if request.url.path.startswith("/v1/documents/") else max_body_bytes
+        if not length.isdigit() or int(length) > limit:
             response = JSONResponse(status_code=413, content={"detail": "request body too large"})
         else:
             response = await call_next(request)
@@ -142,6 +157,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(VaultError)
     async def vault_error(_: Request, exc: VaultError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(DocumentError)
+    async def document_error(_: Request, exc: DocumentError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     @app.exception_handler(PolicyError)
     async def policy_error(_: Request, exc: PolicyError) -> JSONResponse:
@@ -199,12 +218,105 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         policy = state.policy_for(req.policy, req.policy_version, req.tenant, req.team)
         pipeline = Pipeline(policy, detector=state.detector, classifier=state.classifier,
                             vault=state.vault if req.namespace else None)
+        t0 = time.perf_counter()
         result = pipeline.protect(req.text, req.destination, namespace=req.namespace, language=req.language,
                                   dry_run=req.dry_run)
+        if not req.dry_run:
+            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1)))
         text = None if req.dry_run else result.text
         return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text,
                                risk=result.classification.risk, decision=result.decision,
                                classification=result.classification)
+
+    @app.post("/v1/documents/protect", tags=["documents"])
+    async def protect_document_(
+        _: User,
+        file: UploadFile = File(..., description="PDF, DOCX or UTF-8 text"),
+        destination: str = Form("external", pattern="^(external|local)$"),
+        namespace: str | None = Form(None, max_length=128),
+        language: str | None = Form(None, pattern="^(de|en)$"),
+        policy: str | None = Form(None),
+    ) -> dict:
+        """Protect a document. DOCX is anonymized in place (formatting kept, properties cleared) and
+        returned base64-encoded; PDF and text return anonymized text. Nothing is returned unless the
+        policy allows sending. Comments, tracked changes, embedded objects and pages without a text
+        layer degrade the result and put it into review."""
+        data = await file.read(settings.max_upload_bytes + 1)
+        if len(data) > settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail=f"file exceeds {settings.max_upload_bytes} bytes")
+        if namespace and state.vault is None:
+            raise HTTPException(status_code=400, detail="namespace given but no vault configured (CATO_VAULT_KEY)")
+        pipeline = Pipeline(state.policy_for(policy, None, None, None), detector=state.detector,
+                            classifier=state.classifier, vault=state.vault if namespace else None)
+        t0 = time.perf_counter()
+        doc = protect_document(pipeline, data, file.filename, destination, namespace, language,
+                               max_bytes=settings.max_upload_bytes)
+        r = doc.result
+        trace = trace_from_protect("/v1/documents/protect", r, round((time.perf_counter() - t0) * 1000, 1))
+        trace.steps.insert(1, TraceStep(name="Document parsed", detail=f"{doc.format}"
+                                        + (f" · {doc.pages} pages" if doc.pages else "")
+                                        + (f" · {len(doc.warnings)} warning(s)" if doc.warnings else ""),
+                                        status="warning" if doc.warnings else "ok"))
+        state.traces.add(trace)
+        body = {
+            "format": doc.format, "pages": doc.pages, "warnings": doc.warnings, "notes": doc.notes,
+            "outcome": r.decision.outcome.value, "allowed": doc.allowed, "risk": r.classification.risk.value,
+            "decision": r.decision.model_dump(mode="json"),
+            "text": None, "content_base64": None, "media_type": doc.media_type,
+        }
+        if doc.allowed:
+            if doc.format == "docx":
+                body["content_base64"] = base64.b64encode(doc.content).decode()
+                body["text"] = r.text
+            else:
+                body["text"] = doc.content.decode("utf-8")
+        return body
+
+    # -- gateway ---------------------------------------------------------------
+    @app.post("/v1/chat/completions", tags=["gateway"])
+    async def chat_completions(request: Request, _: User) -> JSONResponse:
+        """OpenAI-compatible chat completions. Messages are protected by the active policy before they
+        reach the provider; placeholders in the answer are restored. Use your Cato API key as the
+        OpenAI API key and Cato's URL as base_url."""
+        try:
+            body = await request.json()
+        except ValueError:
+            return JSONResponse(status_code=400, content={"error": {"message": "invalid JSON", "type":
+                                                                    "invalid_request_error", "code": "invalid_json"}})
+        if not isinstance(body, dict):
+            return JSONResponse(status_code=400, content={"error": {"message": "invalid body", "type":
+                                                                    "invalid_request_error", "code": "invalid_body"}})
+        total = sum(len(m.get("content")) for m in body.get("messages", []) if isinstance(m, dict)
+                    and isinstance(m.get("content"), str))
+        if total > settings.max_chars:
+            return JSONResponse(status_code=413, content={"error": {"message": "request too large", "type":
+                                                                    "invalid_request_error", "code": "too_large"}})
+        try:
+            data, trace = await run_in_threadpool(state.gateway.chat_completions, body)
+        except GatewayError as exc:
+            if exc.trace is not None:
+                state.traces.add(exc.trace)
+            headers = {"X-Cato-Trace-Id": exc.trace.id} if exc.trace else {}
+            return JSONResponse(status_code=exc.status, content=exc.body(), headers=headers)
+        state.traces.add(trace)
+        return JSONResponse(content=data, headers={"X-Cato-Trace-Id": trace.id, "X-Cato-Outcome": trace.outcome or ""})
+
+    # -- observability ---------------------------------------------------------
+    @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
+    def list_traces(_: User, limit: int = 50, outcome: str | None = None, route: str | None = None,
+                    since: float | None = None) -> list[Trace]:
+        return state.traces.list(limit, outcome, route, since)
+
+    @app.get("/v1/traces/{trace_id}", response_model=Trace, tags=["observability"])
+    def get_trace(trace_id: str, _: User) -> Trace:
+        trace = state.traces.get(trace_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return trace
+
+    @app.get("/v1/metrics", tags=["observability"])
+    def metrics(_: User, hours: int = 24) -> dict:
+        return state.traces.metrics(max(1, min(hours, 24 * 90)))
 
     @app.post("/v1/restore", response_model=RestoreResult, tags=["privacy"])
     def restore_(req: RestoreRequest, _: Admin) -> RestoreResult:

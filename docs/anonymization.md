@@ -83,3 +83,29 @@ cato restore answer.txt --vault vault.json --namespace matter-17
 - **Generalizing addresses** only works with a postcode + city (DE) or "City, ST" (US). Otherwise the type label `[ADDRESS]` is used.
 - **Plain text only.** Preserving structure and formatting for PDF/DOCX requires a parser that maps offsets back. That's not part of step 3.
 - **FileVault is for single-node self-hosting.** Concurrent writers from several processes are not synchronized; Postgres storage comes later.
+
+## Documents (PDF, DOCX)
+
+`cato.documents.protect_document()`, `POST /v1/documents/protect` and the MCP tool `read_document_protected` process documents.
+
+| Format | Processing |
+|---|---|
+| DOCX | Anonymized in place: formatting of untouched text and of the run containing the replacement is preserved. Covers tables, headers and footers. Document properties (author, title, ...) are cleared |
+| PDF | Text layer only. The result is anonymized **text**, not a redacted PDF |
+| TXT/MD | Like text |
+
+### Safety rules
+
+- **Format by content:** the format is detected from the file content (magic bytes), not from the file name. A false extension is rejected.
+- **Size and zip bombs:** uploads are size-limited. DOCX is checked for zip bombs before parsing.
+- **Into review:** these situations go to review (`review`), because they can't be anonymized safely:
+  - comments, tracked changes and embedded objects in DOCX;
+  - PDF pages without a text layer (scans, OCR missing).
+- **Independent check:** after rewriting a DOCX, its text is extracted again and checked for remaining original values.
+- **Images in DOCX** stay unchanged and are not inspected (`notes`).
+
+### Limitations
+
+- **No OCR.** Scanned PDFs are not processed.
+- **PDF output is plain text.** A visually redacted PDF would need a PDF library with real content removal. The common option, PyMuPDF, is AGPL-licensed and therefore deliberately not used.
+- **Hyperlinks and fields in DOCX:** if an affected paragraph contains them, it is rebuilt as a single run. Inline formatting of that one paragraph is lost.

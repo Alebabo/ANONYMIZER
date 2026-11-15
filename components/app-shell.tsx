@@ -2,8 +2,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, BarChart3, Gauge, KeyRound, Menu, Network, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
+import { Activity, BarChart3, Gauge, KeyRound, Menu, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Wordmark } from "@/components/logo";
 
 const workspace = [
   { href: "/", label: "Overview", icon: Gauge },
@@ -86,9 +87,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function Logo() {
   return (
     <>
-      <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold">C</span>
-      <span className="text-sm font-medium">Cato</span>
-      <Network className="text-muted-foreground ml-auto hidden h-3.5 w-3.5 md:block" />
+      <Link href="/" aria-label="Cato – Overview" className="text-foreground flex items-center">
+        <Wordmark />
+      </Link>
+      <span className="text-muted-foreground ml-auto hidden text-2xs md:block">Workspace</span>
     </>
   );
 }
