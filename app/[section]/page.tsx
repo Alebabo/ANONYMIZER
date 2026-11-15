@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 
-const sections: Record<string, string> = { gateway: "Gateway", metrics: "Metrics", "api-keys": "API Keys", integrations: "Integrations", settings: "Settings" };
+const sections: Record<string, string> = { gateway: "Gateway", "api-keys": "API Keys", integrations: "Integrations", settings: "Settings" };
 
 export default async function Section({ params }: { params: Promise<{ section: string }> }) {
   const { section } = await params;

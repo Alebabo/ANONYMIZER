@@ -1,33 +1,48 @@
-import { PageHeader, Badge, TableScroll } from "@/components/app-shell";
-import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card";
+import Link from "next/link";
+import { PageHeader, TableScroll } from "@/components/app-shell";
+import { Bars, Distribution, Pill, SourceBanner, Stat, fmt, pct, time } from "@/components/dashboard";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getMetrics, getTraces } from "@/lib/cato-api";
 
-const stats = [
-  ["Total requests", "24,891", "+12.4%"],
-  ["PII detections", "3,421", "13.7% of requests"],
-  ["Anonymized", "2,817", "82.3% of detections"],
-  ["Blocked", "104", "Policy violations"],
-];
-const activity = [["14:32", "PII detected", "Processed"], ["14:30", "Policy violation", "Blocked"], ["14:28", "Request processed", "Processed"]];
+export const dynamic = "force-dynamic";
 
-export default function Overview() {
+export default async function Overview() {
+  const [{ data: m, source }, { data: traces }] = await Promise.all([getMetrics(24), getTraces(8)]);
   return (
     <>
-      <PageHeader title="Overview" description="Last 24 hours · Example data" />
+      <PageHeader title="Overview" description={`Last ${m.window_hours} hours`} />
+      <SourceBanner source={source} />
       <div className="space-y-4 p-4 md:space-y-6 md:p-6">
         <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
-          {stats.map(([k, v, s]) => (
-            <Card key={k}><CardHeader><CardDescription>{k}</CardDescription></CardHeader>
-              <CardContent><div className="text-xl font-bold md:text-2xl">{v}</div><div className="text-muted-foreground text-xs">{s}</div></CardContent></Card>
-          ))}
+          <Stat label="Total requests" value={fmt(m.requests)} sub={`${fmt(m.errors)} errors`} />
+          <Stat label="Requests with detections" value={fmt(m.requests_with_detections)} sub={`${pct(m.detection_rate)} of requests`} />
+          <Stat label="Anonymized entities" value={fmt(m.anonymized_entities)} sub={`${pct(m.anonymization_rate)} of ${fmt(m.detections)} detections`} />
+          <Stat label="Not sent" value={fmt(m.not_allowed)} sub={`review / local only / block · ${pct(m.block_rate)}`} />
         </div>
-        <Card><CardHeader><CardDescription>Request volume</CardDescription></CardHeader>
-          <CardContent><div className="bg-muted/50 text-muted-foreground flex h-32 items-center md:h-40 justify-center rounded-md text-xs">Chart placeholder · wired to /v1/metrics later</div></CardContent></Card>
-        <Card><CardHeader><CardDescription>Recent activity</CardDescription></CardHeader>
-          <CardContent>
-            <TableScroll minWidth={360}><Table><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Event</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-              <TableBody>{activity.map(([t, e, s]) => <TableRow key={t}><TableCell>{t}</TableCell><TableCell>{e}</TableCell><TableCell><Badge>{s}</Badge></TableCell></TableRow>)}</TableBody></Table></TableScroll>
-          </CardContent></Card>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2"><CardHeader><CardDescription>Request volume per hour</CardDescription></CardHeader>
+            <CardContent><Bars series={m.timeseries} label="Requests per hour" /></CardContent></Card>
+          <Card><CardHeader><CardDescription>Outcomes</CardDescription></CardHeader>
+            <CardContent><Distribution data={m.by_outcome} /></CardContent></Card>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2"><CardHeader><CardDescription>Recent activity</CardDescription></CardHeader>
+            <CardContent>
+              <TableScroll minWidth={480}><Table><TableHeader><TableRow>
+                <TableHead>Time</TableHead><TableHead>Route</TableHead><TableHead>Risk</TableHead><TableHead>Outcome</TableHead>
+              </TableRow></TableHeader>
+                <TableBody>{traces.map(t => (
+                  <TableRow key={t.id}>
+                    <TableCell>{time(t.created_at)}</TableCell>
+                    <TableCell><Link className="text-link hover:text-link-hover" href={`/traces/${t.id}`}>{t.route}</Link></TableCell>
+                    <TableCell><Pill value={t.risk} /></TableCell><TableCell><Pill value={t.outcome} /></TableCell>
+                  </TableRow>))}
+                </TableBody></Table></TableScroll>
+            </CardContent></Card>
+          <Card><CardHeader><CardDescription>Providers</CardDescription></CardHeader>
+            <CardContent><Distribution data={m.by_provider} empty="No provider traffic yet" /></CardContent></Card>
+        </div>
       </div>
     </>
   );
