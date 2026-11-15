@@ -1,6 +1,6 @@
 # Cato REST API
 
-The Python API (`packages/core`, FastAPI) replaces the old TypeScript prototype under `app/api/v1/*`. The full OpenAPI spec is at `/openapi.json`, with interactive docs at `/docs`.
+The Python API lives in `packages/core` (FastAPI). The full OpenAPI spec is at `/openapi.json`, with interactive docs at `/docs`.
 
 ## Quickstart (Docker)
 

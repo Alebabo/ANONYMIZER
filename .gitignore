@@ -9,3 +9,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 packages/core/data/
+tsconfig.tsbuildinfo

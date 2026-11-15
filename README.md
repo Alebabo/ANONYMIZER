@@ -24,8 +24,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 |---|---|
 | `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
 | `sdk/python/` | Python client `cato-sdk` (`from cato_sdk import Cato`) |
-| `app/`, `components/` | Next.js dashboard (design derived from Langfuse, mobile-ready, example data only so far) |
-| `app/api/v1/*`, `lib/privacy-engine.ts` | Legacy TypeScript prototype, replaced by the Python API |
+| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready): overview, traces, privacy, metrics, policies from the live API |
 | `docs/` | Documentation |
 
 ## Documentation
@@ -47,8 +46,10 @@ python -m spacy download de_core_news_lg && python -m spacy download en_core_web
 pytest                       # incl. corpus, leak and API tests
 cato eval tests/corpus       # detection/classification against the synthetic corpus
 
-# Dashboard
-npm install && npm run dev
+# Dashboard (example data unless connected; live data requires the dashboard login)
+npm install
+CATO_API_URL=http://localhost:8080 CATO_API_KEY=cato_... \
+CATO_DASHBOARD_USER=admin CATO_DASHBOARD_PASSWORD=... npm run dev
 ```
 
 ## Security principles
@@ -66,7 +67,7 @@ npm install && npm run dev
 ## Roadmap
 
 - **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint (done: gateway, MCP, documents, Python SDK)
-- **Phase 3:** dashboard on real data (traces, metrics, review queue, policy editor)
+- **Phase 3:** review queue with approvals, graphical policy editor, API key management in the UI (done: traces, metrics, dashboard on live data)
 - **Phase 4:** multi-tenancy, SSO/RBAC, audit logs, Helm
 
 License: Apache-2.0. Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
