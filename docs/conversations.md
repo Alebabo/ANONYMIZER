@@ -157,8 +157,10 @@ Detection is tuned on synthetic data. Support chats are informal: lowercase name
 
 1. An authorized person exports a sample (e.g. 200 conversations) **inside** the protected environment.
 2. Label names, contact data and your own identifiers in a corpus file (format: `packages/core/tests/corpus/de_support.yaml`).
-3. Run `cato eval <corpus-dir>` with `CATO_CUSTOM_PATTERNS` set. No cloud model is involved.
+3. Run `cato eval <corpus-dir>` with `CATO_CUSTOM_PATTERNS` set (the evaluation loads the same patterns as the API). No cloud model is involved.
 4. Add patterns for every identifier format you find, repeat until recall is acceptable to your data-protection contact.
+
+Quick check without a labelled corpus: `cato leak-check --api <url> --key <key> --limit 200 [--secrets known-values.txt] [--details]` reads conversations through the API and reports e-mail addresses, IBANs, phone numbers, long digit runs and known values that appear in the protected output. Found values are masked; known values are reported by line number only. Keep secrets files out of version control (`local/` and `*.secrets.txt` are gitignored).
 
 Known behaviour on chat text:
 

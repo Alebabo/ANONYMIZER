@@ -4,6 +4,7 @@ plus account management: ``cato org create | org list | user create | user list 
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import sys
 
@@ -62,6 +63,13 @@ def main(argv: list[str] | None = None) -> int:
     sc = sub.add_parser("source-check", help="check the conversation source from CATO_SOURCE_* (no content printed)")
     sc.add_argument("--protect", action="store_true",
                     help="also run the newest conversation through the policy and print counts only")
+    lc = sub.add_parser("leak-check", help="read conversations through a running API and report anything "
+                                           "that should not be in protected output (values are masked)")
+    lc.add_argument("--api", default=os.environ.get("CATO_BASE_URL", "http://127.0.0.1:8080"))
+    lc.add_argument("--key", default=os.environ.get("CATO_API_KEY"), help="Cato API key (or CATO_API_KEY)")
+    lc.add_argument("--limit", type=int, default=50, help="conversations to read (counts against the quota)")
+    lc.add_argument("--secrets", help="file with known real values, one per line (never printed)")
+    lc.add_argument("--details", action="store_true", help="list every finding (masked)")
     sd = sub.add_parser("seed-demo", help="write synthetic demo traces (metadata only) for an organization")
     sd.add_argument("--org", default="default")
     sd.add_argument("--count", type=int, default=400)
@@ -72,6 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         return _accounts(args)
     if args.command == "eval":
         return _eval(args.corpus)
+    if args.command == "leak-check":
+        return _leak_check(args)
     if args.command == "source-check":
         return _source_check(args.protect)
     if args.command == "classify":
@@ -180,7 +190,12 @@ def _eval(directory: str) -> int:
 
     from cato.evaluation import evaluate_doc, load_corpus, summarize
 
-    reports = [evaluate_doc(doc, Detector()) for doc in load_corpus(Path(directory))]
+    from cato.detect import load_custom_patterns
+
+    # Same patterns as the API, so the evaluation measures what will run.
+    custom = load_custom_patterns(os.environ["CATO_CUSTOM_PATTERNS"]) if os.environ.get("CATO_CUSTOM_PATTERNS") else []
+    detector = Detector(DetectorConfig(custom_entities=custom))
+    reports = [evaluate_doc(doc, detector) for doc in load_corpus(Path(directory))]
     for r in reports:
         status = "ok" if r.ok else "FAIL"
         risk = r.classification.risk.value if r.classification else "-"
@@ -196,6 +211,25 @@ def _eval(directory: str) -> int:
             print(f"     false positive {det.entity_type} for rule {spec}")
     print(json.dumps(summarize(reports), indent=2))
     return 0 if all(r.ok for r in reports) else 1
+
+
+def _leak_check(args: argparse.Namespace) -> int:
+    import httpx
+
+    from cato.leakcheck import load_secrets, run
+
+    if not args.key:
+        print("--key or CATO_API_KEY is required", file=sys.stderr)
+        return 2
+    secrets = load_secrets(args.secrets) if args.secrets else []
+    with httpx.Client(timeout=120) as client:
+        report = run(client, args.api, args.key, args.limit, secrets)
+    out = report.summary()
+    if args.details:
+        out["details"] = [f.__dict__ for f in report.findings]
+    json.dump(out, sys.stdout, indent=2, ensure_ascii=False)
+    sys.stdout.write("\n")
+    return 0 if report.ok else 1
 
 
 def _source_check(protect: bool) -> int:

@@ -54,7 +54,7 @@ claude mcp add --transport http cato http://127.0.0.1:8080/mcp \
   --header "Authorization: Bearer cato_demo_key_change_me_0123456789"
 ```
 
-Details, guarantees and the checks required before production: [docs/conversations.md](docs/conversations.md).
+Details, guarantees and the checks required before production: [docs/conversations.md](docs/conversations.md). Step-by-step handover for testing and adapting it in a company environment (German): [HANDOVER.md](HANDOVER.md).
 
 ## Development
 
