@@ -13,6 +13,7 @@ cato classify document.txt       # risk per entity and document
 cato anonymize document.txt      # transformed text (add --vault/--namespace for reversible)
 cato protect document.txt        # full pipeline with the built-in legal-default policy
 CATO_API_KEYS=... cato-api       # REST API on 127.0.0.1:8080 (see docs/API.md)
+CATO_MCP_ROOT=./akte cato-mcp    # MCP server over stdio (see docs/mcp.md)
 cato eval tests/corpus           # recall / false positives on the corpus
 ```
 

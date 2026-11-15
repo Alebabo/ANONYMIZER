@@ -22,7 +22,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 
 | Path | Content |
 |---|---|
-| `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), Dockerfile |
+| `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
 | `app/`, `components/` | Next.js dashboard (design derived from Langfuse, mobile-ready, example data only so far) |
 | `app/api/v1/*`, `lib/privacy-engine.ts` | Legacy TypeScript prototype, replaced by the Python API |
 | `docs/` | Documentation |
@@ -34,6 +34,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 - [Classification](docs/classification.md): low / sensitive / critical with reasons
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
+- [MCP server](docs/mcp.md): `cato-mcp` for Claude, Cursor & other agents, with protected document access
 
 ## Development
 
@@ -62,7 +63,7 @@ npm install && npm run dev
 
 ## Roadmap
 
-- **Phase 2:** OpenAI-compatible gateway, Python/TypeScript SDK, MCP server, LangChain
+- **Phase 2:** OpenAI-compatible gateway, Python/TypeScript SDK, LangChain (MCP server: done, stdio)
 - **Phase 3:** dashboard on real data (traces, metrics, review queue, policy editor)
 - **Phase 4:** multi-tenancy, SSO/RBAC, audit logs, Helm
 
