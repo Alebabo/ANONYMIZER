@@ -17,7 +17,7 @@ def app(tmp_path):
     from cato.vault import VaultKey
     return TestClient(create_app(Settings.from_env({
         "CATO_API_KEYS": USER, "CATO_ADMIN_KEYS": ADMIN, "CATO_POLICY_DIR": str(tmp_path / "p"),
-        "CATO_TRACE_DB": ":memory:", "CATO_VAULT_KEY": VaultKey.generate().to_b64(),
+        "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:", "CATO_VAULT_KEY": VaultKey.generate().to_b64(),
         "CATO_VAULT_PATH": str(tmp_path / "v.json")})))
 
 

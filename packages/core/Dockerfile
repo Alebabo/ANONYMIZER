@@ -24,7 +24,7 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
  && python -m spacy download de_core_news_lg \
  && python -m spacy download en_core_web_lg
 
-# Unprivileged runtime user; data (vault, policies) lives in a volume.
+# Unprivileged runtime user; data (vault, policies, traces, accounts, audit log) lives in a volume.
 RUN useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin cato \
  && mkdir -p /data && chown cato /data
 USER cato
@@ -33,7 +33,9 @@ ENV CATO_HOST=0.0.0.0 \
     CATO_PORT=8080 \
     CATO_VAULT_PATH=/data/vault.json \
     CATO_POLICY_DIR=/data/policies \
-    CATO_TRACE_DB=/data/traces.db
+    CATO_TRACE_DB=/data/traces.db \
+    CATO_ACCOUNTS_DB=/data/accounts.db \
+    CATO_AUDIT_DB=/data/audit.db
 
 VOLUME ["/data"]
 EXPOSE 8080

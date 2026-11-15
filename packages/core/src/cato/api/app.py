@@ -1,8 +1,13 @@
 """Cato REST API.
 
 Security properties:
-* Every /v1 endpoint requires an API key (``Authorization: Bearer <key>`` or
-  ``X-API-Key``). Restore and policy writes require an admin key.
+* Every /v1 endpoint requires an API key or a dashboard session token
+  (``Authorization: Bearer <key>`` or ``X-API-Key``). Restore requires an
+  admin API key; policy writes and account management require an admin.
+* Every caller belongs to one organization. Traces, API keys, members, the
+  audit log and vault namespaces are scoped to it.
+* Security-relevant changes (logins, keys, members, policies, restores) are
+  written to an append-only, hash-chained audit log.
 * Request bodies are never logged. The access log contains method, path,
   status, latency and a request id only.
 * Validation errors never echo the submitted input (FastAPI's default 422
@@ -18,9 +23,12 @@ breaks (covered by tests/test_api.py::test_endpoints_require_key).
 
 import logging
 import re
+import threading
 import time
 import uuid
+from collections import defaultdict, deque
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import base64
 
@@ -32,10 +40,13 @@ from pydantic import ValidationError
 
 import cato
 from cato.anonymize import Anonymizer, AnonymizerConfig, LeakError, restore
+from cato.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from cato.api.schemas import (
-    AnonymizeRequest, ClassifyRequest, DetectionOut, DryRunRequest, PolicyCreate, PolicySummary, ProtectRequest,
-    ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
+    AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, LoginRequest, MemberCreate,
+    MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, ProtectRequest, ProtectResponse,
+    RestoreRequest, ScanResponse, TextRequest,
 )
+from cato.audit import AuditLog
 from cato.api.settings import Settings
 from cato.anonymize.engine import AnonymizationResult, RestoreResult
 from cato.classify import Classifier, DocumentClassification
@@ -58,7 +69,15 @@ _REQUEST_ID = re.compile(r"[\w.:-]{1,64}", re.ASCII)
 class State:
     def __init__(self, settings: Settings, gateway_transport=None) -> None:
         self.settings = settings
-        self.traces = TraceStore(settings.trace_db, settings.trace_retention_days)
+        self.accounts = AccountStore(settings.accounts_db, settings.session_hours)
+        self.audit = AuditLog(settings.audit_db)
+        self.traces = TraceStore(settings.trace_db, settings.trace_retention_days, retention_for=self._retention)
+        if settings.bootstrap_admin and self.accounts.count_users() == 0:
+            email, password = settings.bootstrap_admin
+            user = self.accounts.create_user(DEFAULT_ORG, email, email.split("@")[0], password, "admin")
+            self.audit.record(DEFAULT_ORG, "create", "member", user["id"], after=user,
+                              actor_label="system (bootstrap)")
+            log.warning("bootstrap admin created; change the password after the first login")
         self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner))
         self.classifier = Classifier()
         self.vault = (FileVault(settings.vault_path, VaultKey.from_b64(settings.vault_key))
@@ -71,6 +90,12 @@ class State:
                                    classifier=self.classifier, vault=vault),
             GatewayConfig.from_env(settings.env), transport=gateway_transport,
         )
+
+    def _retention(self, org_id: str) -> int | None:
+        try:
+            return self.accounts.get_org(org_id)["trace_retention_days"]
+        except AccountError:
+            return None
 
     def policy_for(self, name: str | None, version: int | None, tenant: str | None, team: str | None) -> Policy:
         if name:
@@ -87,6 +112,35 @@ def _key_from(request: Request) -> str | None:
     return request.headers.get("x-api-key")
 
 
+class LoginLimiter:
+    """At most ``limit`` failed logins per e-mail within ``window`` seconds."""
+
+    def __init__(self, limit: int = 10, window: float = 900) -> None:
+        self.limit, self.window = limit, window
+        self._fails: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = threading.Lock()
+
+    def blocked(self, email: str) -> bool:
+        with self._lock:
+            q = self._fails[email]
+            while q and q[0] < time.time() - self.window:
+                q.popleft()
+            return len(q) >= self.limit
+
+    def fail(self, email: str) -> None:
+        with self._lock:
+            self._fails[email].append(time.time())
+
+    def reset(self, email: str) -> None:
+        with self._lock:
+            self._fails.pop(email, None)
+
+
+def _host(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.hostname}{f':{parts.port}' if parts.port else ''}" if parts.hostname else ""
+
+
 def create_app(settings: Settings | None = None, gateway_transport=None) -> FastAPI:
     settings = settings or Settings.from_env()
     state = State(settings, gateway_transport)
@@ -98,20 +152,60 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
     )
 
     # -- auth -----------------------------------------------------------------
-    def require_key(request: Request) -> None:
+    limiter = LoginLimiter()
+
+    def resolve(request: Request) -> Principal | None:
         key = _key_from(request)
-        if not key or not settings.is_api_key(key):
+        if not key:
+            return None
+        if settings.is_admin_key(key):
+            return Principal("env_key", DEFAULT_ORG, "admin", "env-admin", "environment admin key")
+        if settings.is_api_key(key):
+            return Principal("env_key", DEFAULT_ORG, "user", "env", "environment API key")
+        return state.accounts.principal(key)
+
+    def require_key(request: Request) -> Principal:
+        p = resolve(request)
+        if p is None:
             raise HTTPException(status_code=401, detail="invalid or missing API key")
+        return p
 
-    def require_admin(request: Request) -> None:
-        key = _key_from(request)
-        if not settings.admin_key_hashes:
+    def admin_keys_exist() -> bool:
+        return bool(settings.admin_key_hashes) or state.accounts.has_admin_keys()
+
+    def require_admin(request: Request) -> Principal:
+        p = resolve(request)
+        if p is not None and p.is_admin:
+            return p
+        if p is not None and p.kind != "session" and not admin_keys_exist():
             raise HTTPException(status_code=403, detail="admin endpoints are disabled (no CATO_ADMIN_KEYS)")
-        if not key or not settings.is_admin_key(key):
-            raise HTTPException(status_code=403, detail="admin key required")
+        raise HTTPException(status_code=403, detail="admin key required")
 
-    User = Annotated[None, Depends(require_key)]
-    Admin = Annotated[None, Depends(require_admin)]
+    def require_admin_key(request: Request) -> Principal:
+        p = require_admin(request)
+        if p.kind == "session":
+            raise HTTPException(status_code=403, detail="restore requires an admin API key")
+        return p
+
+    def require_session(request: Request) -> Principal:
+        p = require_key(request)
+        if p.kind != "session":
+            raise HTTPException(status_code=403, detail="dashboard session required")
+        return p
+
+    User = Annotated[Principal, Depends(require_key)]
+    Admin = Annotated[Principal, Depends(require_admin)]
+    AdminKey = Annotated[Principal, Depends(require_admin_key)]
+    SessionUser = Annotated[Principal, Depends(require_session)]
+
+    def scoped(p: Principal, namespace: str | None) -> str | None:
+        """Vault namespaces are isolated per organization. The default org keeps plain
+        names so existing vaults stay readable; other orgs get an unforgeable prefix."""
+        if namespace is None:
+            return None
+        if "\x1f" in namespace:
+            raise HTTPException(status_code=422, detail="namespace contains a control character")
+        return namespace if p.org_id == DEFAULT_ORG else f"{p.org_id}\x1f{namespace}"
 
     # UTF-8 needs up to 4 bytes per character; the rest covers JSON framing and policy YAML.
     max_body_bytes = settings.max_chars * 4 + 512_000
@@ -166,6 +260,11 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
     async def policy_error(_: Request, exc: PolicyError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+    @app.exception_handler(AccountError)
+    async def account_error(_: Request, exc: AccountError) -> JSONResponse:
+        status = 404 if "not found" in str(exc) else 400
+        return JSONResponse(status_code=status, content={"detail": str(exc)})
+
     # -- public ----------------------------------------------------------------
     @app.get("/health", tags=["system"])
     def health() -> dict:
@@ -178,7 +277,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
             "version": cato.__version__,
             "ner": "disabled" if not settings.enable_ner else ("unavailable" if ner else "available"),
             "vault": state.vault is not None,
-            "admin_endpoints": bool(settings.admin_key_hashes),
+            "admin_endpoints": admin_keys_exist(),
             "default_policy": settings.default_policy,
         }
 
@@ -200,17 +299,17 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         return state.classifier.classify_text(req.text, r, corrections=req.corrections)
 
     @app.post("/v1/anonymize", response_model=AnonymizationResult, tags=["privacy"])
-    def anonymize(req: AnonymizeRequest, _: User) -> AnonymizationResult:
+    def anonymize(req: AnonymizeRequest, p: User) -> AnonymizationResult:
         check_size(req.text)
         if req.namespace and state.vault is None:
             raise HTTPException(status_code=400, detail="namespace given but no vault configured (CATO_VAULT_KEY)")
         r = state.detector.scan(req.text, req.language)
         cfg = AnonymizerConfig(methods=req.methods, include_role=req.include_role)
         return Anonymizer(cfg, vault=state.vault if req.namespace else None).anonymize(
-            req.text, r, namespace=req.namespace)
+            req.text, r, namespace=scoped(p, req.namespace))
 
     @app.post("/v1/protect", response_model=ProtectResponse, tags=["privacy"])
-    def protect(req: ProtectRequest, _: User) -> ProtectResponse:
+    def protect(req: ProtectRequest, p: User) -> ProtectResponse:
         """Full pipeline. ``text`` is only returned when the policy allows sending it to ``destination``."""
         check_size(req.text)
         if req.namespace and state.vault is None:
@@ -219,10 +318,11 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         pipeline = Pipeline(policy, detector=state.detector, classifier=state.classifier,
                             vault=state.vault if req.namespace else None)
         t0 = time.perf_counter()
-        result = pipeline.protect(req.text, req.destination, namespace=req.namespace, language=req.language,
-                                  dry_run=req.dry_run)
+        result = pipeline.protect(req.text, req.destination, namespace=scoped(p, req.namespace),
+                                  language=req.language, dry_run=req.dry_run)
         if not req.dry_run:
-            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1)))
+            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1)),
+                             p.org_id)
         text = None if req.dry_run else result.text
         return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text,
                                risk=result.classification.risk, decision=result.decision,
@@ -230,7 +330,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
 
     @app.post("/v1/documents/protect", tags=["documents"])
     async def protect_document_(
-        _: User,
+        p: User,
         file: UploadFile = File(..., description="PDF, DOCX or UTF-8 text"),
         destination: str = Form("external", pattern="^(external|local)$"),
         namespace: str | None = Form(None, max_length=128),
@@ -249,7 +349,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         pipeline = Pipeline(state.policy_for(policy, None, None, None), detector=state.detector,
                             classifier=state.classifier, vault=state.vault if namespace else None)
         t0 = time.perf_counter()
-        doc = protect_document(pipeline, data, file.filename, destination, namespace, language,
+        doc = protect_document(pipeline, data, file.filename, destination, scoped(p, namespace), language,
                                max_bytes=settings.max_upload_bytes)
         r = doc.result
         trace = trace_from_protect("/v1/documents/protect", r, round((time.perf_counter() - t0) * 1000, 1))
@@ -257,7 +357,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
                                         + (f" · {doc.pages} pages" if doc.pages else "")
                                         + (f" · {len(doc.warnings)} warning(s)" if doc.warnings else ""),
                                         status="warning" if doc.warnings else "ok"))
-        state.traces.add(trace)
+        state.traces.add(trace, p.org_id)
         body = {
             "format": doc.format, "pages": doc.pages, "warnings": doc.warnings, "notes": doc.notes,
             "outcome": r.decision.outcome.value, "allowed": doc.allowed, "risk": r.classification.risk.value,
@@ -274,7 +374,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
 
     # -- gateway ---------------------------------------------------------------
     @app.post("/v1/chat/completions", tags=["gateway"])
-    async def chat_completions(request: Request, _: User) -> JSONResponse:
+    async def chat_completions(request: Request, p: User) -> JSONResponse:
         """OpenAI-compatible chat completions. Messages are protected by the active policy before they
         reach the provider; placeholders in the answer are restored. Use your Cato API key as the
         OpenAI API key and Cato's URL as base_url."""
@@ -295,37 +395,40 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
             data, trace = await run_in_threadpool(state.gateway.chat_completions, body)
         except GatewayError as exc:
             if exc.trace is not None:
-                state.traces.add(exc.trace)
+                state.traces.add(exc.trace, p.org_id)
             headers = {"X-Cato-Trace-Id": exc.trace.id} if exc.trace else {}
             return JSONResponse(status_code=exc.status, content=exc.body(), headers=headers)
-        state.traces.add(trace)
+        state.traces.add(trace, p.org_id)
         return JSONResponse(content=data, headers={"X-Cato-Trace-Id": trace.id, "X-Cato-Outcome": trace.outcome or ""})
 
     # -- observability ---------------------------------------------------------
     @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
-    def list_traces(_: User, limit: int = 50, outcome: str | None = None, route: str | None = None,
+    def list_traces(p: User, limit: int = 50, outcome: str | None = None, route: str | None = None,
                     since: float | None = None) -> list[Trace]:
-        return state.traces.list(limit, outcome, route, since)
+        return state.traces.list(limit, outcome, route, since, org_id=p.org_id)
 
     @app.get("/v1/traces/{trace_id}", response_model=Trace, tags=["observability"])
-    def get_trace(trace_id: str, _: User) -> Trace:
-        trace = state.traces.get(trace_id)
+    def get_trace(trace_id: str, p: User) -> Trace:
+        trace = state.traces.get(trace_id, p.org_id)
         if trace is None:
             raise HTTPException(status_code=404, detail="trace not found")
         return trace
 
     @app.get("/v1/metrics", tags=["observability"])
-    def metrics(_: User, hours: int = 24) -> dict:
-        return state.traces.metrics(max(1, min(hours, 24 * 90)))
+    def metrics(p: User, hours: int = 24) -> dict:
+        return state.traces.metrics(max(1, min(hours, 24 * 90)), p.org_id)
 
     @app.post("/v1/restore", response_model=RestoreResult, tags=["privacy"])
-    def restore_(req: RestoreRequest, _: Admin) -> RestoreResult:
-        """Resolve placeholders with the vault. Admin key only; the call is logged without content."""
+    def restore_(req: RestoreRequest, p: AdminKey) -> RestoreResult:
+        """Resolve placeholders with the vault. Admin API key only; recorded in the audit log
+        (namespace and count, never values)."""
         check_size(req.text)
         if state.vault is None:
             raise HTTPException(status_code=400, detail="no vault configured (CATO_VAULT_KEY)")
-        result = restore(req.text, state.vault, req.namespace)
+        result = restore(req.text, state.vault, scoped(p, req.namespace))
         log.warning("restore performed: %d placeholder(s) resolved", result.restored)
+        state.audit.record(p.org_id, "restore", "vault", req.namespace, p,
+                           after={"restored": result.restored, "unresolved": len(result.unresolved)})
         return result
 
     # -- policies --------------------------------------------------------------
@@ -346,16 +449,22 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         return [PolicySummary(**h.model_dump()) for h in state.policies.history(name)]
 
     @app.post("/v1/policies", response_model=PolicySummary, status_code=201, tags=["policies"])
-    def create_policy(req: PolicyCreate, _: Admin) -> PolicySummary:
+    def create_policy(req: PolicyCreate, p: Admin) -> PolicySummary:
         try:
             policy = Policy.from_yaml(req.yaml)
         except ValidationError as exc:
             raise HTTPException(status_code=422, detail=[
                 {"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()])
+        if p.org_id != DEFAULT_ORG:
+            raise HTTPException(status_code=403, detail="policies are shared; only the default organization manages them")
+        prev = state.policies.history(policy.name)[-1] if policy.name in state.policies.names() else None
         saved = state.policies.save(policy)
         log.warning("policy saved: %s %s", saved.ref, saved.content_hash)
-        return PolicySummary(name=saved.name, version=saved.version, hash=saved.content_hash,
-                             scope=saved.scope.model_dump())
+        summary = PolicySummary(name=saved.name, version=saved.version, hash=saved.content_hash,
+                                scope=saved.scope.model_dump())
+        state.audit.record(p.org_id, "create" if prev is None else "update", "policy", saved.name, p,
+                           before=prev.model_dump() if prev else None, after=summary.model_dump())
+        return summary
 
     @app.post("/v1/policies/dry-run", response_model=DecisionDiff, tags=["policies"])
     def dry_run(req: DryRunRequest, _: User) -> DecisionDiff:
@@ -372,6 +481,129 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         live = PolicyEngine(active).evaluate(r.detections, c, req.destination)
         cand = PolicyEngine(candidate).evaluate(r.detections, c, req.destination, dry_run=True)
         return diff_decisions(live, cand)
+
+    # -- auth & accounts -----------------------------------------------------------
+    def me_body(p: Principal) -> dict:
+        org = state.accounts.get_org(p.org_id)
+        org["effective_trace_retention_days"] = org["trace_retention_days"] or settings.trace_retention_days
+        user = state.accounts.get_user(p.org_id, p.id) if p.kind == "session" else None
+        return {"kind": p.kind, "role": p.role, "user": user, "organization": org}
+
+    @app.post("/v1/auth/login", tags=["accounts"])
+    def login(req: LoginRequest) -> dict:
+        """Exchange e-mail and password for a session token (dashboard). Failed attempts are rate
+        limited per e-mail and recorded in the audit log of the user's organization."""
+        email = req.email.strip().lower()
+        if limiter.blocked(email):
+            raise HTTPException(status_code=429, detail="too many failed logins; try again later")
+        user = state.accounts.authenticate(email, req.password)
+        if user is None:
+            limiter.fail(email)
+            known = state.accounts.user_by_email(email)
+            if known is not None:
+                state.audit.record(known["org_id"], "login_failed", "session", known["id"],
+                                   actor_label=known["email"], actor_type="anonymous")
+            raise HTTPException(status_code=401, detail="invalid e-mail or password")
+        limiter.reset(email)
+        token, expires = state.accounts.create_session(user["id"])
+        actor = Principal("session", user["org_id"], user["role"], user["id"], user["email"])
+        state.audit.record(user["org_id"], "login", "session", user["id"], actor)
+        return {"token": token, "expires_at": expires, **me_body(actor)}
+
+    @app.post("/v1/auth/logout", status_code=204, tags=["accounts"])
+    def logout(request: Request, p: SessionUser) -> None:
+        state.accounts.revoke_session(_key_from(request) or "")
+        state.audit.record(p.org_id, "logout", "session", p.id, p)
+
+    @app.get("/v1/auth/me", tags=["accounts"])
+    def me(p: User) -> dict:
+        return me_body(p)
+
+    @app.post("/v1/auth/password", status_code=204, tags=["accounts"])
+    def change_password(req: PasswordChange, request: Request, p: SessionUser) -> None:
+        """Change the own password. Other sessions of the user are signed out."""
+        state.accounts.set_password(p.org_id, p.id, req.current_password, req.new_password)
+        state.accounts.revoke_user_sessions(p.id, keep=_key_from(request))
+        state.audit.record(p.org_id, "password_change", "member", p.id, p)
+
+    @app.get("/v1/organization", tags=["accounts"])
+    def get_organization(p: User) -> dict:
+        return me_body(p)["organization"]
+
+    @app.patch("/v1/organization", tags=["accounts"])
+    def update_organization(req: OrganizationUpdate, p: Admin) -> dict:
+        before, after = state.accounts.update_org(p.org_id, req.name, req.trace_retention_days)
+        if before != after:
+            state.audit.record(p.org_id, "update", "organization", p.org_id, p, before=before, after=after)
+        return me_body(p)["organization"]
+
+    @app.get("/v1/members", tags=["accounts"])
+    def list_members(p: User) -> list[dict]:
+        return state.accounts.list_users(p.org_id)
+
+    @app.post("/v1/members", status_code=201, tags=["accounts"])
+    def create_member(req: MemberCreate, p: Admin) -> dict:
+        user = state.accounts.create_user(p.org_id, req.email, req.name, req.password, req.role)
+        state.audit.record(p.org_id, "create", "member", user["id"], p, after=user)
+        return user
+
+    @app.patch("/v1/members/{user_id}", tags=["accounts"])
+    def update_member(user_id: str, req: MemberUpdate, p: Admin) -> dict:
+        before, after = state.accounts.update_user(p.org_id, user_id, p.id, req.role, req.disabled, req.name)
+        if before != after:
+            state.audit.record(p.org_id, "update", "member", user_id, p, before=before, after=after)
+        return after
+
+    @app.get("/v1/api-keys", tags=["accounts"])
+    def list_api_keys(p: User) -> list[dict]:
+        return state.accounts.list_api_keys(p.org_id)
+
+    @app.post("/v1/api-keys", status_code=201, tags=["accounts"])
+    def create_api_key(req: ApiKeyCreate, p: Admin) -> dict:
+        """Create an API key. The key is returned once and stored as a hash only."""
+        key, meta = state.accounts.create_api_key(p.org_id, req.name, req.role, p.id)
+        state.audit.record(p.org_id, "create", "api_key", meta["id"], p, after=meta)
+        return {**meta, "key": key}
+
+    @app.delete("/v1/api-keys/{key_id}", tags=["accounts"])
+    def revoke_api_key(key_id: str, p: Admin) -> dict:
+        before, after = state.accounts.revoke_api_key(p.org_id, key_id)
+        state.audit.record(p.org_id, "revoke", "api_key", key_id, p, before=before, after=after)
+        return after
+
+    # -- audit log -------------------------------------------------------------------
+    @app.get("/v1/audit-logs", tags=["audit"])
+    def list_audit_logs(p: Admin, limit: int = 50, before: int | None = None, action: str | None = None,
+                        resource_type: str | None = None, actor_id: str | None = None) -> dict:
+        """Newest first. Page with ``before`` = ``next_before`` of the previous page."""
+        rows = state.audit.list(p.org_id, limit, before, action, resource_type, actor_id)
+        return {"data": rows, "next_before": rows[-1]["seq"] if len(rows) == min(max(limit, 1), 200) else None,
+                **state.audit.facets(p.org_id)}
+
+    @app.get("/v1/audit-logs/verify", tags=["audit"])
+    def verify_audit_logs(p: Admin) -> dict:
+        return state.audit.verify(p.org_id)
+
+    @app.get("/v1/audit-logs/{entry_id}", tags=["audit"])
+    def get_audit_log(entry_id: str, p: Admin) -> dict:
+        entry = state.audit.get(p.org_id, entry_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="audit log entry not found")
+        return entry
+
+    # -- gateway status --------------------------------------------------------------
+    @app.get("/v1/gateway", tags=["gateway"])
+    def gateway_status(_: User) -> dict:
+        """Gateway configuration without credentials (host only, never keys or paths)."""
+        cfg = state.gateway.config
+
+        def up(u) -> dict | None:
+            return None if u is None else {"host": _host(u.base_url), "provider": u.provider,
+                                           "model": u.model, "authenticated": bool(u.api_key)}
+
+        return {"external": up(cfg.external), "local": up(cfg.local), "restore_responses": cfg.restore_responses,
+                "timeout_s": cfg.timeout, "streaming": False, "endpoint": "/v1/chat/completions",
+                "default_policy": settings.default_policy}
 
     return app
 

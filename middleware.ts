@@ -1,30 +1,24 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Optional HTTP Basic Auth for the dashboard (CATO_DASHBOARD_USER / CATO_DASHBOARD_PASSWORD).
- * Live API data is only shown when this is configured (see lib/cato-api.ts).
- * Use HTTPS (Vercel does by default); put SSO in front for production teams.
+ * Login gate. With CATO_API_URL set (live mode) every page except /login requires a session
+ * cookie; the API validates the token on each call and expired sessions are sent back to /login.
+ * Without CATO_API_URL the dashboard runs in demo mode with example data and no login.
  */
+const COOKIE = "cato_session";
+
 export function middleware(req: NextRequest) {
-  const user = process.env.CATO_DASHBOARD_USER;
-  const password = process.env.CATO_DASHBOARD_PASSWORD;
-  if (!user || !password) return NextResponse.next();
-
-  const header = req.headers.get("authorization") ?? "";
-  if (header.startsWith("Basic ")) {
-    const [u, ...rest] = atob(header.slice(6)).split(":");
-    if (safeEqual(u, user) && safeEqual(rest.join(":"), password)) return NextResponse.next();
+  if (!process.env.CATO_API_URL) return NextResponse.next();
+  const { pathname, search } = req.nextUrl;
+  const hasSession = Boolean(req.cookies.get(COOKIE)?.value);
+  if (pathname === "/login") return NextResponse.next();
+  if (!hasSession) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    return NextResponse.redirect(url);
   }
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Cato", charset="UTF-8"' },
-  });
-}
-
-function safeEqual(a: string, b: string): boolean {
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
+  return NextResponse.next();
 }
 
 export const config = { matcher: ["/((?!_next/static|_next/image|icon.svg|brand/).*)"] };

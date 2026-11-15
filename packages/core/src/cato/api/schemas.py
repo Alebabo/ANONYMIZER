@@ -95,3 +95,38 @@ class DryRunRequest(TextRequest):
     candidate_yaml: str = Field(min_length=1, max_length=100_000)
     destination: Destination = "external"
     against: str | None = Field(None, description="active policy name to compare with (default: default policy)")
+
+
+# -- accounts ----------------------------------------------------------------------
+
+class LoginRequest(_Strict):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class PasswordChange(_Strict):
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str = Field(min_length=1, max_length=1024)
+
+
+class ApiKeyCreate(_Strict):
+    name: str = Field(min_length=1, max_length=100)
+    role: Literal["user", "admin"] = "user"
+
+
+class MemberCreate(_Strict):
+    email: str = Field(min_length=3, max_length=320)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=1024, description="initial password, min. 12 characters")
+    role: Literal["admin", "member"] = "member"
+
+
+class MemberUpdate(_Strict):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    role: Literal["admin", "member"] | None = None
+    disabled: bool | None = None
+
+
+class OrganizationUpdate(_Strict):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    trace_retention_days: int | None = Field(None, ge=1, le=3650)

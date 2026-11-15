@@ -6,7 +6,11 @@ The dashboard design tokens (`app/globals.css`) and the UI primitives in
 `components/ui/` (button, card, table, input) are derived from
 https://github.com/langfuse/langfuse (`web/src/styles/globals.css`,
 `web/src/components/ui/`). Only files outside Langfuse's `ee/` directories
-were used. License text as distributed by Langfuse:
+were used. The audit log record shape (`packages/core/src/cato/audit.py`:
+resource type/id, action, before/after, actor) follows Langfuse's
+`web/src/features/audit-logs/auditLog.ts` (MIT). The audit log viewer is Cato's
+own implementation; Langfuse's viewer lives in `ee/` and was not used.
+License text as distributed by Langfuse:
 
 ```
 Copyright (c) 2023-2026 ClickHouse, Inc.

@@ -156,7 +156,7 @@ def test_size_limit():
 @pytest.fixture
 def client(tmp_path):
     key = "cato_test_user_key_0123456789abcdef"
-    s = Settings.from_env({"CATO_API_KEYS": key, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_TRACE_DB": ":memory:",
+    s = Settings.from_env({"CATO_API_KEYS": key, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
                            "CATO_MAX_UPLOAD_BYTES": "2000000"})
     return TestClient(create_app(s)), {"Authorization": f"Bearer {key}"}
 

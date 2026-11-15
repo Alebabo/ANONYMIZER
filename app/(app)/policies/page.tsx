@@ -2,7 +2,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getPolicies, getPolicyYaml } from "@/lib/cato-api";
+import { getPolicies, getPolicy } from "@/lib/cato-api";
 import { examplePolicyYaml } from "@/lib/mock";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function Policies() {
   const { data: policies, source } = await getPolicies();
   const active = policies.find(p => p.name === "legal-default") ?? policies[0];
-  const detail = active ? await getPolicyYaml(active.name) : null;
+  const detail = active ? await getPolicy(active.name) : null;
   const body = detail?.data ? JSON.stringify(detail.data, null, 2) : examplePolicyYaml;
   return (
     <>

@@ -34,7 +34,7 @@ class FakeProvider:
 
 def make_client(tmp_path, provider: FakeProvider, local: bool = False, restore: bool = True):
     env = {
-        "CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_TRACE_DB": ":memory:",
+        "CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
         "CATO_UPSTREAM_URL": "https://api.provider.test/v1", "CATO_UPSTREAM_KEY": "sk-upstream-secret",
         "CATO_UPSTREAM_PROVIDER": "openai",
     }
@@ -135,7 +135,7 @@ def test_upstream_error_and_unreachable(tmp_path):
 
     def down(request):
         raise httpx.ConnectError("refused")
-    env = {"CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "q"), "CATO_TRACE_DB": ":memory:",
+    env = {"CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "q"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
            "CATO_UPSTREAM_URL": "https://api.provider.test/v1"}
     c2 = TestClient(create_app(Settings.from_env(env), gateway_transport=httpx.MockTransport(down)))
     assert chat(c2, "Hallo Welt, wie geht es?").status_code == 502
@@ -143,7 +143,7 @@ def test_upstream_error_and_unreachable(tmp_path):
 
 def test_no_upstream_configured(tmp_path):
     c = TestClient(create_app(Settings.from_env({"CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"),
-                                                 "CATO_TRACE_DB": ":memory:"})))
+                                                 "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})))
     assert chat(c, "Hallo").status_code == 503
 
 
