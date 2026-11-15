@@ -21,7 +21,9 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+import base64
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -40,6 +42,7 @@ from cato.pipeline import Pipeline
 from cato.policy import (
     DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
+from cato.documents import DocumentError, protect_document
 from cato.vault import FileVault, VaultError, VaultKey
 
 log = logging.getLogger("cato.api")
@@ -127,6 +130,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def vault_error(_: Request, exc: VaultError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+    @app.exception_handler(DocumentError)
+    async def document_error(_: Request, exc: DocumentError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
+
     @app.exception_handler(PolicyError)
     async def policy_error(_: Request, exc: PolicyError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -189,6 +196,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text,
                                risk=result.classification.risk, decision=result.decision,
                                classification=result.classification)
+
+    @app.post("/v1/documents/protect", tags=["documents"])
+    async def protect_document_(
+        _: User,
+        file: UploadFile = File(..., description="PDF, DOCX or UTF-8 text"),
+        destination: str = Form("external", pattern="^(external|local)$"),
+        namespace: str | None = Form(None, max_length=128),
+        language: str | None = Form(None, pattern="^(de|en)$"),
+        policy: str | None = Form(None),
+    ) -> dict:
+        """Protect a document. DOCX is anonymized in place (formatting kept, properties cleared) and
+        returned base64-encoded; PDF and text return anonymized text. Nothing is returned unless the
+        policy allows sending. Comments, tracked changes, embedded objects and pages without a text
+        layer degrade the result and put it into review."""
+        data = await file.read(settings.max_upload_bytes + 1)
+        if len(data) > settings.max_upload_bytes:
+            raise HTTPException(status_code=413, detail=f"file exceeds {settings.max_upload_bytes} bytes")
+        if namespace and state.vault is None:
+            raise HTTPException(status_code=400, detail="namespace given but no vault configured (CATO_VAULT_KEY)")
+        pipeline = Pipeline(state.policy_for(policy, None, None, None), detector=state.detector,
+                            classifier=state.classifier, vault=state.vault if namespace else None)
+        doc = protect_document(pipeline, data, file.filename, destination, namespace, language,
+                               max_bytes=settings.max_upload_bytes)
+        r = doc.result
+        body = {
+            "format": doc.format, "pages": doc.pages, "warnings": doc.warnings, "notes": doc.notes,
+            "outcome": r.decision.outcome.value, "allowed": doc.allowed, "risk": r.classification.risk.value,
+            "decision": r.decision.model_dump(mode="json"),
+            "text": None, "content_base64": None, "media_type": doc.media_type,
+        }
+        if doc.allowed:
+            if doc.format == "docx":
+                body["content_base64"] = base64.b64encode(doc.content).decode()
+                body["text"] = r.text
+            else:
+                body["text"] = doc.content.decode("utf-8")
+        return body
 
     @app.post("/v1/restore", response_model=RestoreResult, tags=["privacy"])
     def restore_(req: RestoreRequest, _: Admin) -> RestoreResult:

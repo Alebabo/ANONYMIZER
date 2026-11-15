@@ -45,6 +45,7 @@ CATO_API_KEYS=... cato-api          # binds to 127.0.0.1:8080
 | POST | `/v1/classify` | API | Risk per entity and document, with reasons |
 | POST | `/v1/anonymize` | API | Anonymize; `namespace` enables reversible pseudonyms |
 | POST | `/v1/protect` | API | Full pipeline with policy; returns `text` only when allowed |
+| POST | `/v1/documents/protect` | API | Upload PDF/DOCX/TXT (multipart); DOCX comes back anonymized in place |
 | POST | `/v1/restore` | Admin | Resolve placeholders via the vault |
 | GET | `/v1/policies` | API | Policies (latest version, hash, scope) |
 | GET | `/v1/policies/{name}` | API | Policy (`?version=`, `?effective=true` resolves `extends`) |

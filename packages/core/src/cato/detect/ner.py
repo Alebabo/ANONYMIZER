@@ -46,7 +46,11 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
     stripped = text.lstrip(" ,.;:()")
     start += len(text) - len(stripped)
     text = stripped.rstrip(" ,.;:()")
-    tokens = text.split()
+    tokens = text.split(" ")
+    while len(tokens) > 1 and tokens[0] in stopwords:  # "Akte Mustermann" -> "Mustermann"
+        start += len(tokens[0]) + 1
+        tokens = tokens[1:]
+    text = " ".join(tokens)
     if len(text) < 3 or not tokens or all(t in stopwords for t in tokens):
         return None
     if entity_type == E.PERSON and any(ch.isdigit() for ch in text):

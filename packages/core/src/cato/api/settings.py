@@ -32,6 +32,7 @@ class Settings:
     CATO_POLICY_DIR      policy store directory (default ./data/policies)
     CATO_DEFAULT_POLICY  policy name used when a request names none and no scope applies
     CATO_MAX_CHARS       max characters per text (default 200000)
+    CATO_MAX_UPLOAD_BYTES max document upload size (default 25 MiB)
     CATO_ENABLE_NER      "0" to disable spaCy NER (not recommended)
     """
 
@@ -42,6 +43,7 @@ class Settings:
     policy_dir: Path = Path("data/policies")
     default_policy: str = "legal-default"
     max_chars: int = 200_000
+    max_upload_bytes: int = 25 * 1024 * 1024
     enable_ner: bool = True
 
     @classmethod
@@ -64,6 +66,7 @@ class Settings:
             policy_dir=Path(env.get("CATO_POLICY_DIR", "data/policies")),
             default_policy=env.get("CATO_DEFAULT_POLICY", "legal-default"),
             max_chars=int(env.get("CATO_MAX_CHARS", "200000")),
+            max_upload_bytes=int(env.get("CATO_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))),
             enable_ner=env.get("CATO_ENABLE_NER", "1") != "0",
         )
 

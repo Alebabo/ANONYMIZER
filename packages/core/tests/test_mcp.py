@@ -20,7 +20,7 @@ def docs(tmp_path):
     root.mkdir()
     (root / "brief.txt").write_text(CLIENT_LETTER, encoding="utf-8")
     (root / "gesundheit.md").write_text(HEALTH_LETTER, encoding="utf-8")
-    (root / "binary.pdf").write_bytes(b"%PDF-1.7")
+    (root / "binary.exe").write_bytes(b"MZ\x90\x00")
     (tmp_path / "outside.txt").write_text("Herr Geheim Außerhalb", encoding="utf-8")
     os.symlink(tmp_path / "outside.txt", root / "escape.txt")
     return root
@@ -80,7 +80,7 @@ def test_list_documents_excludes_unsupported_and_escaping_files(tools):
     ("../outside.txt", "outside"),
     ("/etc/passwd", "outside"),
     ("escape.txt", "outside"),          # symlink pointing outside the root
-    ("binary.pdf", "unsupported"),
+    ("binary.exe", "unsupported"),
     ("missing.txt", "not found"),
     ("brief.txt\x00.md", "invalid"),
 ])

@@ -50,7 +50,17 @@ class Pipeline:
         language: str | None = None,
         dry_run: bool = False,
     ) -> ProtectResult:
-        scan = self.detector.scan(text, language)
+        return self.protect_scan(text, self.detector.scan(text, language), destination, namespace, dry_run)
+
+    def protect_scan(
+        self,
+        text: str,
+        scan,
+        destination: str = "external",
+        namespace: str | None = None,
+        dry_run: bool = False,
+    ) -> ProtectResult:
+        """Like :meth:`protect` with a precomputed (e.g. document-degraded) scan."""
         classification = self.classifier.classify_text(text, scan)
         decision = PolicyEngine(self.policy).evaluate(scan.detections, classification, destination, dry_run)
         anonymization = None
