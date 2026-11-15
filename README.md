@@ -30,6 +30,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 ## Documentation
 
 - [API & self-hosting](docs/API.md)
+- [Gateway](docs/gateway.md): OpenAI-compatible, local routing, traces & metrics
 - [Detection](docs/detection.md): DE/EN, rules + spaCy NER, context signals, roles
 - [Classification](docs/classification.md): low / sensitive / critical with reasons
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
@@ -63,7 +64,7 @@ npm install && npm run dev
 
 ## Roadmap
 
-- **Phase 2:** OpenAI-compatible gateway, Python/TypeScript SDK, LangChain (MCP server: done, stdio)
+- **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint (done: gateway, MCP, documents, Python SDK)
 - **Phase 3:** dashboard on real data (traces, metrics, review queue, policy editor)
 - **Phase 4:** multi-tenancy, SSO/RBAC, audit logs, Helm
 

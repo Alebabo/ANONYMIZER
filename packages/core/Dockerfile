@@ -32,7 +32,8 @@ USER cato
 ENV CATO_HOST=0.0.0.0 \
     CATO_PORT=8080 \
     CATO_VAULT_PATH=/data/vault.json \
-    CATO_POLICY_DIR=/data/policies
+    CATO_POLICY_DIR=/data/policies \
+    CATO_TRACE_DB=/data/traces.db
 
 VOLUME ["/data"]
 EXPOSE 8080

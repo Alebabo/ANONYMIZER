@@ -34,6 +34,11 @@ class Settings:
     CATO_MAX_CHARS       max characters per text (default 200000)
     CATO_MAX_UPLOAD_BYTES max document upload size (default 25 MiB)
     CATO_ENABLE_NER      "0" to disable spaCy NER (not recommended)
+    CATO_TRACE_DB        SQLite file for metadata-only traces (default data/traces.db)
+    CATO_TRACE_RETENTION_DAYS  default 30
+    CATO_UPSTREAM_URL / _KEY / _PROVIDER            external OpenAI-compatible provider
+    CATO_LOCAL_UPSTREAM_URL / _KEY / CATO_LOCAL_MODEL  optional local model for local_only content
+    CATO_GATEWAY_RESTORE "0" to return placeholders instead of restored values
     """
 
     api_key_hashes: set[str]
@@ -45,6 +50,9 @@ class Settings:
     max_chars: int = 200_000
     max_upload_bytes: int = 25 * 1024 * 1024
     enable_ner: bool = True
+    trace_db: str = "data/traces.db"
+    trace_retention_days: int = 30
+    env: dict[str, str] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -68,6 +76,9 @@ class Settings:
             max_chars=int(env.get("CATO_MAX_CHARS", "200000")),
             max_upload_bytes=int(env.get("CATO_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))),
             enable_ner=env.get("CATO_ENABLE_NER", "1") != "0",
+            trace_db=env.get("CATO_TRACE_DB", "data/traces.db"),
+            trace_retention_days=int(env.get("CATO_TRACE_RETENTION_DAYS", "30")),
+            env={k: v for k, v in env.items() if k.startswith(("CATO_UPSTREAM", "CATO_LOCAL", "CATO_GATEWAY"))},
         )
 
     def is_api_key(self, key: str) -> bool:
