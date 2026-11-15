@@ -88,7 +88,7 @@ function Logo() {
   return (
     <>
       <Link href="/" aria-label="Cato – Overview" className="text-foreground flex items-center">
-        <Wordmark className="h-[18px] w-auto" />
+        <Wordmark />
       </Link>
       <span className="text-muted-foreground ml-auto hidden text-2xs md:block">Workspace</span>
     </>

@@ -1,36 +1,32 @@
 /**
- * Cato brand marks. Geometric construction (no font dependency):
- * the solid block is a redaction bar – "something here is protected".
- * Colors come from currentColor so the marks follow the theme.
+ * Cato brand marks: lines of text with one redacted segment.
+ * Lines use currentColor (follow the theme); the redaction block is the
+ * single accent color. 4 lines on a 32-unit grid stay legible at 16 px.
  */
 
-export function Wordmark({ className, title = "Cato" }: { className?: string; title?: string }) {
+export const ACCENT = "#3D5AFE";
+
+export function Logomark({ className, title = "Cato" }: { className?: string; title?: string }) {
   return (
-    <svg viewBox="0 0 126 40" className={className} role="img" aria-label={title} fill="none">
-      <g stroke="currentColor" strokeWidth={6.5}>
-        <path d="M21.5 15.5A11 11 0 1 0 21.5 32.5" />
-        <circle cx="38" cy="24" r="10.75" />
-        <path d="M48.75 12.5V36" />
-        <path d="M62 5V36M56.5 14H69.5" />
-        <circle cx="86" cy="24" r="10.75" />
+    <svg viewBox="0 0 32 32" className={className} role="img" aria-label={title}>
+      <g fill="currentColor">
+        <rect x="4" y="5" width="24" height="3.5" rx="1.75" />
+        <rect x="4" y="11" width="18" height="3.5" rx="1.75" />
+        <rect x="4" y="17" width="5" height="3.5" rx="1.75" />
+        <rect x="23" y="17" width="5" height="3.5" rx="1.75" />
+        <rect x="4" y="23" width="15" height="3.5" rx="1.75" />
       </g>
-      <rect x="104" y="12" width="20" height="24" fill="currentColor" />
+      <rect x="11" y="16" width="10" height="5.5" fill={ACCENT} />
     </svg>
   );
 }
 
-/** Square app mark: "c" plus redaction bar. ``inverted`` draws a filled tile. */
-export function Logomark({ className, inverted = true }: { className?: string; inverted?: boolean }) {
+/** Mark + "cato" set in the UI sans. */
+export function Wordmark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={className} role="img" aria-label="Cato">
-      {inverted && <rect width="64" height="64" rx="14" fill="currentColor" />}
-      <path
-        d="M30 22.5A12.5 12.5 0 1 0 30 41.5"
-        fill="none"
-        stroke={inverted ? "var(--logo-contrast, #fff)" : "currentColor"}
-        strokeWidth={7}
-      />
-      <rect x="35" y="19.5" width="14" height="25" fill={inverted ? "var(--logo-contrast, #fff)" : "currentColor"} />
-    </svg>
+    <span className={`inline-flex items-center gap-1.5 ${className ?? ""}`} aria-label="Cato">
+      <Logomark className="h-6 w-6" title="" />
+      <span aria-hidden className="text-[17px] leading-none font-bold tracking-[-0.03em]">cato</span>
+    </span>
   );
 }
