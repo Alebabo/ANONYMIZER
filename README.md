@@ -23,6 +23,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 | Path | Content |
 |---|---|
 | `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
+| `sdk/python/` | Python client `cato-sdk` (`from cato_sdk import Cato`) |
 | `app/`, `components/` | Next.js dashboard (design derived from Langfuse, mobile-ready, example data only so far) |
 | `app/api/v1/*`, `lib/privacy-engine.ts` | Legacy TypeScript prototype, replaced by the Python API |
 | `docs/` | Documentation |
