@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -107,27 +108,43 @@ def merge_traces(route: str, parts: list[Trace], **extra: Any) -> Trace:
     )
 
 
+DEFAULT_ORG = "default"
+
+
 class TraceStore:
-    def __init__(self, path: str | Path = ":memory:", retention_days: int = 30) -> None:
+    """Traces are stored per organization (``org_id``); every read is scoped to one.
+
+    ``retention_for`` maps an organization to its retention in days (falls back
+    to ``retention_days``).
+    """
+
+    def __init__(self, path: str | Path = ":memory:", retention_days: int = 30,
+                 retention_for: Callable[[str], int | None] | None = None) -> None:
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.retention_days = retention_days
+        self.retention_for = retention_for
         self._lock = threading.Lock()
         self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.execute("""CREATE TABLE IF NOT EXISTS traces (
             id TEXT PRIMARY KEY, created_at REAL NOT NULL, route TEXT, outcome TEXT, risk TEXT,
             provider TEXT, status INTEGER, data TEXT NOT NULL)""")
+        cols = {r[1] for r in self._db.execute("PRAGMA table_info(traces)")}
+        if "org_id" not in cols:  # migration: traces written before accounts belong to the default org
+            self._db.execute(f"ALTER TABLE traces ADD COLUMN org_id TEXT NOT NULL DEFAULT '{DEFAULT_ORG}'")
         self._db.execute("CREATE INDEX IF NOT EXISTS traces_created ON traces(created_at)")
+        self._db.execute("CREATE INDEX IF NOT EXISTS traces_org_created ON traces(org_id, created_at)")
         self._db.commit()
         self._writes = 0
 
-    def add(self, trace: Trace) -> Trace:
+    def add(self, trace: Trace, org_id: str = DEFAULT_ORG) -> Trace:
         with self._lock:
             self._db.execute(
-                "INSERT INTO traces (id, created_at, route, outcome, risk, provider, status, data) VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO traces (id, created_at, route, outcome, risk, provider, status, data, org_id) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
                 (trace.id, trace.created_at, trace.route, trace.outcome, trace.risk, trace.provider, trace.status,
-                 trace.model_dump_json()),
+                 trace.model_dump_json(), org_id),
             )
             self._writes += 1
             if self._writes % 100 == 1:
@@ -136,17 +153,25 @@ class TraceStore:
         return trace
 
     def _purge(self) -> None:
-        cutoff = time.time() - self.retention_days * 86400
-        self._db.execute("DELETE FROM traces WHERE created_at < ?", (cutoff,))
+        now = time.time()
+        for (org,) in self._db.execute("SELECT DISTINCT org_id FROM traces").fetchall():
+            days = (self.retention_for(org) if self.retention_for else None) or self.retention_days
+            self._db.execute("DELETE FROM traces WHERE org_id = ? AND created_at < ?", (org, now - days * 86400))
 
-    def get(self, trace_id: str) -> Trace | None:
+    def purge(self) -> None:
         with self._lock:
-            row = self._db.execute("SELECT data FROM traces WHERE id = ?", (trace_id,)).fetchone()
+            self._purge()
+            self._db.commit()
+
+    def get(self, trace_id: str, org_id: str = DEFAULT_ORG) -> Trace | None:
+        with self._lock:
+            row = self._db.execute("SELECT data FROM traces WHERE id = ? AND org_id = ?",
+                                   (trace_id, org_id)).fetchone()
         return Trace.model_validate_json(row[0]) if row else None
 
     def list(self, limit: int = 50, outcome: str | None = None, route: str | None = None,
-             since: float | None = None) -> list[Trace]:
-        sql, args = "SELECT data FROM traces WHERE 1=1", []
+             since: float | None = None, org_id: str = DEFAULT_ORG) -> list[Trace]:
+        sql, args = "SELECT data FROM traces WHERE org_id = ?", [org_id]
         if outcome:
             sql += " AND outcome = ?"
             args.append(outcome)
@@ -162,9 +187,9 @@ class TraceStore:
             rows = self._db.execute(sql, args).fetchall()
         return [Trace.model_validate_json(r[0]) for r in rows]
 
-    def metrics(self, hours: int = 24) -> dict[str, Any]:
+    def metrics(self, hours: int = 24, org_id: str = DEFAULT_ORG) -> dict[str, Any]:
         since = time.time() - hours * 3600
-        traces = self._all_since(since)
+        traces = self._all_since(since, org_id)
         total = len(traces)
         with_det = sum(1 for t in traces if t.entity_counts)
         detections = sum(sum(t.entity_counts.values()) for t in traces)
@@ -206,8 +231,8 @@ class TraceStore:
             "timeseries": series,
         }
 
-    def _all_since(self, since: float) -> list[Trace]:
+    def _all_since(self, since: float, org_id: str) -> list[Trace]:
         with self._lock:
-            rows = self._db.execute("SELECT data FROM traces WHERE created_at >= ? ORDER BY created_at",
-                                    (since,)).fetchall()
+            rows = self._db.execute("SELECT data FROM traces WHERE org_id = ? AND created_at >= ? ORDER BY created_at",
+                                    (org_id, since)).fetchall()
         return [Trace.model_validate_json(r[0]) for r in rows]

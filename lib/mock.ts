@@ -1,5 +1,5 @@
 // Illustrative example data in the shape of the Cato API. No real content.
-import type { Metrics, PolicySummary, Trace } from "@/lib/cato-api";
+import type { ApiKey, AuditEntry, GatewayStatus, Me, Metrics, PolicySummary, Trace, User } from "@/lib/cato-api";
 
 const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
 
@@ -102,3 +102,65 @@ document_rules:
     destinations: [external]
     action: review
 default_action: redact`;
+
+const day = 86400;
+
+export const exampleMembers: User[] = [
+  { id: "usr_3f1a9c0b7d2e", org_id: "default", email: "admin@kanzlei.example", name: "Dr. Example Admin", role: "admin",
+    created_at: base - 30 * day, last_login_at: base - 600, disabled: false },
+  { id: "usr_8b2e4d6f1a0c", org_id: "default", email: "it@kanzlei.example", name: "IT Team", role: "member",
+    created_at: base - 12 * day, last_login_at: base - 2 * day, disabled: false },
+];
+
+export const exampleMe: Me = {
+  kind: "session", role: "admin", user: exampleMembers[0],
+  organization: { id: "default", name: "Example Firm", created_at: base - 30 * day, trace_retention_days: null,
+                  effective_trace_retention_days: 30 },
+};
+
+export const exampleApiKeys: ApiKey[] = [
+  { id: "key_a1b2c3d4e5f6", org_id: "default", name: "Contract review backend", prefix: "cato_Xr8vQ2p", role: "user",
+    created_by: "usr_3f1a9c0b7d2e", created_at: base - 20 * day, last_used_at: base - 120, revoked_at: null },
+  { id: "key_0f9e8d7c6b5a", org_id: "default", name: "Policy deployment (CI)", prefix: "cato_Lm3Tz9a", role: "admin",
+    created_by: "usr_3f1a9c0b7d2e", created_at: base - 9 * day, last_used_at: base - 3 * day, revoked_at: null },
+  { id: "key_5a4b3c2d1e0f", org_id: "default", name: "Old prototype", prefix: "cato_P0qWe7r", role: "user",
+    created_by: "usr_3f1a9c0b7d2e", created_at: base - 28 * day, last_used_at: base - 15 * day, revoked_at: base - 14 * day },
+];
+
+export const exampleGateway: GatewayStatus = {
+  external: { host: "https://api.openai.com", provider: "openai", model: null, authenticated: true },
+  local: { host: "http://ollama:11434", provider: "local", model: "llama3.1", authenticated: false },
+  restore_responses: true, timeout_s: 120, streaming: false, endpoint: "/v1/chat/completions",
+  default_policy: "legal-default",
+};
+
+const admin = { actor_type: "user" as const, actor_id: "usr_3f1a9c0b7d2e", actor_label: "admin@kanzlei.example" };
+const entry = (i: number, ago: number, e: Partial<AuditEntry>): AuditEntry => ({
+  seq: i, id: `aud_example${String(i).padStart(5, "0")}`, created_at: base - ago, org_id: "default",
+  ...admin, resource_type: "", resource_id: "", action: "", before: null, after: null,
+  prev_hash: "", hash: `example${i}`, ...e,
+});
+export const exampleAudit: AuditEntry[] = [
+  entry(9, 300, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (cato_Lm3Tz9a…)",
+    resource_type: "vault", resource_id: "matter-2026-114", action: "restore", after: { restored: 3, unresolved: 0 } }),
+  entry(8, 600, { resource_type: "session", resource_id: "usr_3f1a9c0b7d2e", action: "login" }),
+  entry(7, 900, { actor_type: "anonymous", actor_id: null, actor_label: "admin@kanzlei.example",
+    resource_type: "session", resource_id: "usr_3f1a9c0b7d2e", action: "login_failed" }),
+  entry(6, 2 * day, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (cato_Lm3Tz9a…)",
+    resource_type: "policy", resource_id: "firm-a", action: "update",
+    before: { name: "firm-a", version: 2, hash: "sha256:51c0…", scope: { tenant: "firm-a", team: null } },
+    after: { name: "firm-a", version: 3, hash: "sha256:7a0e…", scope: { tenant: "firm-a", team: null } } }),
+  entry(5, 9 * day, { resource_type: "api_key", resource_id: "key_0f9e8d7c6b5a", action: "create",
+    after: { id: "key_0f9e8d7c6b5a", name: "Policy deployment (CI)", prefix: "cato_Lm3Tz9a", role: "admin", revoked_at: null } }),
+  entry(4, 12 * day, { resource_type: "member", resource_id: "usr_8b2e4d6f1a0c", action: "create",
+    after: { id: "usr_8b2e4d6f1a0c", email: "it@kanzlei.example", name: "IT Team", role: "member", disabled: false } }),
+  entry(3, 14 * day, { resource_type: "api_key", resource_id: "key_5a4b3c2d1e0f", action: "revoke",
+    before: { id: "key_5a4b3c2d1e0f", name: "Old prototype", role: "user", revoked_at: null },
+    after: { id: "key_5a4b3c2d1e0f", name: "Old prototype", role: "user", revoked_at: base - 14 * day } }),
+  entry(2, 29 * day, { resource_type: "organization", resource_id: "default", action: "update",
+    before: { id: "default", name: "Default", trace_retention_days: null },
+    after: { id: "default", name: "Example Firm", trace_retention_days: null } }),
+  entry(1, 30 * day, { actor_type: "system", actor_id: null, actor_label: "system (cli)", resource_type: "member",
+    resource_id: "usr_3f1a9c0b7d2e", action: "create",
+    after: { id: "usr_3f1a9c0b7d2e", email: "admin@kanzlei.example", role: "admin", disabled: false } }),
+];

@@ -27,7 +27,7 @@ def client(tmp_path):
         "CATO_VAULT_PATH": str(tmp_path / "vault.json"),
         "CATO_POLICY_DIR": str(tmp_path / "policies"),
         "CATO_MAX_CHARS": "5000",
-        "CATO_TRACE_DB": str(tmp_path / "traces.db"),
+        "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": str(tmp_path / "traces.db"),
     })
     return TestClient(create_app(settings))
 
@@ -35,8 +35,8 @@ def client(tmp_path):
 # --- settings ------------------------------------------------------------------
 
 @pytest.mark.parametrize("env", [
-    {},
     {"CATO_API_KEYS": "short"},
+    {"CATO_BOOTSTRAP_ADMIN_EMAIL": "a@example.org"},
     {"CATO_API_KEYS": API_KEY, "CATO_ADMIN_KEYS": API_KEY},
 ])
 def test_settings_fail_closed(env):
@@ -66,7 +66,7 @@ def test_admin_key_can_use_user_endpoints(client):
 
 
 def test_admin_disabled_without_admin_keys(tmp_path):
-    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_TRACE_DB": ":memory:"})
+    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))
     r = c.post("/v1/restore", json={"text": "x", "namespace": "m"}, headers=USER)
     assert r.status_code == 403 and "disabled" in r.json()["detail"]
@@ -129,7 +129,7 @@ def test_protect_dry_run_returns_no_text(client):
 
 
 def test_namespace_without_vault_is_rejected(tmp_path):
-    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_TRACE_DB": ":memory:"})
+    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))
     r = c.post("/v1/anonymize", json={"text": LETTER, "namespace": "m"}, headers=USER)
     assert r.status_code == 400

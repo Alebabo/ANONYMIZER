@@ -79,9 +79,32 @@ const outcomeStyle: Record<string, string> = {
   warning: "bg-light-yellow text-dark-yellow",
   blocked: "bg-light-red text-dark-red",
   error: "bg-light-red text-dark-red",
+  active: "bg-light-green text-dark-green",
+  disabled: "bg-light-red text-dark-red",
+  configured: "bg-light-green text-dark-green",
+  "not configured": "bg-muted text-muted-foreground",
 };
 
 export function Pill({ value }: { value: string | null | undefined }) {
   const v = value ?? "n/a";
   return <span className={cn("inline-flex rounded-md px-2 py-0.5 text-xs", outcomeStyle[v] ?? "bg-muted text-muted-foreground")}>{v}</span>;
+}
+
+export const dateTime = (ts: number | null | undefined) =>
+  ts == null ? "–" : new Date(ts * 1000).toLocaleString("de-DE", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin",
+  });
+
+export function ago(ts: number | null | undefined): string {
+  if (ts == null) return "never";
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return "just now";
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 129600) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} days ago`;
+}
+
+/** Notice shown on management pages for members (read-only) and in demo mode. */
+export function Notice({ children }: { children: React.ReactNode }) {
+  return <p className="bg-muted text-muted-foreground rounded-md px-3 py-2 text-xs">{children}</p>;
 }

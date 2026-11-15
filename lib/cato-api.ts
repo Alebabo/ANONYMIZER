@@ -1,14 +1,20 @@
 import "server-only";
-import { exampleMetrics, examplePolicies, exampleTraces } from "@/lib/mock";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import {
+  exampleApiKeys, exampleAudit, exampleGateway, exampleMe, exampleMembers, exampleMetrics, examplePolicies, exampleTraces,
+} from "@/lib/mock";
 
 /**
- * Server-side access to the Cato API. The API key never reaches the browser.
+ * Server-side access to the Cato API. Tokens never reach browser JavaScript.
  *
- * Live data is only used when BOTH are true:
- *  - CATO_API_URL and CATO_API_KEY are set, and
- *  - the dashboard itself is protected (CATO_DASHBOARD_USER/PASSWORD, see middleware.ts).
- * Otherwise the pages show clearly labelled example data (fail closed).
+ * Modes:
+ *  - demo: CATO_API_URL is not set. Pages show clearly labelled example data, no login.
+ *  - live: CATO_API_URL is set. Every page requires a login (middleware.ts); calls use the
+ *    user's session token (httpOnly cookie), so the API enforces roles and organization scope.
  */
+
+export const SESSION_COOKIE = "cato_session";
 
 export type Trace = {
   id: string; created_at: number; route: string; outcome: string | null; allowed: boolean | null;
@@ -31,40 +37,120 @@ export type Metrics = {
 
 export type PolicySummary = { name: string; version: number; hash: string; scope: Record<string, unknown> };
 
+export type User = {
+  id: string; org_id: string; email: string; name: string; role: "admin" | "member";
+  created_at: number; last_login_at: number | null; disabled: boolean;
+};
+export type Organization = {
+  id: string; name: string; created_at: number; trace_retention_days: number | null;
+  effective_trace_retention_days: number;
+};
+export type Me = { kind: string; role: string; user: User | null; organization: Organization };
+
+export type ApiKey = {
+  id: string; org_id: string; name: string; prefix: string; role: "user" | "admin"; created_by: string | null;
+  created_at: number; last_used_at: number | null; revoked_at: number | null;
+};
+
+export type AuditEntry = {
+  seq: number; id: string; created_at: number; org_id: string; actor_type: "user" | "api_key" | "system" | "anonymous";
+  actor_id: string | null; actor_label: string | null; resource_type: string; resource_id: string; action: string;
+  before: unknown; after: unknown; prev_hash: string; hash: string;
+};
+export type AuditPage = { data: AuditEntry[]; next_before: number | null; actions: string[]; resource_types: string[] };
+export type AuditVerify = { ok: boolean; entries: number; broken_at: string | null; head?: string };
+
+type Upstream = { host: string; provider: string; model: string | null; authenticated: boolean } | null;
+export type GatewayStatus = {
+  external: Upstream; local: Upstream; restore_responses: boolean; timeout_s: number; streaming: boolean;
+  endpoint: string; default_policy: string;
+};
+
 export type Source = { live: boolean; reason?: string };
 
-export function apiConfigured(): Source {
-  const url = process.env.CATO_API_URL;
-  const key = process.env.CATO_API_KEY;
-  if (!url || !key) return { live: false, reason: "API not connected (CATO_API_URL / CATO_API_KEY)" };
-  if (!process.env.CATO_DASHBOARD_USER || !process.env.CATO_DASHBOARD_PASSWORD)
-    return { live: false, reason: "Dashboard login not configured; live data disabled" };
-  return { live: true };
+export const isDemo = () => !process.env.CATO_API_URL;
+const base = () => process.env.CATO_API_URL!.replace(/\/$/, "");
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message); }
 }
 
-async function call<T>(path: string): Promise<T> {
-  const res = await fetch(`${process.env.CATO_API_URL!.replace(/\/$/, "")}${path}`, {
-    headers: { Authorization: `Bearer ${process.env.CATO_API_KEY}` },
+async function token(): Promise<string | undefined> {
+  return (await cookies()).get(SESSION_COOKIE)?.value;
+}
+
+/** Authenticated call with the user's session. 401 sends the user to the login page. */
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const t = await token();
+  if (!t) redirect("/login");
+  const res = await fetch(`${base()}${path}`, {
+    ...init,
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json", ...init.headers },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`Cato API ${res.status}`);
-  return res.json() as Promise<T>;
-}
-
-async function withFallback<T>(path: string, example: () => T): Promise<{ data: T; source: Source }> {
-  const source = apiConfigured();
-  if (!source.live) return { data: example(), source };
-  try {
-    return { data: await call<T>(path), source };
-  } catch (e) {
-    return { data: example(), source: { live: false, reason: e instanceof Error ? e.message : "API error" } };
+  if (res.status === 401) redirect("/login?expired=1");
+  if (!res.ok) {
+    let detail = `Cato API ${res.status}`;
+    try {
+      const body = await res.json();
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (Array.isArray(body.detail)) detail = body.detail.map((d: { msg?: string }) => d.msg).join("; ");
+    } catch { /* keep generic message */ }
+    throw new ApiError(res.status, detail);
   }
+  return (res.status === 204 ? undefined : res.json()) as Promise<T>;
 }
 
-export const getMetrics = (hours = 24) => withFallback<Metrics>(`/v1/metrics?hours=${hours}`, () => exampleMetrics);
-export const getTraces = (limit = 50) => withFallback<Trace[]>(`/v1/traces?limit=${limit}`, () => exampleTraces);
-export const getTrace = (id: string) =>
-  withFallback<Trace | null>(`/v1/traces/${encodeURIComponent(id)}`, () => exampleTraces.find(t => t.id === id) ?? null);
-export const getPolicies = () => withFallback<PolicySummary[]>("/v1/policies", () => examplePolicies);
-export const getPolicyYaml = async (name: string) =>
-  withFallback<Record<string, unknown> | null>(`/v1/policies/${encodeURIComponent(name)}`, () => null);
+/** Unauthenticated login call (used by the login server action only). */
+export async function apiLogin(email: string, password: string) {
+  const res = await fetch(`${base()}/v1/auth/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const msg = res.status === 429 ? "Too many failed attempts. Try again in 15 minutes."
+      : res.status === 401 || res.status === 422 ? "Invalid e-mail or password." : `Login failed (API ${res.status}).`;
+    throw new ApiError(res.status, msg);
+  }
+  return res.json() as Promise<Me & { token: string; expires_at: number }>;
+}
+
+async function read<T>(path: string, example: () => T): Promise<{ data: T; source: Source }> {
+  if (isDemo()) return { data: example(), source: { live: false, reason: "API not connected (CATO_API_URL)" } };
+  return { data: await api<T>(path), source: { live: true } };
+}
+
+export const getMe = () => read<Me>("/v1/auth/me", () => exampleMe);
+export const getMetrics = (hours = 24) => read<Metrics>(`/v1/metrics?hours=${hours}`, () => exampleMetrics);
+export const getTraces = (limit = 50) => read<Trace[]>(`/v1/traces?limit=${limit}`, () => exampleTraces);
+export const getTrace = async (id: string) => {
+  if (isDemo()) return read<Trace | null>("", () => exampleTraces.find(t => t.id === id) ?? null);
+  try {
+    return await read<Trace | null>(`/v1/traces/${encodeURIComponent(id)}`, () => null);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return { data: null, source: { live: true } };
+    throw e;
+  }
+};
+export const getPolicies = () => read<PolicySummary[]>("/v1/policies", () => examplePolicies);
+export const getPolicy = (name: string) =>
+  read<Record<string, unknown> | null>(`/v1/policies/${encodeURIComponent(name)}`, () => null);
+export const getApiKeys = () => read<ApiKey[]>("/v1/api-keys", () => exampleApiKeys);
+export const getMembers = () => read<User[]>("/v1/members", () => exampleMembers);
+export const getGateway = () => read<GatewayStatus>("/v1/gateway", () => exampleGateway);
+
+export type AuditQuery = { before?: string; action?: string; resource_type?: string; limit?: number };
+export const getAuditLogs = (q: AuditQuery) => {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries({ limit: 50, ...q })) if (v) params.set(k, String(v));
+  return read<AuditPage>(`/v1/audit-logs?${params}`, () => ({
+    data: exampleAudit.filter(e => (!q.action || e.action === q.action) && (!q.resource_type || e.resource_type === q.resource_type)),
+    next_before: null,
+    actions: [...new Set(exampleAudit.map(e => e.action))].sort(),
+    resource_types: [...new Set(exampleAudit.map(e => e.resource_type))].sort(),
+  }));
+};
+export const getAuditEntry = (id: string) =>
+  read<AuditEntry | null>(`/v1/audit-logs/${encodeURIComponent(id)}`, () => exampleAudit.find(e => e.id === id) ?? null);
+export const verifyAudit = () =>
+  read<AuditVerify>("/v1/audit-logs/verify", () => ({ ok: true, entries: exampleAudit.length, broken_at: null }));

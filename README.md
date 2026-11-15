@@ -7,9 +7,10 @@ Cato detects, classifies, anonymizes and controls sensitive legal information be
 ## Quickstart
 
 ```bash
-cp .env.example .env            # set the keys (generator commands are in the file)
+cp .env.example .env            # set the first admin and the keys (generator commands are in the file)
 docker compose up -d --build    # API on 127.0.0.1:8080, spaCy models included
 curl -s localhost:8080/health
+docker compose exec api cato seed-demo   # optional: synthetic demo traces for the dashboard
 ```
 
 ```bash
@@ -24,7 +25,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 |---|---|
 | `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
 | `sdk/python/` | Python client `cato-sdk` (`from cato_sdk import Cato`) |
-| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready): overview, traces, privacy, metrics, policies from the live API |
+| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready) with login: overview, gateway, privacy, traces, metrics, policies, API keys, integrations, settings, members, audit log |
 | `docs/` | Documentation |
 
 ## Documentation
@@ -35,6 +36,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 - [Classification](docs/classification.md): low / sensitive / critical with reasons
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
+- [Accounts & audit log](docs/accounts.md): login, roles, organization scope, API keys, hash-chained audit log
 - [MCP server](docs/mcp.md): `cato-mcp` for Claude, Cursor & other agents, with protected document access
 
 ## Development
@@ -46,10 +48,10 @@ python -m spacy download de_core_news_lg && python -m spacy download en_core_web
 pytest                       # incl. corpus, leak and API tests
 cato eval tests/corpus       # detection/classification against the synthetic corpus
 
-# Dashboard (example data unless connected; live data requires the dashboard login)
+# Dashboard: demo mode with example data, or live with login when CATO_API_URL is set
 npm install
-CATO_API_URL=http://localhost:8080 CATO_API_KEY=cato_... \
-CATO_DASHBOARD_USER=admin CATO_DASHBOARD_PASSWORD=... npm run dev
+npm run dev                                         # demo mode
+CATO_API_URL=http://localhost:8080 npm run dev      # live: sign in with a Cato user
 ```
 
 ## Security principles
@@ -67,7 +69,7 @@ CATO_DASHBOARD_USER=admin CATO_DASHBOARD_PASSWORD=... npm run dev
 ## Roadmap
 
 - **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint (done: gateway, MCP, documents, Python SDK)
-- **Phase 3:** review queue with approvals, graphical policy editor, API key management in the UI (done: traces, metrics, dashboard on live data)
-- **Phase 4:** multi-tenancy, SSO/RBAC, audit logs, Helm
+- **Phase 3:** review queue with approvals, graphical policy editor (done: traces, metrics, dashboard on live data, API key management in the UI)
+- **Phase 4:** SSO/MFA, finer RBAC, PostgreSQL, Helm (done: organizations, login, roles, hash-chained audit log)
 
 License: Apache-2.0. Third-party notices: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

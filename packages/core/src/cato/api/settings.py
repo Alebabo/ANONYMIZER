@@ -1,4 +1,4 @@
-"""API settings from environment variables. Fails closed: no keys, no start."""
+"""API settings from environment variables. Fails closed: invalid keys, no start; no keys, no access."""
 
 from __future__ import annotations
 
@@ -24,9 +24,14 @@ class SettingsError(RuntimeError):
 @dataclass
 class Settings:
     """
-    CATO_API_KEYS        comma-separated keys for scan/classify/anonymize/protect (required)
+    CATO_API_KEYS        comma-separated keys for scan/classify/anonymize/protect (optional; keys can
+                         also be created in the dashboard. Environment keys belong to the default org)
     CATO_ADMIN_KEYS      comma-separated keys for restore and policy management (optional;
-                         without them those endpoints are disabled)
+                         without admin keys those endpoints are disabled)
+    CATO_ACCOUNTS_DB     SQLite file for organizations, users, sessions, API keys (default data/accounts.db)
+    CATO_AUDIT_DB        SQLite file for the audit log (default data/audit.db)
+    CATO_SESSION_HOURS   dashboard session lifetime (default 12)
+    CATO_BOOTSTRAP_ADMIN_EMAIL / _PASSWORD  creates the first admin if no user exists yet
     CATO_VAULT_KEY       base64 32-byte vault key (optional; enables reversible pseudonyms)
     CATO_VAULT_PATH      vault file (default ./data/vault.json)
     CATO_POLICY_DIR      policy store directory (default ./data/policies)
@@ -52,6 +57,10 @@ class Settings:
     enable_ner: bool = True
     trace_db: str = "data/traces.db"
     trace_retention_days: int = 30
+    accounts_db: str = "data/accounts.db"
+    audit_db: str = "data/audit.db"
+    session_hours: float = 12
+    bootstrap_admin: tuple[str, str] | None = field(default=None, repr=False)
     env: dict[str, str] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -59,8 +68,6 @@ class Settings:
         env = dict(os.environ if env is None else env)
         api_keys = _split(env.get("CATO_API_KEYS"))
         admin_keys = _split(env.get("CATO_ADMIN_KEYS"))
-        if not api_keys:
-            raise SettingsError("CATO_API_KEYS must contain at least one key")
         for k in api_keys + admin_keys:
             if len(k) < 24:
                 raise SettingsError("API keys must be at least 24 characters")
@@ -78,6 +85,10 @@ class Settings:
             enable_ner=env.get("CATO_ENABLE_NER", "1") != "0",
             trace_db=env.get("CATO_TRACE_DB", "data/traces.db"),
             trace_retention_days=int(env.get("CATO_TRACE_RETENTION_DAYS", "30")),
+            accounts_db=env.get("CATO_ACCOUNTS_DB", "data/accounts.db"),
+            audit_db=env.get("CATO_AUDIT_DB", "data/audit.db"),
+            session_hours=float(env.get("CATO_SESSION_HOURS", "12")),
+            bootstrap_admin=_bootstrap(env),
             env={k: v for k, v in env.items() if k.startswith(("CATO_UPSTREAM", "CATO_LOCAL", "CATO_GATEWAY"))},
         )
 
@@ -86,6 +97,13 @@ class Settings:
 
     def is_admin_key(self, key: str) -> bool:
         return _contains(self.admin_key_hashes, key)
+
+
+def _bootstrap(env: dict[str, str]) -> tuple[str, str] | None:
+    email, password = env.get("CATO_BOOTSTRAP_ADMIN_EMAIL"), env.get("CATO_BOOTSTRAP_ADMIN_PASSWORD")
+    if bool(email) != bool(password):
+        raise SettingsError("set both CATO_BOOTSTRAP_ADMIN_EMAIL and CATO_BOOTSTRAP_ADMIN_PASSWORD")
+    return (email, password) if email and password else None
 
 
 def _contains(hashes: set[str], key: str) -> bool:

@@ -1,4 +1,5 @@
-"""Command line: ``cato scan | classify | anonymize | restore | protect | policy-validate | eval``."""
+"""Command line: ``cato scan | classify | anonymize | restore | protect | policy-validate | eval``
+plus account management: ``cato org create | org list | user create | user list | seed-demo``."""
 
 from __future__ import annotations
 
@@ -42,8 +43,30 @@ def main(argv: list[str] | None = None) -> int:
     pv.add_argument("path")
     ev = sub.add_parser("eval", help="evaluate detection against a YAML corpus directory")
     ev.add_argument("corpus", help="directory with *.yaml documents")
+    org = sub.add_parser("org", help="manage organizations (accounts DB from CATO_ACCOUNTS_DB)")
+    org_sub = org.add_subparsers(dest="org_command", required=True)
+    oc = org_sub.add_parser("create", help="create an organization")
+    oc.add_argument("name")
+    oc.add_argument("--id", help="organization id (default: random)")
+    org_sub.add_parser("list", help="list organizations")
+    us = sub.add_parser("user", help="manage dashboard users")
+    us_sub = us.add_subparsers(dest="user_command", required=True)
+    uc = us_sub.add_parser("create", help="create a user (password is prompted or read from stdin)")
+    uc.add_argument("--email", required=True)
+    uc.add_argument("--name")
+    uc.add_argument("--org", default="default", help="organization id (default: default)")
+    uc.add_argument("--role", choices=["admin", "member"], default="admin")
+    uc.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
+    ul = us_sub.add_parser("list", help="list users of an organization")
+    ul.add_argument("--org", default="default")
+    sd = sub.add_parser("seed-demo", help="write synthetic demo traces (metadata only) for an organization")
+    sd.add_argument("--org", default="default")
+    sd.add_argument("--count", type=int, default=400)
+    sd.add_argument("--days", type=int, default=7)
     args = parser.parse_args(argv)
 
+    if args.command in ("org", "user", "seed-demo"):
+        return _accounts(args)
     if args.command == "eval":
         return _eval(args.corpus)
     if args.command == "classify":
@@ -168,6 +191,53 @@ def _eval(directory: str) -> int:
             print(f"     false positive {det.entity_type} for rule {spec}")
     print(json.dumps(summarize(reports), indent=2))
     return 0 if all(r.ok for r in reports) else 1
+
+
+def _accounts(args: argparse.Namespace) -> int:
+    import getpass
+    import os
+
+    from cato.accounts import AccountError, AccountStore
+    from cato.audit import AuditLog
+
+    accounts = AccountStore(os.environ.get("CATO_ACCOUNTS_DB", "data/accounts.db"))
+    audit = AuditLog(os.environ.get("CATO_AUDIT_DB", "data/audit.db"))
+    try:
+        if args.command == "org" and args.org_command == "create":
+            o = accounts.create_org(args.name, args.id)
+            audit.record(o["id"], "create", "organization", o["id"], after=o, actor_label="system (cli)")
+            print(o["id"])
+        elif args.command == "org":
+            for o in accounts.list_orgs():
+                print(f"{o['id']}\t{o['name']}")
+        elif args.command == "user" and args.user_command == "create":
+            if args.password_stdin:
+                password = sys.stdin.readline().rstrip("\n")
+            else:
+                password = getpass.getpass("Password (min. 12 characters): ")
+                if getpass.getpass("Repeat password: ") != password:
+                    print("error: passwords do not match", file=sys.stderr)
+                    return 1
+            u = accounts.create_user(args.org, args.email, args.name or args.email.split("@")[0], password, args.role)
+            audit.record(args.org, "create", "member", u["id"], after=u, actor_label="system (cli)")
+            print(f"{u['id']}\t{u['email']}\t{u['role']}")
+        elif args.command == "user":
+            for u in accounts.list_users(args.org):
+                print(f"{u['id']}\t{u['email']}\t{u['role']}" + ("\tdisabled" if u["disabled"] else ""))
+        else:
+            from cato.demo import seed_traces
+            from cato.tracing import TraceStore
+
+            accounts.get_org(args.org)
+            store = TraceStore(os.environ.get("CATO_TRACE_DB", "data/traces.db"))
+            n = seed_traces(store, args.org, args.count, args.days)
+            audit.record(args.org, "seed", "demo_data", "traces", after={"traces": n, "days": args.days},
+                         actor_label="system (cli)")
+            print(f"{n} demo traces written to organization {args.org}")
+    except AccountError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

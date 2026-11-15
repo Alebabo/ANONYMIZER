@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, BarChart3, Gauge, KeyRound, Menu, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
+import { Activity, BarChart3, FileClock, Gauge, KeyRound, LogOut, Menu, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
+import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/logo";
 
@@ -17,16 +18,22 @@ const configuration = [
   { href: "/policies", label: "Policies", icon: ScrollText },
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/settings/audit-logs", label: "Audit Logs", icon: FileClock },
+  { href: "/settings", label: "Settings", icon: Settings, exclude: "/settings/audit-logs" },
 ];
 
-function Group({ title, items, onNavigate }: { title: string; items: typeof workspace; onNavigate?: () => void }) {
+type NavItem = { href: string; label: string; icon: typeof Gauge; exclude?: string };
+
+export type Account = { name: string; email: string; role: string; organization: string; demo: boolean };
+
+function Group({ title, items, onNavigate }: { title: string; items: NavItem[]; onNavigate?: () => void }) {
   const path = usePathname();
   return (
     <div className="px-2 py-2">
       <div className="text-muted-foreground px-2 pb-1 text-2xs uppercase tracking-wide">{title}</div>
-      {items.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? path === "/" : path.startsWith(href);
+      {items.map(({ href, label, icon: Icon, exclude }) => {
+        const active = href === "/" ? path === "/"
+          : (path === href || path.startsWith(href + "/")) && !(exclude && path.startsWith(exclude));
         return (
           <Link key={href} href={href} onClick={onNavigate} className={cn("flex h-9 md:h-7 items-center gap-2 rounded-md px-2 text-sm", active ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground hover:bg-sidebar-accent/60")}>
             <Icon className="h-4 w-4" />{label}
@@ -37,7 +44,31 @@ function Group({ title, items, onNavigate }: { title: string; items: typeof work
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AccountBox({ account }: { account: Account }) {
+  return (
+    <div className="border-sidebar-border mt-auto border-t p-3">
+      <div className="text-muted-foreground text-2xs uppercase tracking-wide">{account.organization}</div>
+      <div className="mt-1 flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{account.name}</div>
+          <div className="text-muted-foreground truncate text-xs">
+            {account.demo ? "Demo mode" : `${account.email} · ${account.role}`}
+          </div>
+        </div>
+        {!account.demo && (
+          <form action={logout}>
+            <button type="submit" aria-label="Sign out" title="Sign out"
+                    className="hover:bg-sidebar-accent flex h-8 w-8 items-center justify-center rounded-md">
+              <LogOut className="h-4 w-4" />
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function AppShell({ children, account }: { children: React.ReactNode; account: Account }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   useEffect(() => setOpen(false), [path]);
@@ -78,6 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="h-12 md:hidden" />
         <Group title="Workspace" items={workspace} onNavigate={() => setOpen(false)} />
         <Group title="Configuration" items={configuration} onNavigate={() => setOpen(false)} />
+        <AccountBox account={account} />
       </aside>
       <main className="min-w-0 flex-1 overflow-auto">{children}</main>
     </div>
