@@ -74,6 +74,10 @@ GATE_ACTIONS = {Action.REVIEW, Action.LOCAL_ONLY, Action.BLOCK}
 DESTINATIONS = {"external", "local"}
 
 
+class PolicyError(ValueError):
+    pass
+
+
 def _as_list(value: Any) -> list[str] | None:
     if value is None:
         return None
@@ -184,7 +188,13 @@ class Policy(BaseModel):
     # -- serialization ---------------------------------------------------------
     @classmethod
     def from_yaml(cls, text: str) -> "Policy":
-        return cls.model_validate(yaml.safe_load(text))
+        try:
+            data = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            mark = getattr(exc, "problem_mark", None)
+            where = f" (line {mark.line + 1})" if mark else ""
+            raise PolicyError(f"policy is not valid YAML{where}") from None
+        return cls.model_validate(data)
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Policy":

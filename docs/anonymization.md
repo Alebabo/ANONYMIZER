@@ -52,7 +52,7 @@ export CATO_VAULT_KEY=$(python -c "from cato.vault import VaultKey; print(VaultK
 
 ## Safety net
 
-1. **Sweep:** further exact occurrences of a transformed value that detection missed get the same replacement (`swept=true`).
+1. **Sweep:** further occurrences of a transformed value that detection missed get the same replacement (`swept=true`). Matching ignores case and tolerates a line break inside the value, so it covers what the leak check would otherwise reject. Side effect: a value that is also a common word (city "Essen" vs. verb "essen") is replaced in both places.
 2. **Leak check:** after the transformation, every transformed original value is searched in the output (normalized, case-insensitive). In `strict` mode (the default) any hit raises a `LeakError`, so nothing goes out.
 
 The leak check only finds values that were **detected**. A name that detection misses completely won't be found by the leak check either. Detection quality remains the limiting factor.

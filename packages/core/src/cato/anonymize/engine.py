@@ -6,8 +6,9 @@ the re-identification mapping; reversible methods write it to a vault.
 
 Safety net (on by default):
 
-1. *Sweep*: further exact occurrences of a transformed value that the
-   detector missed get the same replacement.
+1. *Sweep*: further occurrences of a transformed value that the detector
+   missed (any case, also wrapped across a line break) get the same
+   replacement.
 2. *Leak check*: after transformation, every transformed original value is
    searched in the output (case-insensitive). Hits are reported in
    ``AnonymizationResult.leaks`` and ``strict`` mode raises.
@@ -16,12 +17,14 @@ Safety net (on by default):
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
+from contextlib import nullcontext
 from enum import Enum
 
 from pydantic import BaseModel, Field
 
 from cato.anonymize.transforms import DEFAULT_MASK_KEEP, generalize, mask
-from cato.models import Detection, EntityType as E, ScanResult, make_detection
+from cato.models import INNER_WS, Detection, EntityType as E, ScanResult, make_detection
 from cato.vault import InMemoryVault, Vault, VaultError, VaultKey, normalize
 
 
@@ -149,8 +152,10 @@ class Anonymizer:
 
         counters: dict[str, int] = {}
         replacements: dict[str, str] = {}
-        for d in sorted(active, key=lambda x: x.start):
-            replacements[d.id] = self._replacement(d, methods[d.id], canonical[d.id], vault, ns, counters, lang)
+        # One vault write for the whole document instead of one per new value.
+        with getattr(vault, "batch", nullcontext)():
+            for d in sorted(active, key=lambda x: x.start):
+                replacements[d.id] = self._replacement(d, methods[d.id], canonical[d.id], vault, ns, counters, lang)
 
         out, transformations = self._apply(text, active, methods, replacements)
         leaks = self._leaks(out, active)
@@ -173,19 +178,36 @@ class Anonymizer:
 
     @staticmethod
     def _sweep(text: str, detections: list[Detection], active: list[Detection]) -> list[Detection]:
-        covered = [(d.start, d.end) for d in detections]
+        # Non-overlapping covered spans, kept sorted so the overlap test is a
+        # bisect instead of a scan over every span.
+        covered = sorted((d.start, d.end) for d in detections)
+        # Pre-filter: a value can only have a free occurrence if one of its
+        # words occurs more often in the text than inside detected spans.
+        folded = text.casefold()
+        inside = "\x00".join(d.text for d in detections).casefold()
         extra: list[Detection] = []
-        seen: set[tuple[int, int]] = set()
+        done: set[str] = set()
         for d in active:
-            if len(d.text.strip()) < 3:
+            # The first detection of a value claims all its free occurrences,
+            # so repeated values need no second pass over the text.
+            key = normalize(d.text)
+            if len(key) < 3 or key in done:
                 continue
-            for m in re.finditer(rf"(?<![\w-]){re.escape(d.text)}(?![\w-])", text):
+            done.add(key)
+            tokens = d.text.split()
+            probe = max(tokens, key=len).casefold()
+            if "\x00" not in probe and folded.count(probe) == inside.count(probe):
+                continue
+            # Same tolerance as the leak check (case, wrapped lines): what the
+            # leak check would reject is replaced here instead.
+            pattern = INNER_WS.join(re.escape(token) for token in tokens)
+            for m in re.finditer(rf"(?<![\w-]){pattern}(?![\w-])", text, re.IGNORECASE):
                 span = (m.start(), m.end())
-                if span in seen or any(s < span[1] and span[0] < e for s, e in covered):
+                i = bisect_right(covered, span)
+                if (i and covered[i - 1][1] > span[0]) or (i < len(covered) and covered[i][0] < span[1]):
                     continue
-                seen.add(span)
-                covered.append(span)
-                det = make_detection(d.entity_type, d.category, span[0], span[1], d.text, d.confidence, "sweep",
+                covered.insert(i, span)
+                det = make_detection(d.entity_type, d.category, span[0], span[1], m.group(0), d.confidence, "sweep",
                                      attributes={**d.attributes, "swept_from": d.id})
                 extra.append(det)
         return extra
@@ -246,10 +268,16 @@ class Anonymizer:
     @staticmethod
     def _leaks(out: str, active: list[Detection]) -> list[str]:
         folded = normalize(out)
+        verdict: dict[str, bool] = {}  # one search per distinct value
         leaks = []
         for d in active:
             value = normalize(d.text)
-            if len(value) >= 3 and re.search(rf"(?<!\w){re.escape(value)}(?!\w)", folded):
+            if value not in verdict:
+                # Substring test first: it is far cheaper than the regex and
+                # almost always negative.
+                verdict[value] = (len(value) >= 3 and value in folded
+                                  and re.search(rf"(?<!\w){re.escape(value)}(?!\w)", folded) is not None)
+            if verdict[value]:
                 leaks.append(d.id)
         return leaks
 

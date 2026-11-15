@@ -9,6 +9,7 @@ the signals found within ``window`` characters (bounded by paragraph breaks).
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 
 from cato.detect.base import lexicon
 from cato.models import Signal
@@ -61,8 +62,7 @@ def find_signals(text: str) -> list[Signal]:
     return found
 
 
-def signals_near(text: str, signals: list[Signal], start: int, end: int, window: int) -> tuple[str, ...]:
-    """Signal names within ``window`` chars of a span, not crossing a blank line."""
+def _paragraph_window(text: str, start: int, end: int, window: int) -> tuple[int, int]:
     lo = max(0, start - window)
     hi = min(len(text), end + window)
     para_start = text.rfind("\n\n", lo, start)
@@ -71,5 +71,28 @@ def signals_near(text: str, signals: list[Signal], start: int, end: int, window:
     para_end = text.find("\n\n", end, hi)
     if para_end != -1:
         hi = para_end
-    names = {s.name for s in signals if s.end > lo and s.start < hi and not (s.start >= start and s.end <= end)}
-    return tuple(sorted(names))
+    return lo, hi
+
+
+class SignalIndex:
+    """Signals sorted by start, for repeated ``near`` queries on one document."""
+
+    def __init__(self, signals: list[Signal]) -> None:
+        self._signals = sorted(signals, key=lambda s: s.start)
+        self._starts = [s.start for s in self._signals]
+        self._longest = max((s.end - s.start for s in self._signals), default=0)
+
+    def near(self, text: str, start: int, end: int, window: int) -> tuple[str, ...]:
+        """Signal names within ``window`` chars of a span, not crossing a blank line."""
+        lo, hi = _paragraph_window(text, start, end, window)
+        # A signal reaching into the window starts at most ``_longest`` before it.
+        first = bisect_left(self._starts, lo - self._longest)
+        last = bisect_left(self._starts, hi)
+        names = {s.name for s in self._signals[first:last]
+                 if s.end > lo and not (s.start >= start and s.end <= end)}
+        return tuple(sorted(names))
+
+
+def signals_near(text: str, signals: list[Signal], start: int, end: int, window: int) -> tuple[str, ...]:
+    """Signal names within ``window`` chars of a span, not crossing a blank line."""
+    return SignalIndex(signals).near(text, start, end, window)

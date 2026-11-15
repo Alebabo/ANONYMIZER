@@ -17,6 +17,7 @@ Uncertainty is never resolved towards "less sensitive".
 from __future__ import annotations
 
 import re
+from bisect import bisect_left, bisect_right
 from collections import Counter
 
 from pydantic import BaseModel, Field
@@ -151,15 +152,23 @@ class Classifier:
     def _links(self, scan: ScanResult, text_breaks: list[int]) -> dict[str, set[str]]:
         """detection id -> names of link rules that apply to it."""
         out: dict[str, set[str]] = {}
+        breaks = sorted(text_breaks)
         for rule in self.config.link_rules:
-            targets = [d for d in scan.detections if d.category.value in rule.linked_categories]
+            # Detections are non-overlapping, so sorting by start also sorts by end
+            # and the targets within ``window`` form one contiguous slice.
+            targets = sorted((d for d in scan.detections if d.category.value in rule.linked_categories),
+                             key=lambda d: d.start)
+            starts = [t.start for t in targets]
+            ends = [t.end for t in targets]
             for det in scan.detections:
                 if det.entity_type not in rule.entity_types:
                     continue
-                for t in targets:
-                    gap = max(t.start - det.end, det.start - t.end, 0)
-                    same_paragraph = not any(min(det.start, t.start) < b < max(det.end, t.end) for b in text_breaks)
-                    if gap <= rule.window and same_paragraph:
+                first = bisect_left(ends, det.start - rule.window)
+                last = bisect_right(starts, det.end + rule.window)
+                for t in targets[first:last]:
+                    lo, hi = min(det.start, t.start), max(det.end, t.end)
+                    i = bisect_right(breaks, lo)
+                    if i == len(breaks) or breaks[i] >= hi:  # no paragraph break in between
                         out.setdefault(det.id, set()).add(rule.name)
                         break
         return out

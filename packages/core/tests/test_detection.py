@@ -6,7 +6,7 @@ from cato import scan
 from cato.detect import Detector, DetectorConfig, detect_language
 from cato.detect import validators as v
 from cato.detect.engine import resolve_overlaps
-from cato.models import Category, make_detection
+from cato.models import Category, EntityType as E, make_detection
 
 
 def types(result):
@@ -215,3 +215,40 @@ def test_redacted_view_contains_no_raw_values():
     dump = json.dumps([d.redacted() for d in r.detections], default=str)
     for secret in ("Mustermann", "DE89", "max@example.org"):
         assert secret not in dump
+
+
+# --- mentions in other spellings ------------------------------------------------
+
+def test_wrapped_and_upper_case_mentions_are_full_mentions():
+    text = ("Unser Mandant Herr Max Mustermann wohnt hier. Später schrieb Max\nMustermann erneut.\n\n"
+            "MAX MUSTERMANN\n- Kläger -\nMUSTERMANN unterschrieb.")
+    persons = [d for d in RULES_ONLY.scan(text, "de").detections if d.entity_type == "person"]
+    assert [d.text for d in persons] == ["Max Mustermann", "Max\nMustermann", "MAX MUSTERMANN", "MUSTERMANN"]
+    assert all(text[d.start:d.end] == d.text for d in persons)
+    assert {d.attributes["ref"] for d in persons} == {"person_1"}
+    assert {d.attributes.get("role") for d in persons} == {"client"}
+
+
+def test_surname_is_not_matched_in_arbitrary_case():
+    text = "Herr Peter Weiß erschien. Er weiß davon nichts."
+    persons = [d for d in RULES_ONLY.scan(text, "de").detections if d.entity_type == "person"]
+    assert [d.text for d in persons] == ["Peter Weiß"]
+
+
+def test_detection_id_is_independent_of_enum_or_string_type():
+    a = make_detection(E.PERSON, Category.PERSONAL_DATA, 3, 9, "x", 0.5, "r")
+    b = make_detection("person", Category.PERSONAL_DATA, 3, 9, "x", 0.5, "r")
+    assert a.id == b.id and a.entity_type == "person"
+
+
+# --- worst-case runtime -----------------------------------------------------------
+
+@pytest.mark.parametrize("unit", ["Aa-Bb-", "1.000", "a%", "LG Aa-", "€ 1 000 ", "Mandant Aa "])
+def test_scan_scales_linearly(unit):
+    """Inputs that used to take quadratic time (20 s and more at this size)."""
+    import time
+
+    text = unit * (60_000 // len(unit))
+    start = time.perf_counter()
+    RULES_ONLY.scan(text, "de")
+    assert time.perf_counter() - start < 5

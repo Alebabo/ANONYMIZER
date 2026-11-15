@@ -194,3 +194,33 @@ def test_info(client):
     body = client.get("/v1/info", headers=USER).json()
     assert body["vault"] and body["admin_endpoints"] and body["ner"] in {"available", "unavailable"}
     assert json.dumps(body).find(API_KEY) == -1
+
+
+# --- hardening ---------------------------------------------------------------------
+
+def test_dry_run_writes_nothing_to_the_vault(client):
+    body = {"text": LETTER, "namespace": "matter-9", "dry_run": True}
+    assert client.post("/v1/protect", json=body, headers=USER).json()["text"] is None
+    restored = client.post("/v1/restore", json={"text": "PERSON_001", "namespace": "matter-9"}, headers=ADMIN).json()
+    assert restored["restored"] == 0 and restored["unresolved"] == ["PERSON_001"]
+
+
+def test_oversized_body_is_refused_before_auth_and_parsing(client):
+    r = client.post("/v1/scan", content=b"x" * 600_000, headers={"Content-Type": "application/json"})
+    assert r.status_code == 413
+
+
+def test_request_id_is_sanitized(client):
+    ok = client.get("/health", headers={"X-Request-ID": "trace-42.a:b"})
+    assert ok.headers["X-Request-ID"] == "trace-42.a:b"
+    bad = client.get("/health", headers={"X-Request-ID": "x" * 200})
+    assert bad.headers["X-Request-ID"].startswith("req_")
+    spaced = client.get("/health", headers={"X-Request-ID": "a b forged=1"})
+    assert spaced.headers["X-Request-ID"].startswith("req_")
+
+
+def test_malformed_policy_yaml_is_a_client_error(client):
+    r = client.post("/v1/policies", json={"yaml": "name: p\nrules: [oops\n"}, headers=ADMIN)
+    assert r.status_code == 400 and "oops" not in r.text
+    r = client.post("/v1/policies/dry-run", json={"text": LETTER, "candidate_yaml": "name: [\n"}, headers=USER)
+    assert r.status_code == 400

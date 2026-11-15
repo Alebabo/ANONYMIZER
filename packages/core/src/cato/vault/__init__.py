@@ -27,6 +27,8 @@ import secrets
 import tempfile
 import threading
 import unicodedata
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -116,6 +118,8 @@ class InMemoryVault:
         self._enc = AESGCM(key.enc_key)
         self._index_key = key.index_key
         self._lock = threading.RLock()
+        self._batching = 0
+        self._dirty = False
         # ns_hash -> {"entries": {index: {...}}, "tokens": {placeholder: index}, "counters": {prefix: n}}
         self._data: dict[str, dict] = {}
 
@@ -152,8 +156,31 @@ class InMemoryVault:
             ns["entries"][index] = {"placeholder": placeholder, "type": entity_type,
                                     **self._encrypt(ns_hash, placeholder, value)}
             ns["tokens"][placeholder] = index
-            self._persist()
+            self._dirty = True
+            if not self._batching:
+                self._flush()
             return placeholder
+
+    def _flush(self) -> None:
+        if self._dirty:
+            self._persist()
+            self._dirty = False
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """Persist once on exit instead of after every new entry.
+
+        Entries are written before the block is left, i.e. before a caller
+        can hand out the placeholders created inside it.
+        """
+        with self._lock:
+            self._batching += 1
+            try:
+                yield
+            finally:
+                self._batching -= 1
+                if not self._batching:
+                    self._flush()
 
     def _persist(self) -> None:  # overridden by FileVault
         pass
@@ -214,6 +241,8 @@ class FileVault(InMemoryVault):
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(payload)
+                fh.flush()
+                os.fsync(fh.fileno())  # a lost mapping makes sent pseudonyms irreversible
             os.chmod(tmp, 0o600)
             os.replace(tmp, self.path)
         except BaseException:

@@ -76,6 +76,11 @@ DEFAULT_CATEGORIES: dict[str, Category] = {
 }
 
 
+# Whitespace inside a multi-word value: spaces/tabs with at most one line
+# break, so "Max\nMustermann" (wrapped line) still counts as one mention.
+INNER_WS = r"(?:[^\S\n]+|[^\S\n]*\n[^\S\n]*)"
+
+
 def detection_id(entity_type: str, start: int, end: int) -> str:
     """Stable id derived from type and offsets only (never from the raw value)."""
     digest = hashlib.sha1(f"{entity_type}:{start}:{end}".encode()).hexdigest()
@@ -147,9 +152,12 @@ def make_detection(
     validated: bool | None = None,
     attributes: dict[str, str] | None = None,
 ) -> Detection:
+    # Normalise first: an f-string renders a (str, Enum) member as
+    # "EntityType.PERSON", which would give the same span two different ids.
+    entity_type = str(entity_type.value if isinstance(entity_type, Enum) else entity_type)
     return Detection(
         id=detection_id(entity_type, start, end),
-        entity_type=str(entity_type.value if isinstance(entity_type, Enum) else entity_type),
+        entity_type=entity_type,
         category=category,
         start=start,
         end=end,

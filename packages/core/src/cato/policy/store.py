@@ -17,11 +17,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from cato.policy.model import Policy
-
-
-class PolicyError(ValueError):
-    pass
+from cato.policy.model import Policy, PolicyError
 
 
 class PolicyVersion(BaseModel):
@@ -37,15 +33,19 @@ class InMemoryPolicyStore:
 
     # -- write --------------------------------------------------------------
     def save(self, policy: Policy) -> Policy:
-        versions = self._versions.setdefault(policy.name, {})
+        versions = self._versions.get(policy.name, {})
         latest = max(versions) if versions else 0
         if policy.version != latest + 1:
             raise PolicyError(f"{policy.name}: expected version {latest + 1}, got {policy.version} "
                               "(versions are immutable)")
         if policy.extends:
-            self.get(policy.extends)  # parent must exist
-        versions[policy.version] = policy
-        self._persist(policy)
+            if policy.extends != policy.name:
+                self.get(policy.extends)  # parent must exist
+            # Reject now what would otherwise only fail when the policy is used
+            # (id clash with the parent, circular chain): versions are immutable.
+            self._resolve(policy, seen=set(), pending=policy)
+        self._persist(policy)  # first: a failed write must not leave a phantom version
+        self._versions.setdefault(policy.name, {})[policy.version] = policy
         return policy
 
     def _persist(self, policy: Policy) -> None:
@@ -72,12 +72,14 @@ class InMemoryPolicyStore:
         """Policy with ``extends`` resolved."""
         return self._resolve(self.get(name, version), seen=set())
 
-    def _resolve(self, policy: Policy, seen: set[str]) -> Policy:
+    def _resolve(self, policy: Policy, seen: set[str], pending: Policy | None = None) -> Policy:
+        """``pending`` is a version about to be saved; it counts as the latest of its name."""
         if not policy.extends:
             return policy
         if policy.name in seen:
             raise PolicyError(f"circular extends at {policy.name}")
-        parent = self._resolve(self.get(policy.extends), seen | {policy.name})
+        parent = pending if pending is not None and policy.extends == pending.name else self.get(policy.extends)
+        parent = self._resolve(parent, seen | {policy.name}, pending)
         parent_ids = {r.id for r in parent.rules} | {r.id for r in parent.document_rules}
         clash = parent_ids & ({r.id for r in policy.rules} | {r.id for r in policy.document_rules})
         if clash:
@@ -125,8 +127,11 @@ class FilePolicyStore(InMemoryPolicyStore):
     def _persist(self, policy: Policy) -> None:
         path = self.directory / policy.name / f"v{policy.version}.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "x", encoding="utf-8") as fh:  # 'x': never overwrite
-            fh.write(policy.to_yaml())
+        try:
+            with open(path, "x", encoding="utf-8") as fh:  # 'x': never overwrite
+                fh.write(policy.to_yaml())
+        except FileExistsError:
+            raise PolicyError(f"{policy.ref} already exists on disk (versions are immutable)") from None
 
 
 def _num(path: Path) -> int:

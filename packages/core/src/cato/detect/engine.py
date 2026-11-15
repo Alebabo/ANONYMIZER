@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from collections import defaultdict
 
 from pydantic import BaseModel, Field
 
 from cato.detect.base import Recognizer, supports
-from cato.detect.context import find_signals, signals_near
+from cato.detect.context import SignalIndex, find_signals
 from cato.detect.ner import NERUnavailable, SpacyRecognizer
 from cato.detect.recognizers import NAME_STOPWORDS, builtin_recognizers, custom_recognizer
-from cato.models import Category, Detection, EntityType as E, ScanResult, Suppressed, make_detection
+from cato.models import (
+    INNER_WS, Category, Detection, EntityType as E, ScanResult, Signal, Suppressed, make_detection,
+)
 
 # Higher rank wins an overlap. Validated checksums beat everything; custom
 # entity types rank high because users define them deliberately.
@@ -93,13 +96,19 @@ class Detector:
 
         # Cues inside a detected span (e.g. "example" in an e-mail domain)
         # describe the value, not the document.
-        values = [d for d in accepted if d.entity_type in VALUE_TYPES]
-        signals = [s for s in find_signals(text)
-                   if not any(d.start <= s.start and s.end <= d.end for d in values)]
+        values = [d for d in accepted if d.entity_type in VALUE_TYPES]  # sorted, non-overlapping
+        value_starts = [d.start for d in values]
+
+        def inside_value(s: Signal) -> bool:
+            i = bisect_right(value_starts, s.start)
+            return i > 0 and s.end <= values[i - 1].end
+
+        signals = [s for s in find_signals(text) if not inside_value(s)]
+        index = SignalIndex(signals)
         final: list[Detection] = []
         for det in accepted:
             det = det.model_copy(update={
-                "signals": signals_near(text, signals, det.start, det.end, self.config.context_window),
+                "signals": index.near(text, det.start, det.end, self.config.context_window),
             })
             if det.confidence < self.config.min_confidence:
                 suppressed.append(Suppressed(detection=det, overlapped_by="", reason="below_min_confidence"))
@@ -125,15 +134,26 @@ def resolve_overlaps(candidates: list[Detection]) -> tuple[list[Detection], list
         if key not in unique or _rank(det) > _rank(unique[key]):
             unique[key] = det
     ordered = sorted(unique.values(), key=lambda d: (_rank(d), -d.start), reverse=True)
+    # Accepted spans never overlap, so they are kept sorted by start and an
+    # overlap can only involve the neighbours found by bisect.
+    starts: list[int] = []
     accepted: list[Detection] = []
+    order: dict[str, int] = {}
     suppressed: list[Suppressed] = []
     for det in ordered:
-        blocker = next((a for a in accepted if det.start < a.end and a.start < det.end), None)
-        if blocker is None:
-            accepted.append(det)
+        i = bisect_right(starts, det.start)
+        blockers = [accepted[i - 1]] if i and accepted[i - 1].end > det.start else []
+        j = i
+        while j < len(starts) and starts[j] < det.end:
+            blockers.append(accepted[j])
+            j += 1
+        if not blockers:
+            starts.insert(i, det.start)
+            accepted.insert(i, det)
+            order[det.id] = len(order)
         else:
+            blocker = min(blockers, key=lambda a: order[a.id])  # the best-ranked one
             suppressed.append(Suppressed(detection=det, overlapped_by=blocker.id, reason="overlap"))
-    accepted.sort(key=lambda d: d.start)
     return accepted, suppressed
 
 
@@ -170,11 +190,22 @@ def propagate_mentions(text: str, accepted: list[Detection]) -> list[Detection]:
         if " " not in d.text and _surname(d.text) and len(surname_owners.get(d.text, ())) <= 1:
             targets.setdefault(d.text, 0.7)
     for value, confidence in targets.items():
-        for m in re.finditer(rf"(?<![\w-]){re.escape(value)}(?![\w-])", text):
-            attrs = {"role": roles[value]} if value in roles else {}
-            out.append(make_detection(E.PERSON, Category.PERSONAL_DATA, m.start(), m.end(), value, confidence,
-                                      "person_propagation", attributes=attrs))
+        attrs = {"role": roles[value]} if value in roles else {}
+        # Also the spelling used in a rubrum or signature block ("MAX MUSTERMANN").
+        # Arbitrary case is not matched: "Weiß" must not hit the verb "weiß".
+        variants = [value]
+        if (upper := value.upper()) != value and upper.split()[0] in text:
+            variants.append(upper)
+        for variant in variants:
+            pattern = INNER_WS.join(re.escape(token) for token in variant.split())
+            for m in re.finditer(rf"(?<![\w-]){pattern}(?![\w-])", text):
+                out.append(make_detection(E.PERSON, Category.PERSONAL_DATA, m.start(), m.end(), m.group(0),
+                                          confidence, "person_propagation", attributes=attrs))
     return out
+
+
+def _squash(text: str) -> str:
+    return " ".join(text.split())
 
 
 def assign_refs(detections: list[Detection]) -> list[Detection]:
@@ -182,16 +213,25 @@ def assign_refs(detections: list[Detection]) -> list[Detection]:
     mentions of the same entity. Used for consistent pseudonymization. The
     ref is never derived from the raw value."""
     persons = [d for d in detections if d.entity_type == E.PERSON]
-    full = [d.text for d in persons if " " in d.text]
+    # "MAX MUSTERMANN" and "Max\nMustermann" are mentions of "Max Mustermann".
+    names = {_squash(d.text) for d in persons}
+    names |= {s for n in names if " " in n and (s := _surname(n)) is not None}
+    by_upper = {n.upper(): n for n in sorted(names) if n.upper() != n}
+
+    def spelled(det: Detection) -> str:
+        name = _squash(det.text)
+        return by_upper.get(name, name) if det.entity_type == E.PERSON else name
+
     by_surname: dict[str, set[str]] = defaultdict(set)
-    for name in full:
-        if (s := _surname(name)) is not None:
+    for name in {spelled(d) for d in persons}:
+        if " " in name and (s := _surname(name)) is not None:
             by_surname[s].add(name)
 
     def canonical(det: Detection) -> str:
-        if det.entity_type == E.PERSON and " " not in det.text and len(by_surname.get(det.text, ())) == 1:
-            return next(iter(by_surname[det.text]))
-        return det.text
+        name = spelled(det)
+        if det.entity_type == E.PERSON and " " not in name and len(by_surname.get(name, ())) == 1:
+            return next(iter(by_surname[name]))
+        return name
 
     counters: dict[str, int] = defaultdict(int)
     refs: dict[tuple[str, str], str] = {}

@@ -22,7 +22,7 @@ I = re.IGNORECASE
 
 EMAIL = RegexRecognizer(
     "email", E.EMAIL,
-    [Pattern(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w-])", 0.95)],
+    [Pattern(r"(?<![\w.+%-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w-])", 0.95)],
 )
 
 PHONE = RegexRecognizer(
@@ -162,7 +162,9 @@ ADDRESS = RegexRecognizer(
     "address", E.ADDRESS,
     [
         Pattern(
-            rf"\b(?:{_CAP}(?:-{_CAP})*{_STREET_SUFFIX}|{_CAP}(?:\s{_CAP})?\s{_STREET_WORD})"
+            # Start only at a token start: with a plain \b every part of a long
+            # hyphenated chain is a start and the scan becomes quadratic.
+            rf"(?<![\w-])(?:{_CAP}(?:-{_CAP})*{_STREET_SUFFIX}|{_CAP}(?:\s{_CAP})?\s{_STREET_WORD})"
             rf"\s\d{{1,4}}\s?[a-z]?(?:,?\s+\d{{5}}\s+{_DE_CITY})?(?!\w)",
             0.85,
         ),
@@ -391,7 +393,9 @@ def _trim_org(text: str, start: int, end: int) -> tuple[int, int] | None:
 
 ORGANIZATION = RegexRecognizer(
     "organization_legal_form", E.ORGANIZATION,
-    [Pattern(rf"\b(?:[A-ZÄÖÜ0-9][\w&.'-]*\s){{1,4}}(?:{_LEGAL_FORMS})(?![\w])", 0.85)],
+    # Token-start lookbehind instead of \b keeps the scan linear on long
+    # unbroken runs such as "1.000.000..." (see test_scan_scales_linearly).
+    [Pattern(rf"(?<![\w&.'-])(?:[A-ZÄÖÜ0-9][\w&.'-]*\s){{1,4}}(?:{_LEGAL_FORMS})(?![\w])", 0.85)],
     postprocess=_trim_org,
 )
 

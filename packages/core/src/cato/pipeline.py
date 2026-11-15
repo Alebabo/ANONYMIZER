@@ -18,14 +18,14 @@ from cato.vault import Vault
 
 
 class ProtectResult(BaseModel):
-    text: str | None                          # safe to send, or None
+    text: str | None                          # safe to send; None if not allowed or dry run
     decision: PolicyDecision
     classification: DocumentClassification
     anonymization: AnonymizationResult | None
 
     @property
     def allowed(self) -> bool:
-        return self.text is not None
+        return self.decision.may_send
 
 
 class Pipeline:
@@ -54,7 +54,8 @@ class Pipeline:
         classification = self.classifier.classify_text(text, scan)
         decision = PolicyEngine(self.policy).evaluate(scan.detections, classification, destination, dry_run)
         anonymization = None
-        if decision.may_send:
+        # A dry run only reports the decision: no text, no vault entries.
+        if decision.may_send and not dry_run:
             # Strict leak check raises before anything can be returned.
             anonymization = self.anonymizer.anonymize(text, scan, plan=decision.plan, namespace=namespace)
         return ProtectResult(

@@ -246,9 +246,36 @@ def test_extends_rejects_unknown_parent_and_id_clash():
     with pytest.raises(PolicyError):
         store.save(Policy.from_yaml("name: child\nextends: missing\n"))
     store.save(builtin_policy())
-    store.save(Policy.from_yaml("name: child\nextends: legal-default\nrules:\n  - {id: parties, entity: x, action: allow}\n"))
+    # Rejected at save time: a stored version is immutable and would stay unusable.
     with pytest.raises(PolicyError):
-        store.effective("child")
+        store.save(Policy.from_yaml("name: child\nextends: legal-default\nrules:\n  - {id: parties, entity: x, action: allow}\n"))
+    assert store.names() == ["legal-default"]
+
+
+def test_circular_extends_is_rejected_on_save():
+    store = InMemoryPolicyStore()
+    store.save(Policy.from_yaml("name: a\nrules:\n  - {id: a1, entity: person, action: redact}\n"))
+    with pytest.raises(PolicyError):
+        store.save(Policy.from_yaml("name: a\nversion: 2\nextends: a\n"))
+    store.save(Policy.from_yaml("name: b\nextends: a\n"))
+    with pytest.raises(PolicyError):
+        store.save(Policy.from_yaml("name: a\nversion: 2\nextends: b\n"))
+    assert store.effective("b").rules[0].id == "a1" and store.get("a").version == 1
+
+
+def test_failed_file_write_leaves_no_phantom_version(tmp_path):
+    store = FilePolicyStore(tmp_path)
+    store.save(Policy.from_yaml("name: p\n"))
+    (tmp_path / "p" / "v2.yaml").write_text("name: p\nversion: 2\n", encoding="utf-8")  # written by another process
+    with pytest.raises(PolicyError):
+        store.save(Policy.from_yaml("name: p\nversion: 2\n"))
+    assert store.get("p").version == 1
+
+
+def test_malformed_yaml_is_a_policy_error_without_echo():
+    with pytest.raises(PolicyError) as exc:
+        Policy.from_yaml("name: p\nrules: [secret-marker\n")
+    assert "secret-marker" not in str(exc.value)
 
 
 # --- end-to-end pipeline ---------------------------------------------------------------

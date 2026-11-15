@@ -15,7 +15,8 @@ def main(argv: list[str] | None = None) -> int:
     scan = sub.add_parser("scan", help="detect sensitive data in a text file")
     scan.add_argument("path", help="file path or '-' for stdin")
     scan.add_argument("--language", choices=["de", "en"])
-    scan.add_argument("--ner", action="store_true", help="enable spaCy NER (requires cato-core[ner])")
+    scan.add_argument("--no-ner", action="store_true", help="rules only, skip spaCy NER (misses bare names)")
+    scan.add_argument("--ner", action="store_true", help=argparse.SUPPRESS)  # former opt-in, now the default
     scan.add_argument("--show-values", action="store_true", help="include raw values in the output")
     cl = sub.add_parser("classify", help="detect and classify; prints risk per entity and document")
     cl.add_argument("path", help="file path or '-' for stdin")
@@ -56,8 +57,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "policy-validate":
         return _policy_validate(args.path)
 
-    text = sys.stdin.read() if args.path == "-" else open(args.path, encoding="utf-8").read()
-    result = Detector(DetectorConfig(enable_ner=args.ner)).scan(text, args.language)
+    text = _read(args.path)
+    result = Detector(DetectorConfig(enable_ner=not args.no_ner)).scan(text, args.language)
     out = {
         "language": result.language,
         "signals": sorted(result.document_signals),
@@ -72,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
 def _classify(args: argparse.Namespace) -> int:
     from cato.classify import Classifier, ClassifierConfig
 
-    text = sys.stdin.read() if args.path == "-" else open(args.path, encoding="utf-8").read()
+    text = _read(args.path)
     config = ClassifierConfig.from_yaml(args.config) if args.config else None
     result = Detector().scan(text, args.language)
     doc = Classifier(config).classify_text(text, result)
@@ -82,7 +83,10 @@ def _classify(args: argparse.Namespace) -> int:
 
 
 def _read(path: str) -> str:
-    return sys.stdin.read() if path == "-" else open(path, encoding="utf-8").read()
+    if path == "-":
+        return sys.stdin.read()
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
 
 
 def _anonymize(args: argparse.Namespace) -> int:
@@ -132,13 +136,11 @@ def _protect(args: argparse.Namespace) -> int:
 
 
 def _policy_validate(path: str) -> int:
-    from pydantic import ValidationError
-
     from cato.policy import Policy
 
     try:
         policy = Policy.from_file(path)
-    except ValidationError as exc:
+    except ValueError as exc:  # pydantic.ValidationError and PolicyError (malformed YAML)
         print(exc, file=sys.stderr)
         return 1
     print(f"ok {policy.ref} {policy.content_hash} rules={len(policy.rules)} document_rules={len(policy.document_rules)}")

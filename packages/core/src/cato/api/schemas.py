@@ -81,7 +81,7 @@ class RestoreRequest(_Strict):
 
 
 class PolicyCreate(_Strict):
-    yaml: str = Field(min_length=1, description="Policy in YAML; version must be latest + 1")
+    yaml: str = Field(min_length=1, max_length=100_000, description="Policy in YAML; version must be latest + 1")
 
 
 class PolicySummary(BaseModel):
@@ -92,6 +92,6 @@ class PolicySummary(BaseModel):
 
 
 class DryRunRequest(TextRequest):
-    candidate_yaml: str = Field(min_length=1)
+    candidate_yaml: str = Field(min_length=1, max_length=100_000)
     destination: Destination = "external"
     against: str | None = Field(None, description="active policy name to compare with (default: default policy)")

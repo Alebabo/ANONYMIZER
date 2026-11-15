@@ -149,13 +149,34 @@ def test_sweep_catches_missed_repetitions():
     assert any(t.swept for t in r.transformations)
 
 
+def test_sweep_catches_case_and_line_wrap_variants():
+    text = "Herr Max Mustermann. MAX MUSTERMANN unterschrieb, ebenso Max\nMustermann."
+    first = [d for d in scan(text, "de").detections if d.start < 20]
+    r = Anonymizer().anonymize(text, first)
+    assert r.text == "Herr PERSON_001. PERSON_001 unterschrieb, ebenso PERSON_001."
+    assert [t.swept for t in r.transformations] == [False, True, True]
+
+
 def test_leak_check_raises_in_strict_mode():
-    text = "Herr Max Mustermann. MAX MUSTERMANN unterschrieb."  # case variant not swept
+    text = "Herr Max Mustermann. MAX MUSTERMANN unterschrieb."
     first = [d for d in scan(text, "de").detections if d.start < 20]
     with pytest.raises(LeakError):
-        Anonymizer().anonymize(text, first)
-    r = Anonymizer(AnonymizerConfig(strict=False)).anonymize(text, first)
+        Anonymizer(AnonymizerConfig(sweep=False)).anonymize(text, first)
+    r = Anonymizer(AnonymizerConfig(sweep=False, strict=False)).anonymize(text, first)
     assert r.leaks
+
+
+def test_file_vault_batch_writes_once(tmp_path, monkeypatch):
+    key = VaultKey.generate()
+    v = FileVault(tmp_path / "vault.json", key)
+    writes = []
+    persist = v._persist
+    monkeypatch.setattr(v, "_persist", lambda: (writes.append(1), persist()))
+    text = "Herr Max Mustermann und Frau Erika Musterfrau, max@example.org, erika@example.org."
+    r = Anonymizer(vault=v).anonymize(text, scan(text, "de"), namespace="m")
+    assert len(writes) == 1 and len(v.known_placeholders("m")) >= 4
+    reloaded = FileVault(tmp_path / "vault.json", key)
+    assert restore(r.text, reloaded, "m").text == text
 
 
 # --- mapping never leaves the trusted boundary -----------------------------------

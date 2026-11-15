@@ -80,8 +80,9 @@ If the outcome is `review`, `local_only` or `block`, the response has `allowed: 
 - **Responses contain no detected raw values.** `scan` and `classify` return offsets; the client already has the text.
 - **Validation errors (422) don't echo the input.** FastAPI's default behavior would return the submitted text in the error message.
 - **The access log contains only** method, path, status, latency and request ID: no bodies, no query strings, no keys. `restore` and policy changes are logged as events, without content.
-- **Every response carries an `X-Request-ID` header.** An incoming `X-Request-ID` is passed through.
-- **Text length is limited** by `CATO_MAX_CHARS` (default 200,000). Longer texts get 413.
+- **Every response carries an `X-Request-ID` header.** An incoming `X-Request-ID` is passed through if it is 1-64 characters of `A-Z a-z 0-9 _ . : -`; otherwise a new id is generated.
+- **Text length is limited** by `CATO_MAX_CHARS` (default 200,000). Longer texts get 413. Bodies whose `Content-Length` exceeds 4 bytes per allowed character plus 512 kB are refused with 413 before authentication and parsing. Chunked uploads carry no length; cap those at the reverse proxy.
+- **`dry_run` on `/v1/protect`** returns the decision only: no text and no vault entries.
 - **If the leak check fails**, the API returns 500 without any text.
 
 ## Configuration

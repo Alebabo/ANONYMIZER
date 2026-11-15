@@ -17,6 +17,7 @@ breaks (covered by tests/test_api.py::test_endpoints_require_key).
 
 
 import logging
+import re
 import time
 import uuid
 from typing import Annotated
@@ -43,6 +44,9 @@ from cato.policy import (
 from cato.vault import FileVault, VaultError, VaultKey
 
 log = logging.getLogger("cato.api")
+
+# Client-supplied request ids end up in the access log.
+_REQUEST_ID = re.compile(r"[\w.:-]{1,64}", re.ASCII)
 
 
 class State:
@@ -97,6 +101,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     User = Annotated[None, Depends(require_key)]
     Admin = Annotated[None, Depends(require_admin)]
 
+    # UTF-8 needs up to 4 bytes per character; the rest covers JSON framing and policy YAML.
+    max_body_bytes = settings.max_chars * 4 + 512_000
+
     def check_size(text: str) -> None:
         if len(text) > settings.max_chars:
             raise HTTPException(status_code=413, detail=f"text exceeds {settings.max_chars} characters")
@@ -104,9 +111,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # -- middleware & error handling ------------------------------------------
     @app.middleware("http")
     async def access_log(request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or f"req_{uuid.uuid4().hex[:12]}"
+        request_id = request.headers.get("x-request-id", "")
+        if not _REQUEST_ID.fullmatch(request_id):
+            request_id = f"req_{uuid.uuid4().hex[:12]}"
         start = time.perf_counter()
-        response = await call_next(request)
+        # Refuse oversized bodies before they are read and parsed (this runs
+        # before authentication). Chunked uploads carry no length; cap those
+        # at the reverse proxy.
+        length = request.headers.get("content-length", "0")
+        if not length.isdigit() or int(length) > max_body_bytes:
+            response = JSONResponse(status_code=413, content={"detail": "request body too large"})
+        else:
+            response = await call_next(request)
         ms = (time.perf_counter() - start) * 1000
         response.headers["X-Request-ID"] = request_id
         # Never log bodies or query strings.

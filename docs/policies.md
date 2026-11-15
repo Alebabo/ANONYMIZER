@@ -109,7 +109,7 @@ cato protect brief.txt --policy firm.yaml --dry-run
 
 `scope` and `extends`:
 - `resolve_for(tenant, team)` picks the most specific policy: team, then tenant, then global.
-- `extends` adds the parent's rules (parent rules first). Reusing a rule ID is an error.
+- `extends` adds the parent's rules (parent rules first). Reusing a rule ID (including auto-generated ones such as `rule_1`) or a circular chain is rejected when the policy is saved.
 
 ## Built-in policy `legal-default`
 
