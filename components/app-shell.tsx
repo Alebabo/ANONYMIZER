@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, BarChart3, FileClock, Gauge, KeyRound, LogOut, Menu, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
+import { Activity, BarChart3, FileClock, FileText, Gauge, KeyRound, LogOut, Menu, MessagesSquare, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
 import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/logo";
@@ -12,10 +12,12 @@ const workspace = [
   { href: "/gateway", label: "Gateway", icon: Waypoints },
   { href: "/privacy", label: "Privacy", icon: ShieldCheck },
   { href: "/traces", label: "Traces", icon: Activity },
+  { href: "/conversations", label: "Conversations", icon: MessagesSquare },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
 ];
 const configuration = [
   { href: "/policies", label: "Policies", icon: ScrollText },
+  { href: "/prompts", label: "Prompts", icon: FileText },
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/integrations", label: "Integrations", icon: Plug },
   { href: "/settings/audit-logs", label: "Audit Logs", icon: FileClock },

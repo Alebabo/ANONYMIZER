@@ -35,7 +35,9 @@ ENV CATO_HOST=0.0.0.0 \
     CATO_POLICY_DIR=/data/policies \
     CATO_TRACE_DB=/data/traces.db \
     CATO_ACCOUNTS_DB=/data/accounts.db \
-    CATO_AUDIT_DB=/data/audit.db
+    CATO_AUDIT_DB=/data/audit.db \
+    CATO_CONVERSATIONS_DB=/data/conversations.db \
+    CATO_PROMPTS_DB=/data/prompts.db
 
 VOLUME ["/data"]
 EXPOSE 8080

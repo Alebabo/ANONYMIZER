@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     uc.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
     ul = us_sub.add_parser("list", help="list users of an organization")
     ul.add_argument("--org", default="default")
+    sc = sub.add_parser("source-check", help="check the conversation source from CATO_SOURCE_* (no content printed)")
+    sc.add_argument("--protect", action="store_true",
+                    help="also run the newest conversation through the policy and print counts only")
     sd = sub.add_parser("seed-demo", help="write synthetic demo traces (metadata only) for an organization")
     sd.add_argument("--org", default="default")
     sd.add_argument("--count", type=int, default=400)
@@ -69,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         return _accounts(args)
     if args.command == "eval":
         return _eval(args.corpus)
+    if args.command == "source-check":
+        return _source_check(args.protect)
     if args.command == "classify":
         return _classify(args)
     if args.command == "anonymize":
@@ -191,6 +196,53 @@ def _eval(directory: str) -> int:
             print(f"     false positive {det.entity_type} for rule {spec}")
     print(json.dumps(summarize(reports), indent=2))
     return 0 if all(r.ok for r in reports) else 1
+
+
+def _source_check(protect: bool) -> int:
+    """Connectivity and shape check for the configured source. Prints counts and ids' shape, never content."""
+    import os
+
+    from cato.sources import SourceError, source_from_env
+
+    try:
+        source = source_from_env()
+        if source is None:
+            print("CATO_SOURCE is not set", file=sys.stderr)
+            return 2
+        page = source.list(limit=20)
+        out: dict = {**source.describe(), "listed": len(page.data), "more": page.next_cursor is not None,
+                     "with_prompt": sum(1 for h in page.data if h.prompt),
+                     "with_tags": sum(1 for h in page.data if h.tags)}
+        if page.data:
+            conv = source.get(page.data[0].id)
+            out["newest_messages"] = len(conv.messages)
+            out["roles"] = sorted({m.role for m in conv.messages})
+            if protect:
+                from cato.classify import Classifier
+                from cato.conversations import ConversationService, ConversationStore
+                from cato.detect import DetectorConfig, load_custom_patterns
+                from cato.pipeline import Pipeline
+                from cato.policy import builtin_policy
+
+                custom = load_custom_patterns(os.environ["CATO_CUSTOM_PATTERNS"]) \
+                    if os.environ.get("CATO_CUSTOM_PATTERNS") else []
+                detector = Detector(DetectorConfig(custom_entities=custom))
+                policy = builtin_policy(os.environ.get("CATO_CONVERSATIONS_POLICY", "support-default"))
+                svc = ConversationService(source, lambda v: Pipeline(policy, detector=detector,
+                                                                    classifier=Classifier(), vault=v),
+                                          ConversationStore())
+                from cato.conversations import LOCAL_PRINCIPAL
+
+                cid = svc.list(LOCAL_PRINCIPAL, limit=1)["data"][0]["id"]
+                result = svc.get(LOCAL_PRINCIPAL, cid)
+                out["protected"] = {"outcome": result["outcome"], "risk": result["risk"],
+                                    "withheld": result["withheld"]}
+    except SourceError as exc:
+        print(f"source error: {exc}", file=sys.stderr)
+        return 1
+    json.dump(out, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
 
 
 def _accounts(args: argparse.Namespace) -> int:

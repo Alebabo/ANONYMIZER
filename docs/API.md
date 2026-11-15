@@ -57,6 +57,11 @@ CATO_API_KEYS=... cato-api          # binds to 127.0.0.1:8080
 | GET | `/v1/policies/{name}/history` | API | Versions with hashes |
 | POST | `/v1/policies` | Admin | Save a new version (`version` = latest + 1) |
 | POST | `/v1/policies/dry-run` | API | Compare a candidate policy against an active one |
+| GET | `/v1/sources` | API | Connected conversation source and prompt store (type and host only) |
+| GET | `/v1/conversations`, `/v1/conversations/{id}`, `/v1/conversations/stats`, `/v1/conversations/quota` | API | Protected customer conversations, see [conversations.md](conversations.md) |
+| GET/POST | `/v1/prompts`, `/v1/prompts/{name}`, `.../history`, `.../diff` | API | Prompt versions and drafts, see [prompts.md](prompts.md) |
+| POST | `/v1/prompts/{name}/labels` | Admin | Promote a prompt version (audited) |
+| POST | `/mcp` | API | MCP over streamable HTTP when `CATO_MCP_HTTP=1`, see [mcp.md](mcp.md) |
 
 Login, members, API keys and the audit log: [accounts.md](accounts.md).
 

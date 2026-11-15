@@ -42,7 +42,27 @@ The engine lives in `packages/core/src/cato/detect/`. It's deterministic: the sa
 | privilege_marker | professional_secret | "Mandatsgeheimnis", "attorney-client privilege", ... |
 | business_secret_marker | business_secret | "Geschäftsgeheimnis", "trade secret", "vertraulich", ... |
 
-Custom types can be configured through `DetectorConfig.custom_entities`:
+Names in chat self-introductions ("mein Name ist anna müller", "ich heiße …", "my name is …", "ich bin Lena Probe") are found by the `person_self_intro` recognizer. Strong cues also accept lowercase names; weak cues ("ich bin", "I am", "this is") need two capitalised tokens.
+
+### Deployment patterns (`CATO_CUSTOM_PATTERNS`)
+
+House formats such as order numbers or customer ids are configured in a YAML file. The API, `cato-mcp` and `cato source-check` load it from `CATO_CUSTOM_PATTERNS`; an invalid file stops the server, because a silently missing pattern would let identifiers through.
+
+```yaml
+patterns:
+  - name: order_number            # entity type; pseudonymized by support-default
+    pattern: '\b\d{4}-\d{4}\b'
+    context_words: ['bestell', 'order']   # regex fragments shortly before the match raise confidence
+    ignore_case: true
+    confidence: 0.85
+  - name: customer_number
+    pattern: '\bKD-\d{6}\b'
+    confidence: 0.95
+```
+
+Keys: `name` (snake_case), `pattern`, optional `entity_type`, `category`, `confidence` (0–1], `context_words`, `languages`, `ignore_case`. Example: [examples/support/patterns.yaml](../examples/support/patterns.yaml).
+
+In code, custom types can be configured through `DetectorConfig.custom_entities`:
 
 ```python
 Detector(DetectorConfig(custom_entities=[

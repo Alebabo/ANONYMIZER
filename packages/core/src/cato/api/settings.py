@@ -17,6 +17,11 @@ def _split(value: str | None) -> list[str]:
     return [v.strip() for v in (value or "").split(",") if v.strip()]
 
 
+# Settings handed to the gateway, sources, prompt store and MCP; everything else stays out of ``env``.
+_PASS_THROUGH = ("CATO_UPSTREAM", "CATO_LOCAL", "CATO_GATEWAY", "CATO_SOURCE", "CATO_CONVERSATIONS",
+                 "CATO_PROMPTS", "CATO_MCP")
+
+
 class SettingsError(RuntimeError):
     pass
 
@@ -44,6 +49,11 @@ class Settings:
     CATO_UPSTREAM_URL / _KEY / _PROVIDER            external OpenAI-compatible provider
     CATO_LOCAL_UPSTREAM_URL / _KEY / CATO_LOCAL_MODEL  optional local model for local_only content
     CATO_GATEWAY_RESTORE "0" to return placeholders instead of restored values
+    CATO_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
+    CATO_SOURCE / CATO_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
+    CATO_CONVERSATIONS_*                policy, quota, k, database for conversation access
+    CATO_PROMPTS / CATO_PROMPTS_*       prompt store (local | langfuse), see docs/prompts.md
+    CATO_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a Cato API key)
     """
 
     api_key_hashes: set[str]
@@ -60,6 +70,9 @@ class Settings:
     accounts_db: str = "data/accounts.db"
     audit_db: str = "data/audit.db"
     session_hours: float = 12
+    custom_patterns: str | None = None
+    conversations_db: str = "data/conversations.db"
+    mcp_http: bool = False
     bootstrap_admin: tuple[str, str] | None = field(default=None, repr=False)
     env: dict[str, str] = field(default_factory=dict, repr=False)
 
@@ -88,8 +101,11 @@ class Settings:
             accounts_db=env.get("CATO_ACCOUNTS_DB", "data/accounts.db"),
             audit_db=env.get("CATO_AUDIT_DB", "data/audit.db"),
             session_hours=float(env.get("CATO_SESSION_HOURS", "12")),
+            custom_patterns=env.get("CATO_CUSTOM_PATTERNS") or None,
+            conversations_db=env.get("CATO_CONVERSATIONS_DB", "data/conversations.db"),
+            mcp_http=env.get("CATO_MCP_HTTP", "0") == "1",
             bootstrap_admin=_bootstrap(env),
-            env={k: v for k, v in env.items() if k.startswith(("CATO_UPSTREAM", "CATO_LOCAL", "CATO_GATEWAY"))},
+            env={k: v for k, v in env.items() if k.startswith(_PASS_THROUGH)},
         )
 
     def is_api_key(self, key: str) -> bool:

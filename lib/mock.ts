@@ -1,5 +1,8 @@
 // Illustrative example data in the shape of the Cato API. No real content.
-import type { ApiKey, AuditEntry, GatewayStatus, Me, Metrics, PolicySummary, Trace, User } from "@/lib/cato-api";
+import type {
+  ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Me, Metrics, PolicySummary,
+  PromptHistoryItem, PromptListItem, PromptVersion, SourcesInfo, Trace, User,
+} from "@/lib/cato-api";
 
 const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
 
@@ -163,4 +166,67 @@ export const exampleAudit: AuditEntry[] = [
   entry(1, 30 * day, { actor_type: "system", actor_id: null, actor_label: "system (cli)", resource_type: "member",
     resource_id: "usr_3f1a9c0b7d2e", action: "create",
     after: { id: "usr_3f1a9c0b7d2e", email: "admin@kanzlei.example", role: "admin", disabled: false } }),
+];
+
+// -- conversations & prompts (synthetic) -------------------------------------------
+
+export const exampleSources: SourcesInfo = {
+  conversations: { kind: "langfuse", location: "https://langfuse.internal.example", daily_limit: 200, min_group: 10,
+                   stable_placeholders: true },
+  conversation_policy: "support-default",
+  prompts: { backend: "langfuse", location: "https://langfuse.internal.example" },
+  mcp_http: true,
+};
+
+const dayStr = (d: number) => new Date((base - d * day) * 1000).toISOString().slice(0, 10);
+const topics = ["delivery", "billing", "returns", "account", "payment"];
+export const exampleConversations: ConversationPage = {
+  data: Array.from({ length: 12 }, (_, i) => ({
+    id: `conv_${(0x5e1f0a00 + i * 7919).toString(16).padStart(16, "0")}`, day: dayStr(Math.floor(i / 4)),
+    message_count: 3 + (i % 4) * 2, language: "de", channel: i % 3 ? "web" : "app", tags: [topics[i % topics.length]],
+    prompt: "support-bot", prompt_version: i < 6 ? 12 : 11,
+  })),
+  next_cursor: null,
+};
+
+export const exampleConversation: Conversation = {
+  ...exampleConversations.data[0], message_count: 5, outcome: "local_only", risk: "critical", withheld: 1, truncated: false,
+  trace_id: "req_c0ffee000001", stable_placeholders: true, quota: { used: 1, limit: 200, remaining: 199 },
+  messages: [
+    { role: "user", minute: 0, content: "Hallo, mein Name ist PERSON_001. Meine Bestellung ORDER_NUMBER_001 ist nicht angekommen." },
+    { role: "assistant", minute: 0, content: "Hallo PERSON_001, ich sehe nach. Die Bestellung ORDER_NUMBER_001 liegt beim Versand." },
+    { role: "user", minute: 3, content: null, withheld: true, outcome: "local_only", reason: "health_data (det_0001) -> local_only" },
+    { role: "assistant", minute: 4, content: "Danke für den Hinweis. Ich schicke Ihnen eine Bestätigung an EMAIL_001." },
+    { role: "user", minute: 6, content: "Vielen Dank!" },
+  ],
+};
+
+export const exampleConversationStats: ConversationStats = {
+  group_by: "prompt_version", min_group: 10, total: 1840, suppressed_groups: 1, scanned: 1840, truncated: false,
+  groups: [
+    { key: "support-bot@11", conversations: 1012, messages: 6830 },
+    { key: "support-bot@12", conversations: 821, messages: 4920 },
+  ],
+};
+
+export const examplePrompts: PromptListItem[] = [
+  { name: "support-bot", latest_version: 13, versions: 13, labels: { production: 12, staging: 13 }, updated_at: base - 2 * 3600 },
+  { name: "refund-classifier", latest_version: 4, versions: 4, labels: { production: 4 }, updated_at: base - 6 * day },
+];
+
+export const examplePromptVersion: PromptVersion = {
+  name: "support-bot", version: 13, type: "text", labels: ["staging", "latest"], note: "Ask for the order number first",
+  created_by: "Claude Code (cato_Xr8vQ2p…)", created_at: base - 2 * 3600, hash: "sha256:7d1e…", protected: false,
+  config: { temperature: 0.2 },
+  prompt: "Du bist der Support-Assistent der Beispiel GmbH.\nAntworte freundlich und kurz.\n" +
+          "Frage nach der Bestellnummer, bevor du Auskunft gibst.\nSprich {{customer_name}} mit Sie an.",
+};
+
+export const examplePromptHistory: PromptHistoryItem[] = [
+  { version: 13, labels: ["staging", "latest"], note: "Ask for the order number first", created_by: "Claude Code (cato_Xr8vQ2p…)",
+    created_at: base - 2 * 3600, hash: "sha256:7d1e…", type: "text" },
+  { version: 12, labels: ["production"], note: "Shorter answers", created_by: "admin@kanzlei.example",
+    created_at: base - 3 * day, hash: "sha256:a40c…", type: "text" },
+  { version: 11, labels: [], note: "Initial import", created_by: "admin@kanzlei.example",
+    created_at: base - 20 * day, hash: "sha256:19be…", type: "text" },
 ];

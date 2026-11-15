@@ -80,3 +80,32 @@ def test_errors(app):
     assert exc.value.status == 401
     with pytest.raises(ValueError):
         Cato(api_key=None)
+
+
+def test_conversations_and_prompts(tmp_path):
+    import json
+
+    src = tmp_path / "c.jsonl"
+    src.write_text(json.dumps({"id": "s1", "created_at": 1762905600, "tags": ["billing"], "messages": [
+        {"role": "user", "content": "Mein Name ist Max Mustermann."}]}) + "\n", encoding="utf-8")
+    app = TestClient(create_app(Settings.from_env({
+        "CATO_API_KEYS": USER, "CATO_ADMIN_KEYS": ADMIN, "CATO_POLICY_DIR": str(tmp_path / "p"),
+        "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
+        "CATO_SOURCE": "jsonl", "CATO_SOURCE_PATH": str(src), "CATO_CONVERSATIONS_DB": ":memory:",
+        "CATO_PROMPTS": "local", "CATO_PROMPTS_DB": ":memory:"})))
+    cato = client(app)
+    assert cato.sources().conversations["kind"] == "jsonl"
+    page = cato.conversations()
+    conv = cato.conversation(page.data[0]["id"])
+    assert "PERSON_001" in conv.messages[0]["content"] and "Mustermann" not in json.dumps(conv)
+    assert cato.conversation_quota().used == 1
+    assert cato.conversation_stats("tag").total is None  # 1 conversation < k
+    v = cato.create_prompt("bot", "Du bist ein Assistent. Sprich {{name}} an.")
+    with pytest.raises(CatoError) as exc:
+        cato.create_prompt("bot", "Grüße an Max Mustermann")
+    assert exc.value.status == 422
+    with pytest.raises(CatoError):
+        cato.set_prompt_label("bot", v.version)
+    assert client(app, ADMIN).set_prompt_label("bot", v.version).version == 1
+    assert cato.prompt("bot", label="production").version == 1
+    assert [p.name for p in cato.prompts()] == ["bot"] and len(cato.prompt_history("bot")) == 1

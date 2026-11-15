@@ -53,6 +53,13 @@ cato.protect_document("klage.docx").content   # anonymized DOCX`,
       doc: "docs/mcp.md",
     },
     {
+      id: "mcp-http", title: "Remote MCP: customer chats & prompts (Claude Code, Cursor)", lang: "bash",
+      what: "Agents read protected conversations and draft prompts through this API (CATO_MCP_HTTP=1). One key per person: quota and audit log follow the key.",
+      code: `claude mcp add --transport http cato ${url}/mcp \\
+  --header "Authorization: Bearer cato_..."`,
+      doc: "docs/conversations.md",
+    },
+    {
       id: "rest", title: "REST (curl)", lang: "bash",
       what: "Any language: POST text, get the policy outcome and the protected text.",
       code: `curl -s ${url}/v1/protect \\

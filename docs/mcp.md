@@ -39,6 +39,7 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | `CATO_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
 | `CATO_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
 | `CATO_VAULT_KEY`, `CATO_VAULT_PATH`, `CATO_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |
+| `CATO_SOURCE`, `CATO_PROMPTS`, `CATO_CUSTOM_PATTERNS`, `CATO_CONVERSATIONS_*` | Optional: conversation and prompt tools (stdio reads them from the environment) |
 
 ## Setup
 
@@ -85,8 +86,43 @@ docker run -i --rm -v /path/to/matter-folder:/docs:ro -e CATO_MCP_ROOT=/docs cat
 4. If the result is `review` / `local_only` / `block`, the agent stops and asks the user.
 5. A lawyer restores the original names in the final document via the admin API or `cato restore`, outside the agent.
 
+## Conversations and prompts
+
+With a conversation source (`CATO_SOURCE`) and/or a prompt store (`CATO_PROMPTS`) the server offers more tools. Setup and the guarantees behind them: [conversations.md](conversations.md), [prompts.md](prompts.md).
+
+| Tool | Returns | Annotation |
+|---|---|---|
+| `list_conversations(since?, until?, tag?, limit?, cursor?)` | Opaque ids and metadata, no content | read-only |
+| `get_conversation(conversation_id)` | Protected messages; withheld ones as `content: null`. Counts against the daily quota | read-only, not idempotent |
+| `conversation_stats(since?, until?, group_by)` | Counts by day, tag, prompt, prompt_version, channel, language; groups < k suppressed | read-only |
+| `list_prompts()`, `get_prompt(name, version?, label?)`, `prompt_history(name)`, `diff_prompt(name, from_version, to_version)` | Prompt versions and diffs | read-only |
+| `create_prompt_draft(name, text? \| messages?, note?)` | New version without labels; rejected with customer data or placeholders | **write** |
+
+Not available over MCP on purpose: moving a label (promotion), restore, and every argument that could change policy, destination or namespace.
+
+## HTTP transport (remote MCP)
+
+`CATO_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a Cato API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
+
+```bash
+claude mcp add --transport http cato https://cato.internal.example/mcp \
+  --header "Authorization: Bearer cato_..."
+```
+
+Cursor (`.cursor/mcp.json`):
+
+```json
+{ "mcpServers": { "cato": { "url": "https://cato.internal.example/mcp",
+                            "headers": { "Authorization": "Bearer cato_..." } } } }
+```
+
+- Put TLS in front (reverse proxy), as for the rest of the API.
+- `CATO_MCP_ALLOWED_HOSTS=cato.internal.example` enables DNS-rebinding protection for those hosts.
+- One key per person: the quota and the audit log are per key.
+- Claude Desktop and claude.ai custom connectors need OAuth; that is not included yet. Claude Code, Cursor and other clients that send a header work.
+
 ## Not included yet
 
-- **Only plain text formats.** PDF/DOCX need the parsing worker.
-- **No HTTP transport.** Remote MCP with OAuth comes with the gateway in Phase 2.
-- **No audit log of MCP calls.** Phase 3, together with traces.
+- **Only plain text formats** for `read_document_protected`. PDF/DOCX go through `POST /v1/documents/protect`.
+- **No OAuth** for remote MCP (see above).
+- **Audit:** conversation reads and prompt changes are audited; `scan`/`anonymize` calls are not.

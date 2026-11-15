@@ -1,0 +1,17 @@
+# Support example (synthetic)
+
+Synthetic data for trying conversation access and prompt management without any real customer data.
+All names, numbers and addresses are invented.
+
+| File | Content |
+|---|---|
+| `conversations.jsonl` | 24 support chats over 4 days, two prompt versions (`support-bot@11`, `@12`) |
+| `patterns.yaml` | Example patterns for order numbers, customer numbers and ticket ids |
+
+Start the API with these files (see [docs/conversations.md](../../docs/conversations.md)):
+
+```bash
+CATO_SOURCE=jsonl CATO_SOURCE_PATH=examples/support/conversations.jsonl \
+CATO_CUSTOM_PATTERNS=examples/support/patterns.yaml CATO_PROMPTS=local \
+CATO_MCP_HTTP=1 CATO_API_KEYS=cato_demo_key_change_me_0123456789 cato-api
+```

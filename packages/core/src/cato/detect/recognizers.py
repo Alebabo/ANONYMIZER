@@ -503,11 +503,58 @@ class PersonRecognizer:
 PERSON = PersonRecognizer()
 
 
+class SelfIntroductionRecognizer:
+    """Names in self-introductions, typical for chats: "mein Name ist Anna Müller", "ich heiße anna",
+    "my name is John Doe", "ich bin Anna Müller", "this is John Doe".
+
+    Strong cues ("mein Name ist", "ich heiße", "my name is") also accept lowercase names, because chat
+    users often do not capitalise. Weak cues ("ich bin", "I am", "this is") need at least two
+    capitalised tokens, otherwise "ich bin Kunde" would be a name. False positives cost readability;
+    misses leak a name, so the strong cues are deliberately generous."""
+
+    name = "person_self_intro"
+    languages: frozenset[str] = frozenset()
+    _word = r"[A-Za-zÄÖÜäöüßéèáàç]+(?:-[A-Za-zÄÖÜäöüßéèáàç]+)?"
+    _strong = re.compile(
+        rf"(?i:\b(?:mein\s+name\s+ist|ich\s+hei(?:ß|ss)e|my\s+name\s+is|my\s+name's|name\s*:)\s+)"
+        rf"(?P<name>{_word}(?:\s(?:{_PARTICLE}\s)?{_word}){{0,2}})")
+    _weak = re.compile(
+        rf"(?i:\b(?:ich\s+bin|hier\s+ist|hier\s+spricht|i\s+am|i'm|this\s+is)\s+)"
+        rf"(?P<name>{_NAME}(?:\s(?:{_PARTICLE}\s)?{_NAME}){{1,2}})")
+    # Words that end a lowercase name ("mein name ist anna und ich ...").
+    _stop = {"und", "and", "ich", "i", "aus", "from", "bei", "mit", "with", "habe", "have", "hatte", "bin", "am",
+             "wohne", "live", "komme", "come", "möchte", "would", "want", "will", "wollte", "brauche", "need",
+             "der", "die", "das", "the", "ein", "eine", "a", "an", "kunde", "kundin", "customer", "hier", "here",
+             "nicht", "not", "auch", "also", "aber", "but", "oder", "or", "zu", "to", "für", "for", "es", "it"}
+
+    def analyze(self, text: str, language: str) -> Iterable[Detection]:
+        for regex, strong in ((self._strong, True), (self._weak, False)):
+            for m in regex.finditer(text):
+                tokens = m.group("name").split(" ")
+                kept: list[str] = []
+                for tok in tokens:
+                    if tok.lower() in self._stop or tok in NAME_STOPWORDS:
+                        break
+                    kept.append(tok)
+                while kept and re.fullmatch(_PARTICLE, kept[-1]):
+                    kept.pop()
+                if not kept or (not strong and len(kept) < 2):
+                    continue
+                value = " ".join(kept)
+                start = m.start("name")
+                confidence = 0.85 if len(kept) > 1 else 0.7
+                yield make_detection(E.PERSON, Category.PERSONAL_DATA, start, start + len(value), value, confidence,
+                                     self.name)
+
+
+SELF_INTRO = SelfIntroductionRecognizer()
+
+
 def builtin_recognizers() -> list:
     return [
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
-        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, PERSON,
+        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, PERSON, SELF_INTRO,
     ]
 
 

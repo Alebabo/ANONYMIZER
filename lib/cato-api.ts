@@ -2,7 +2,9 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  exampleApiKeys, exampleAudit, exampleGateway, exampleMe, exampleMembers, exampleMetrics, examplePolicies, exampleTraces,
+  exampleApiKeys, exampleAudit, exampleConversation, exampleConversations, exampleConversationStats, exampleGateway,
+  exampleMe, exampleMembers, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
+  exampleSources, exampleTraces,
 } from "@/lib/mock";
 
 /**
@@ -67,6 +69,41 @@ export type GatewayStatus = {
 };
 
 export type Source = { live: boolean; reason?: string };
+
+export type SourcesInfo = {
+  conversations: { kind: string; location: string; daily_limit: number; min_group: number; stable_placeholders: boolean } | null;
+  conversation_policy: string | null;
+  prompts: { backend: string; location?: string } | null;
+  mcp_http: boolean;
+};
+export type ConversationHead = {
+  id: string; day: string; message_count: number | null; language: string | null; channel: string | null;
+  tags: string[]; prompt: string | null; prompt_version: number | null;
+};
+export type ConversationPage = { data: ConversationHead[]; next_cursor: string | null };
+export type ConversationMessage = {
+  role: string; content: string | null; minute?: number; withheld?: boolean; outcome?: string; reason?: string;
+};
+export type Conversation = ConversationHead & {
+  outcome: string; risk: string; withheld: number; truncated: boolean; messages: ConversationMessage[];
+  trace_id: string; stable_placeholders: boolean; quota: { used: number; limit: number; remaining: number };
+};
+export type ConversationStats = {
+  group_by: string; min_group: number; total: number | null; suppressed_groups: number; scanned: number; truncated: boolean;
+  groups: { key: string; conversations: number; messages: number }[];
+};
+export type Quota = { used: number; limit: number; remaining: number };
+export type PromptListItem = { name: string; latest_version: number; versions: number; labels: Record<string, number>; updated_at: number | null };
+export type PromptMessage = { role: string; content: string | null };
+export type PromptVersion = {
+  name: string; version: number; type: "text" | "chat"; prompt: string | PromptMessage[] | null; config: Record<string, unknown>;
+  labels: string[]; note: string | null; created_by: string | null; created_at: number | null; hash: string;
+  protected: boolean; warnings?: string[]; notice?: string;
+};
+export type PromptHistoryItem = {
+  version: number; labels: string[]; note: string | null; created_by: string | null; created_at: number | null; hash: string; type: string;
+};
+export type PromptDiff = { name: string; from: number; to: number; diff: string; config_changed: boolean; protected: boolean };
 
 export const isDemo = () => !process.env.CATO_API_URL;
 const base = () => process.env.CATO_API_URL!.replace(/\/$/, "");
@@ -138,6 +175,43 @@ export const getPolicy = (name: string) =>
 export const getApiKeys = () => read<ApiKey[]>("/v1/api-keys", () => exampleApiKeys);
 export const getMembers = () => read<User[]>("/v1/members", () => exampleMembers);
 export const getGateway = () => read<GatewayStatus>("/v1/gateway", () => exampleGateway);
+
+export const getSources = () => read<SourcesInfo>("/v1/sources", () => exampleSources);
+
+/** Not-configured features answer 404; pages show a setup hint instead of an error. */
+async function optional<T>(path: string, example: () => T): Promise<{ data: T | null; source: Source }> {
+  try {
+    return await read<T | null>(path, example);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return { data: null, source: { live: true } };
+    throw e;
+  }
+}
+
+export const getConversations = (cursor?: string) =>
+  optional<ConversationPage>(`/v1/conversations?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    () => exampleConversations);
+export const getConversationStats = (groupBy: string) =>
+  optional<ConversationStats>(`/v1/conversations/stats?group_by=${encodeURIComponent(groupBy)}`,
+    () => ({ ...exampleConversationStats, group_by: groupBy }));
+export const getQuota = () =>
+  optional<Quota>("/v1/conversations/quota", () => ({ used: 1, limit: 200, remaining: 199 }));
+/** Reading a conversation counts against the viewer's daily quota and is written to the audit log. */
+export const getConversation = (id: string) =>
+  optional<Conversation>(`/v1/conversations/${encodeURIComponent(id)}`,
+    () => (exampleConversations.data.some(c => c.id === id) ? { ...exampleConversation, id } : null) as Conversation);
+
+export const getPrompts = () => optional<PromptListItem[]>("/v1/prompts", () => examplePrompts);
+export const getPrompt = (name: string, version?: number) =>
+  optional<PromptVersion>(`/v1/prompts/${encodeURIComponent(name)}${version ? `?version=${version}` : ""}`,
+    () => (examplePrompts.some(p => p.name === name)
+      ? { ...examplePromptVersion, name, ...(version ? { version } : {}) } : null) as PromptVersion);
+export const getPromptHistory = (name: string) =>
+  optional<PromptHistoryItem[]>(`/v1/prompts/${encodeURIComponent(name)}/history`, () => examplePromptHistory);
+export const getPromptDiff = (name: string, from: number, to: number) =>
+  optional<PromptDiff>(`/v1/prompts/${encodeURIComponent(name)}/diff?from_version=${from}&to_version=${to}`,
+    () => ({ name, from, to, config_changed: false, protected: false,
+             diff: `--- ${name}@v${from}\n+++ ${name}@v${to}\n@@ -1,2 +1,3 @@\n Du bist der Support-Assistent der Beispiel GmbH.\n-Antworte freundlich.\n+Antworte freundlich und kurz.\n+Frage nach der Bestellnummer, bevor du Auskunft gibst.\n` }));
 
 export type AuditQuery = { before?: string; action?: string; resource_type?: string; limit?: number };
 export const getAuditLogs = (q: AuditQuery) => {

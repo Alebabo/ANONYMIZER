@@ -33,6 +33,9 @@ NER_STOPWORDS = {
     "Az", "Tel", "Fax", "IBAN", "BIC", "NDA", "Mandatsgeheimnis", "Beklagten", "Klägerin", "Zeugin", "Sehr",
     "Geehrte", "Damen", "Herren", "Kündigungsschutzklage", "Rubrum", "Anlage", "Schriftsatz", "Grüßen",
     "PRIVILEGED", "CONFIDENTIAL", "Re", "Dear", "Sincerely",
+    # Chat greetings and thanks that German NER labels as names.
+    "Danke", "Vielen", "Hallo", "Hi", "Hey", "Moin", "Servus", "Gruß", "Grüße", "LG", "VG", "MfG", "Thanks",
+    "Thank", "Hello", "Cheers",
 }
 
 # Entity types whose text is a value (name, address, ...). Context words

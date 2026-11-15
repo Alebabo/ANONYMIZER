@@ -13,6 +13,10 @@ Security properties:
 * Validation errors never echo the submitted input (FastAPI's default 422
   response would).
 * Text size is capped (``CATO_MAX_CHARS``).
+* Conversations (``CATO_SOURCE``) are only returned protected, behind opaque
+  ids, a daily quota per key and k-anonymous statistics. Prompt versions are
+  scanned before they are saved; moving a label is an admin action.
+* ``CATO_MCP_HTTP=1`` serves the MCP tools at ``/mcp`` with the same keys.
 
 Note: no ``from __future__ import annotations`` here. FastAPI must resolve
 the locally defined ``User``/``Admin`` dependency types at definition time;
@@ -23,6 +27,7 @@ breaks (covered by tests/test_api.py::test_endpoints_require_key).
 
 import logging
 import re
+from contextlib import asynccontextmanager
 import threading
 import time
 import uuid
@@ -43,20 +48,23 @@ from cato.anonymize import Anonymizer, AnonymizerConfig, LeakError, restore
 from cato.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from cato.api.schemas import (
     AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, LoginRequest, MemberCreate,
-    MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, ProtectRequest, ProtectResponse,
-    RestoreRequest, ScanResponse, TextRequest,
+    MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
+    ProtectRequest, ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
 )
 from cato.audit import AuditLog
 from cato.api.settings import Settings
 from cato.anonymize.engine import AnonymizationResult, RestoreResult
 from cato.classify import Classifier, DocumentClassification
-from cato.detect import Detector, DetectorConfig
+from cato.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
+from cato.detect import Detector, DetectorConfig, load_custom_patterns
 from cato.pipeline import Pipeline
 from cato.policy import (
     DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
 from cato.documents import DocumentError, protect_document
 from cato.gateway import Gateway, GatewayConfig, GatewayError
+from cato.prompts import PromptError, PromptService, backend_from_env
+from cato.sources import source_from_env
 from cato.tracing import Trace, TraceStep, TraceStore, trace_from_protect
 from cato.vault import FileVault, VaultError, VaultKey
 
@@ -67,7 +75,7 @@ _REQUEST_ID = re.compile(r"[\w.:-]{1,64}", re.ASCII)
 
 
 class State:
-    def __init__(self, settings: Settings, gateway_transport=None) -> None:
+    def __init__(self, settings: Settings, gateway_transport=None, source_transport=None) -> None:
         self.settings = settings
         self.accounts = AccountStore(settings.accounts_db, settings.session_hours)
         self.audit = AuditLog(settings.audit_db)
@@ -78,18 +86,38 @@ class State:
             self.audit.record(DEFAULT_ORG, "create", "member", user["id"], after=user,
                               actor_label="system (bootstrap)")
             log.warning("bootstrap admin created; change the password after the first login")
-        self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner))
+        custom = load_custom_patterns(settings.custom_patterns) if settings.custom_patterns else []
+        self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner, custom_entities=custom))
         self.classifier = Classifier()
         self.vault = (FileVault(settings.vault_path, VaultKey.from_b64(settings.vault_key))
                       if settings.vault_key else None)
         self.policies = FilePolicyStore(settings.policy_dir)
-        if "legal-default" not in self.policies.names():
-            self.policies.save(builtin_policy())
+        for builtin in ("legal-default", "support-default"):
+            if builtin not in self.policies.names():
+                self.policies.save(builtin_policy(builtin))
         self.gateway = Gateway(
             lambda vault: Pipeline(self.policy_for(None, None, None, None), detector=self.detector,
                                    classifier=self.classifier, vault=vault),
             GatewayConfig.from_env(settings.env), transport=gateway_transport,
         )
+        env = settings.env
+        self.conversation_policy = env.get("CATO_CONVERSATIONS_POLICY", "support-default")
+        source = source_from_env(env, transport=source_transport)
+        self.conversations = None if source is None else ConversationService(
+            source,
+            lambda vault: Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
+                                   classifier=self.classifier, vault=vault),
+            ConversationStore(settings.conversations_db), ConversationConfig.from_env(env),
+            vault=self.vault, traces=self.traces, audit=self.audit,
+        )
+        backend = backend_from_env(env, transport=source_transport)
+        self.prompts = None if backend is None else PromptService(
+            backend, self.detector, self.classifier, self._protect_prompt, self.audit)
+
+    def _protect_prompt(self, text: str) -> str | None:
+        pipeline = Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
+                            classifier=self.classifier)
+        return pipeline.protect(text, "external").text
 
     def _retention(self, org_id: str) -> int | None:
         try:
@@ -141,10 +169,21 @@ def _host(url: str) -> str:
     return f"{parts.scheme}://{parts.hostname}{f':{parts.port}' if parts.port else ''}" if parts.hostname else ""
 
 
-def create_app(settings: Settings | None = None, gateway_transport=None) -> FastAPI:
+def create_app(settings: Settings | None = None, gateway_transport=None, source_transport=None) -> FastAPI:
     settings = settings or Settings.from_env()
-    state = State(settings, gateway_transport)
+    state = State(settings, gateway_transport, source_transport)
+    mcp_holder: dict = {}
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        if "server" in mcp_holder:
+            async with mcp_holder["server"].session_manager.run():
+                yield
+        else:
+            yield
+
     app = FastAPI(
+        lifespan=lifespan,
         title="Cato API",
         version=cato.__version__,
         description="Privacy infrastructure for legal AI: detect, classify, anonymize and control sensitive "
@@ -155,7 +194,9 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
     limiter = LoginLimiter()
 
     def resolve(request: Request) -> Principal | None:
-        key = _key_from(request)
+        return resolve_token(_key_from(request))
+
+    def resolve_token(key: str | None) -> Principal | None:
         if not key:
             return None
         if settings.is_admin_key(key):
@@ -259,6 +300,14 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
     @app.exception_handler(PolicyError)
     async def policy_error(_: Request, exc: PolicyError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.exception_handler(ConversationError)
+    async def conversation_error(_: Request, exc: ConversationError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(PromptError)
+    async def prompt_error(_: Request, exc: PromptError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(AccountError)
     async def account_error(_: Request, exc: AccountError) -> JSONResponse:
@@ -590,6 +639,91 @@ def create_app(settings: Settings | None = None, gateway_transport=None) -> Fast
         if entry is None:
             raise HTTPException(status_code=404, detail="audit log entry not found")
         return entry
+
+    # -- conversations -----------------------------------------------------------------
+    def conversations() -> ConversationService:
+        if state.conversations is None:
+            raise HTTPException(status_code=404, detail="conversation access is not configured (CATO_SOURCE)")
+        return state.conversations
+
+    def prompts() -> PromptService:
+        if state.prompts is None:
+            raise HTTPException(status_code=404, detail="prompt management is not configured (CATO_PROMPTS)")
+        return state.prompts
+
+    @app.get("/v1/sources", tags=["conversations"])
+    def sources(_: User) -> dict:
+        """What is connected, without credentials (adapter type and host only)."""
+        return {
+            "conversations": state.conversations.describe() if state.conversations else None,
+            "conversation_policy": state.conversation_policy if state.conversations else None,
+            "prompts": state.prompts.describe() if state.prompts else None,
+            "mcp_http": settings.mcp_http,
+        }
+
+    @app.get("/v1/conversations", tags=["conversations"])
+    def list_conversations(p: User, since: float | None = None, until: float | None = None, tag: str | None = None,
+                           limit: int = 50, cursor: str | None = None) -> dict:
+        """Opaque ids and allow-listed metadata. No content."""
+        return conversations().list(p, since, until, tag, limit, cursor)
+
+    @app.get("/v1/conversations/stats", tags=["conversations"])
+    def conversation_stats(p: User, since: float | None = None, until: float | None = None,
+                           group_by: str = "day") -> dict:
+        return conversations().stats(p, since, until, group_by)
+
+    @app.get("/v1/conversations/quota", tags=["conversations"])
+    def conversation_quota(p: User) -> dict:
+        return conversations().quota(p)
+
+    @app.get("/v1/conversations/{conversation_id}", tags=["conversations"])
+    def get_conversation(conversation_id: str, p: User) -> dict:
+        """Protected messages. Counts against the daily quota; traced and audited."""
+        return conversations().get(p, conversation_id)
+
+    # -- prompts ---------------------------------------------------------------------------
+    @app.get("/v1/prompts", tags=["prompts"])
+    def list_prompts(p: User) -> list[dict]:
+        return prompts().list(p.org_id)
+
+    @app.post("/v1/prompts", status_code=201, tags=["prompts"])
+    def create_prompt(req: PromptCreate, p: User) -> dict:
+        """New version without labels. Rejected if it contains sensitive data or Cato placeholders."""
+        body = req.prompt if isinstance(req.prompt, str) else [m.model_dump() for m in req.prompt]
+        return prompts().create(p, req.name, body, req.config, req.note)
+
+    @app.get("/v1/prompts/{name}", tags=["prompts"])
+    def get_prompt(name: str, p: User, version: int | None = None, label: str | None = None) -> dict:
+        return prompts().get(p.org_id, name, version, label)
+
+    @app.get("/v1/prompts/{name}/history", tags=["prompts"])
+    def prompt_history(name: str, p: User) -> list[dict]:
+        return prompts().history(p.org_id, name)
+
+    @app.get("/v1/prompts/{name}/diff", tags=["prompts"])
+    def prompt_diff(name: str, p: User, from_version: int, to_version: int) -> dict:
+        return prompts().diff(p.org_id, name, from_version, to_version)
+
+    @app.post("/v1/prompts/{name}/labels", tags=["prompts"])
+    def set_prompt_label(name: str, req: PromptLabelSet, p: Admin) -> dict:
+        """Move a label (e.g. production) to a version. Admin only; audited with before/after."""
+        return prompts().set_label(p, name, req.version, req.label)
+
+    # -- MCP over HTTP -------------------------------------------------------------------------
+    if settings.mcp_http:
+        from starlette.routing import Route
+
+        from cato.mcp import CatoTools, MCPConfig, http_server
+
+        mcp_env = {k: v for k, v in settings.env.items() if k.startswith("CATO_MCP_")}
+        if settings.vault_key:
+            mcp_env |= {"CATO_VAULT_KEY": settings.vault_key, "CATO_VAULT_PATH": str(settings.vault_path)}
+        tools = CatoTools(MCPConfig.from_env(mcp_env), detector=state.detector,
+                          conversations=state.conversations, prompts=state.prompts)
+        hosts = [h.strip() for h in settings.env.get("CATO_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
+        mcp_holder["server"] = server
+        app.router.routes.append(Route("/mcp", endpoint=endpoint))
 
     # -- gateway status --------------------------------------------------------------
     @app.get("/v1/gateway", tags=["gateway"])

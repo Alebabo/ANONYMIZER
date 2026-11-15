@@ -25,7 +25,8 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 |---|---|
 | `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
 | `sdk/python/` | Python client `cato-sdk` (`from cato_sdk import Cato`) |
-| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready) with login: overview, gateway, privacy, traces, metrics, policies, API keys, integrations, settings, members, audit log |
+| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready) with login: overview, gateway, privacy, traces, conversations, metrics, policies, prompts, API keys, integrations, settings, members, audit log |
+| `examples/support/` | Synthetic support chats and example detection patterns |
 | `docs/` | Documentation |
 
 ## Documentation
@@ -37,7 +38,23 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
 - [Accounts & audit log](docs/accounts.md): login, roles, organization scope, API keys, hash-chained audit log
-- [MCP server](docs/mcp.md): `cato-mcp` for Claude, Cursor & other agents, with protected document access
+- [MCP server](docs/mcp.md): `cato-mcp` (stdio) and `/mcp` (HTTP) for Claude, Cursor & other agents, with protected document access
+- [Conversations](docs/conversations.md): protected access to customer chats (JSONL, HTTP contract, Langfuse) with quota, k-anonymity and audit
+- [Prompts](docs/prompts.md): versions, labels, drafts from agents, promotion by people
+
+## Customer chats and prompts for AI agents
+
+Cato can run next to production and give Claude Code or Cursor protected access to customer conversations and prompt management, without the agent ever seeing raw customer data:
+
+```bash
+CATO_API_KEYS=cato_demo_key_change_me_0123456789 CATO_MCP_HTTP=1 CATO_PROMPTS=local \
+CATO_SOURCE=jsonl CATO_SOURCE_PATH=examples/support/conversations.jsonl \
+CATO_CUSTOM_PATTERNS=examples/support/patterns.yaml cato-api
+claude mcp add --transport http cato http://127.0.0.1:8080/mcp \
+  --header "Authorization: Bearer cato_demo_key_change_me_0123456789"
+```
+
+Details, guarantees and the checks required before production: [docs/conversations.md](docs/conversations.md).
 
 ## Development
 
@@ -68,7 +85,7 @@ CATO_API_URL=http://localhost:8080 npm run dev      # live: sign in with a Cato 
 
 ## Roadmap
 
-- **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint (done: gateway, MCP, documents, Python SDK)
+- **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint, OAuth for remote MCP (done: gateway, MCP over stdio and HTTP, documents, Python SDK, conversation access, prompt management)
 - **Phase 3:** review queue with approvals, graphical policy editor (done: traces, metrics, dashboard on live data, API key management in the UI)
 - **Phase 4:** SSO/MFA, finer RBAC, PostgreSQL, Helm (done: organizations, login, roles, hash-chained audit log)
 

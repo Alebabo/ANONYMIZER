@@ -112,3 +112,13 @@ export async function changePassword(_: ActionState, form: FormData): Promise<Ac
     return { message: "Password changed. Other sessions were signed out." };
   }, "/settings");
 }
+
+export async function setPromptLabel(_: ActionState, form: FormData): Promise<ActionState> {
+  const name = str(form, "name");
+  return run(async () => {
+    const out = await api<{ version: number; previous_version: number | null; label: string }>(
+      `/v1/prompts/${encodeURIComponent(name)}/labels`,
+      { method: "POST", body: JSON.stringify({ version: Number(str(form, "version")), label: str(form, "label") }) });
+    return { message: `${out.label} → v${out.version}` + (out.previous_version ? ` (was v${out.previous_version})` : "") };
+  }, `/prompts/${encodeURIComponent(name)}`);
+}
