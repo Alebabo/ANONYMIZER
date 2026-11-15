@@ -103,6 +103,8 @@ class State:
         env = settings.env
         self.conversation_policy = env.get("CATO_CONVERSATIONS_POLICY", "support-default")
         source = source_from_env(env, transport=source_transport)
+        if source is not None or env.get("CATO_PROMPTS"):
+            self.policies.effective(self.conversation_policy)  # unknown policy: fail at start, not per request
         self.conversations = None if source is None else ConversationService(
             source,
             lambda vault: Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,

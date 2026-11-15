@@ -180,3 +180,14 @@ def test_backend_factory(tmp_path):
         backend_from_env({"CATO_PROMPTS": "langfuse"})
     with pytest.raises(PromptError, match="unknown"):
         backend_from_env({"CATO_PROMPTS": "git"})
+
+
+def test_notes_and_config_from_outside_are_protected_on_read():
+    backend = LocalPromptBackend()
+    backend.create(DEFAULT_ORG, "lf", "text", GOOD, {"example_customer": "max.mustermann@example.org"},
+                   "Fix für Max Mustermann (max.mustermann@example.org)", "import")
+    svc = service(backend)
+    out = svc.get(DEFAULT_ORG, "lf")
+    assert out["protected"] and out["config"] == {"withheld": "config contains sensitive data"}
+    assert "Mustermann" not in json.dumps(out) and "EMAIL_001" in out["note"]
+    assert "Mustermann" not in json.dumps(svc.history(DEFAULT_ORG, "lf"))

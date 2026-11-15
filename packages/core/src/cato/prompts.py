@@ -419,6 +419,13 @@ class PromptService:
         if soft:
             out["warnings"] = [f"possibly contains {t} (statistical detection; check before promoting)"
                                for t in soft]
+        # Notes and config can come from outside Cato (Langfuse commit messages); same rule.
+        if v.note and self._findings(v.note)[0]:
+            out["note"] = self.protect_text(v.note)
+            out["protected"] = True
+        if v.config and self._findings(json.dumps(v.config, ensure_ascii=False))[0]:
+            out["config"] = {"withheld": "config contains sensitive data"}
+            out["protected"] = True
         if risky:
             safe = self.protect_text
             if isinstance(v.prompt, str):
@@ -441,7 +448,10 @@ class PromptService:
 
     def history(self, org_id: str, name: str) -> list[dict[str, Any]]:
         check_name(name)
-        return [{"version": v.version, "labels": v.labels, "note": v.note, "created_by": v.created_by,
+        def note(text: str | None) -> str | None:
+            return self.protect_text(text) if text and self._findings(text)[0] else text
+
+        return [{"version": v.version, "labels": v.labels, "note": note(v.note), "created_by": v.created_by,
                  "created_at": v.created_at, "hash": v.hash, "type": v.type}
                 for v in self.backend.history(org_id, name)]
 

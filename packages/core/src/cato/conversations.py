@@ -149,13 +149,24 @@ class ConversationStore:
                                    "AND day = ?", (org_id, principal_id, day)).fetchone()
         return row[0] if row else 0
 
-    def count_read(self, org_id: str, principal_id: str, day: str) -> int:
+    def reserve(self, org_id: str, principal_id: str, day: str, limit: int) -> int | None:
+        """Atomically take one read from the day's quota; ``None`` if it is used up."""
         with self._lock:
-            self._db.execute("INSERT INTO conversation_usage VALUES (?,?,?,1) ON CONFLICT (org_id, principal_id, day) "
-                             "DO UPDATE SET reads = reads + 1", (org_id, principal_id, day))
+            self._db.execute("INSERT OR IGNORE INTO conversation_usage VALUES (?,?,?,0)", (org_id, principal_id, day))
+            cur = self._db.execute("UPDATE conversation_usage SET reads = reads + 1 WHERE org_id = ? AND "
+                                   "principal_id = ? AND day = ? AND reads < ?", (org_id, principal_id, day, limit))
             self._db.commit()
+            if cur.rowcount == 0:
+                return None
             return self._db.execute("SELECT reads FROM conversation_usage WHERE org_id = ? AND principal_id = ? "
                                     "AND day = ?", (org_id, principal_id, day)).fetchone()[0]
+
+    def release(self, org_id: str, principal_id: str, day: str) -> None:
+        """Give a reservation back (the read failed before anything was returned)."""
+        with self._lock:
+            self._db.execute("UPDATE conversation_usage SET reads = MAX(reads - 1, 0) WHERE org_id = ? AND "
+                             "principal_id = ? AND day = ?", (org_id, principal_id, day))
+            self._db.commit()
 
 
 def namespace_for(org_id: str, conv_id: str) -> str:
@@ -228,6 +239,10 @@ class ConversationService:
              tag: str | None = None, limit: int = 50, cursor: str | None = None) -> dict[str, Any]:
         if cursor is not None and not _CURSOR.fullmatch(cursor):
             raise ConversationError("invalid cursor", 400)
+        # A filter is a question to the raw data ("is there a conversation tagged <name>?"). Only labels
+        # that could also appear in an answer may be asked for.
+        if tag is not None and self._safe_label(tag) is None:
+            raise ConversationError("tag filter not allowed: only plain labels without personal data", 400)
         limit = max(1, min(limit, self.config.max_page))
         raw_cursor = self.store.unwrap_cursor(principal.org_id, cursor)
         try:
@@ -252,8 +267,17 @@ class ConversationService:
         if source_id is None:
             raise ConversationError("conversation not found; list conversations first", 404)
         day = _today()
-        if self.store.used(principal.org_id, principal.id, day) >= self.config.daily_limit:
+        used = self.store.reserve(principal.org_id, principal.id, day, self.config.daily_limit)
+        if used is None:
             raise ConversationError(f"daily limit of {self.config.daily_limit} conversations reached", 429)
+        try:
+            return self._read(principal, conv_id, source_id, used)
+        except BaseException:
+            # Nothing was returned: the read does not count.
+            self.store.release(principal.org_id, principal.id, day)
+            raise
+
+    def _read(self, principal: Principal, conv_id: str, source_id: str, used: int) -> dict[str, Any]:
         t0 = time.perf_counter()
         try:
             conv = self.source.get(source_id)
@@ -290,7 +314,6 @@ class ConversationService:
                         withheld += 1
                 out.append(item)
 
-        used = self.store.count_read(principal.org_id, principal.id, day)
         trace = self._trace(parts, len(msgs), withheld, round((time.perf_counter() - t0) * 1000, 1))
         if self.traces is not None:
             self.traces.add(trace, principal.org_id)

@@ -236,3 +236,19 @@ def test_parse_time(value, expected):
 def test_parse_time_rejects_garbage():
     with pytest.raises(ToolError):
         parse_time("last tuesday")
+
+
+def test_unknown_conversation_policy_fails_at_start(env):
+    with pytest.raises(Exception, match="no-such-policy"):
+        create_app(Settings.from_env({**env, "CATO_CONVERSATIONS_POLICY": "no-such-policy"}))
+
+
+def test_unexpected_tool_errors_do_not_reach_the_model(env, tmp_path):
+    tools = tools_from_env({**env, "CATO_CONVERSATIONS_DB": str(tmp_path / "x.db")})
+
+    def boom(*a, **k):
+        raise ValueError("raw source row: Max Mustermann")
+    tools.conversations.source.list = boom
+    with pytest.raises(ToolError) as exc:
+        tools.list_conversations()
+    assert "Mustermann" not in str(exc.value) and "internal error" in str(exc.value)

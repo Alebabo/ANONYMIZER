@@ -161,3 +161,42 @@ def test_long_and_truncated_conversations(tmp_path):
     conv = svc.get(ALICE, svc.list(ALICE)["data"][0]["id"])
     assert conv["messages"][0]["content"] is None and conv["truncated"] and len(conv["messages"]) == 3
     assert conv["message_count"] == 6 and conv["outcome"] == "review"
+
+
+def test_tag_filter_is_not_an_oracle(source):
+    svc = service(source)
+    with pytest.raises(ConversationError, match="tag filter not allowed"):
+        svc.list(ALICE, tag="Max Mustermann")
+    with pytest.raises(ConversationError, match="tag filter not allowed"):
+        svc.list(ALICE, tag="Erika Musterfrau")  # same answer whether or not the tag exists
+    assert len(svc.list(ALICE, tag="billing")["data"]) == 6
+
+
+def test_quota_is_atomic_under_concurrency(source):
+    from concurrent.futures import ThreadPoolExecutor
+
+    svc = service(source, daily_limit=5)
+    ids = [h["id"] for h in svc.list(ALICE, limit=12)["data"]]
+
+    def read(cid):
+        try:
+            svc.get(ALICE, cid)
+            return True
+        except ConversationError as exc:
+            assert exc.status == 429
+            return False
+
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(read, ids))
+    assert sum(results) == 5 and svc.quota(ALICE)["used"] == 5
+
+
+def test_failed_reads_do_not_count(source, tmp_path):
+    svc = service(source, daily_limit=2)
+    cid = svc.list(ALICE, limit=1)["data"][0]["id"]
+    source.path.write_text("", encoding="utf-8")  # the conversation disappears from the source
+    for _ in range(3):
+        with pytest.raises(ConversationError) as exc:
+            svc.get(ALICE, cid)
+        assert exc.value.status == 404
+    assert svc.quota(ALICE)["used"] == 0

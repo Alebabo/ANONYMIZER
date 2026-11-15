@@ -130,9 +130,11 @@ def conversation(cid: str, authorization: str = Header("")):
 | Opaque ids | Source ids and source cursors stay in Cato's database (`CATO_CONVERSATIONS_DB`); callers see `conv_…`/`cur_…`. Ids and cursors are scoped to the organization |
 | Metadata allow-list | Day instead of timestamp, minute offsets instead of message times. Tags, channel and prompt names are dropped if they contain anything detectable |
 | Quota | `CATO_CONVERSATIONS_DAILY_LIMIT` full reads per key (or dashboard user) and UTC day, default 200. Listing and statistics do not count |
-| k-anonymity | Statistics groups with fewer than `CATO_CONVERSATIONS_MIN_GROUP` conversations (default 10) are suppressed; so is the total |
+| k-anonymity | Statistics groups with fewer than `CATO_CONVERSATIONS_MIN_GROUP` conversations (default 10) are suppressed; so is the total. Note: the listing already shows each conversation's allow-listed metadata, so k protects aggregate views, not the metadata itself |
 | Trace and audit | Every read writes a metadata-only trace (`/v1/conversations`) and an audit entry `read conversation <id>` with message and withheld counts |
 | No search | There is deliberately no full-text search: a search over raw data would answer "is there a chat mentioning X?" |
+| Filters are no oracle | A `tag` filter that contains detectable data (e.g. a name) is rejected before the source is asked, so "is there a conversation tagged Max Mustermann?" gets the same answer whether or not one exists |
+| Quota is atomic | Parallel reads cannot exceed the limit; a read that fails at the source does not count |
 
 `CATO_CONVERSATIONS_STATS_SCAN` (default 5000) caps how many listing entries one statistics request reads; `CATO_CONVERSATIONS_MAX_MESSAGES` (default 500) caps messages per conversation.
 

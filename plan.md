@@ -266,3 +266,22 @@ Found while testing on the synthetic chats:
 
 - "Mein Name ist Hans Beispiel." was **not detected** by rules or NER and would have leaked. Fixed with the self-introduction recognizer (`person_self_intro`), covered by the `de_support` corpus.
 - NER over-redacts lowercase chat text ("ich komme nicht mehr in mein konto" → two `PERSON_` placeholders). Readability cost, no leak; left as is and documented.
+
+## 12. Review after implementation
+
+End-to-end checks (real server, official MCP client over HTTP and stdio, dashboard in live mode with login):
+
+- All 24 synthetic conversations read over MCP HTTP and in the dashboard: no name, e-mail, customer/ticket number, IBAN, phone, diagnosis or source id in any response. Server log: no customer data.
+- Wrong or missing key on `/mcp`: 401. Dashboard link prefetching does not consume quota. Promote form works and is audited.
+
+Findings and fixes:
+
+| Finding | Fix |
+|---|---|
+| `tag` filter was an oracle: "tag = Max Mustermann" returned 1 vs. 0 conversations | Filters with detectable data are rejected before the source is asked |
+| Quota check and increment were separate: parallel reads could exceed the limit; failed reads counted | Atomic reservation in SQLite, released when the read fails |
+| Prompt notes and config (e.g. Langfuse commit messages) were returned unchecked | Same read protection as the prompt text |
+| Unexpected exceptions in MCP tools reached the model with their message (could contain source data) | Generic tool error; details only in the server log |
+| Unknown `CATO_CONVERSATIONS_POLICY` failed on the first request | Checked at startup |
+
+Known limits that remain (documented): recall on real chats unmeasured; NER over-redaction on lowercase text; k-anonymity protects aggregates only, since the listing shows per-conversation metadata; no OAuth for remote MCP.

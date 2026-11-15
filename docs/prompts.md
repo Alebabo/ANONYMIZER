@@ -34,7 +34,7 @@ Context words such as "example" lower the risk of a name elsewhere in Cato. For 
 
 ## Reading
 
-Prompts are returned as stored. If a stored version contains sensitive data (for example one created directly in Langfuse), readers receive it anonymized with `protected: true` and a notice. Fix it at the source; drafts built from the anonymized text are rejected because of the placeholders.
+Prompts are returned as stored. If a stored version contains sensitive data (for example one created directly in Langfuse), readers receive it anonymized with `protected: true` and a notice. The same applies to notes (Langfuse commit messages) and config; a config with sensitive data is replaced by `{"withheld": ...}`. Fix it at the source; drafts built from the anonymized text are rejected because of the placeholders.
 
 ## API
 

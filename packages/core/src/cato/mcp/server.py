@@ -244,6 +244,14 @@ class CatoTools:
             return fn(*args, **kwargs)
         except (ConversationError, PromptError) as exc:
             raise ToolError(str(exc)) from None
+        except ToolError:
+            raise
+        except Exception:
+            # Unexpected errors can carry source data in their message; the model gets none of it.
+            import logging
+
+            logging.getLogger("cato.mcp").exception("tool failed")
+            raise ToolError("internal error; details are in the Cato server log") from None
 
     def list_conversations(self, since: str | None = None, until: str | None = None, tag: str | None = None,
                            limit: int = 50, cursor: str | None = None,
