@@ -86,6 +86,8 @@ CATO_API_URL=http://localhost:8080 npm run dev      # live: sign in with a Cato 
 
 ## Roadmap
 
+Plan for the MCP proxy and the next phases: [roadmap.md](roadmap.md).
+
 - **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint, OAuth for remote MCP (done: gateway, MCP over stdio and HTTP, documents, Python SDK, conversation access, prompt management)
 - **Phase 3:** review queue with approvals, graphical policy editor (done: traces, metrics, dashboard on live data, API key management in the UI)
 - **Phase 4:** SSO/MFA, finer RBAC, PostgreSQL, Helm (done: organizations, login, roles, hash-chained audit log)
