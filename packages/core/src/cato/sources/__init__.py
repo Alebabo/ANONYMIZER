@@ -35,6 +35,11 @@ class Message(BaseModel):
     role: Role
     content: str
     created_at: float | None = None
+    # Optional short labels per message (e.g. which agent or workflow answered). Cato passes them on
+    # only if they contain nothing detectable, like tags.
+    agent: str | None = None
+    action: str | None = None
+    subtopic: str | None = None
 
 
 class ConversationHead(BaseModel):
@@ -130,17 +135,26 @@ class HttpSource:
 
         GET {base}/conversations?since=&until=&limit=&cursor=&tag=  -> {"data": [head...], "next_cursor": ...}
         GET {base}/conversations/{id}                               -> conversation
+
+    Authentication: a bearer key (``api_key``) or HTTP basic (``username`` + ``password``), not both.
     """
 
     kind = "http"
 
     def __init__(self, base_url: str, api_key: str | None = None, timeout: float = 30,
-                 transport: httpx.BaseTransport | None = None) -> None:
+                 transport: httpx.BaseTransport | None = None, username: str | None = None,
+                 password: str | None = None) -> None:
         if not base_url:
             raise SourceError("CATO_SOURCE_URL is required for the http source")
+        if bool(username) != bool(password):
+            raise SourceError("basic auth needs both CATO_SOURCE_USER and CATO_SOURCE_PASSWORD")
+        if api_key and username:
+            raise SourceError("set either CATO_SOURCE_KEY or CATO_SOURCE_USER/CATO_SOURCE_PASSWORD, not both")
         self.base_url = base_url.rstrip("/")
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-        self.client = httpx.Client(base_url=self.base_url, headers=headers, timeout=timeout, transport=transport)
+        auth = httpx.BasicAuth(username, password) if username and password else None
+        self.client = httpx.Client(base_url=self.base_url, headers=headers, auth=auth, timeout=timeout,
+                                   transport=transport)
 
     def _get(self, path: str, params: dict | None = None) -> Any:
         try:
@@ -324,7 +338,9 @@ def source_from_env(env: dict[str, str] | None = None,
     if kind == "jsonl":
         return JsonlSource(env.get("CATO_SOURCE_PATH", ""))
     if kind == "http":
-        return HttpSource(env.get("CATO_SOURCE_URL", ""), env.get("CATO_SOURCE_KEY") or None, timeout, transport)
+        return HttpSource(env.get("CATO_SOURCE_URL", ""), env.get("CATO_SOURCE_KEY") or None, timeout, transport,
+                          username=env.get("CATO_SOURCE_USER") or None,
+                          password=env.get("CATO_SOURCE_PASSWORD") or None)
     if kind == "langfuse":
         return LangfuseSource(env.get("CATO_SOURCE_URL", ""), env.get("CATO_SOURCE_PUBLIC_KEY", ""),
                               env.get("CATO_SOURCE_SECRET_KEY", ""), timeout, transport)

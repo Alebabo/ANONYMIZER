@@ -83,6 +83,36 @@ def test_http_contract_violation_and_outage():
         HttpSource("https://x", transport=httpx.MockTransport(boom)).list()
 
 
+
+def test_http_basic_auth_and_message_labels():
+    seen: list = []
+    conv = {**CONV, "messages": [{"role": "user", "content": "Hallo", "agent": "TRANSACTION",
+                                  "action": "TRANSACTION_RECALL_EMB", "subtopic": "recall", "extra": 1}]}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=conv)
+
+    s = HttpSource("https://chat.internal/api", username="cato", password="pw", transport=httpx.MockTransport(handler))
+    m = s.get("sess-1").messages[0]
+    assert (m.agent, m.action, m.subtopic) == ("TRANSACTION", "TRANSACTION_RECALL_EMB", "recall")
+    assert seen[0].headers["authorization"] == httpx.BasicAuth("cato", "pw")._auth_header
+    assert "pw" not in str(s.describe())
+
+
+def test_http_auth_settings_are_unambiguous():
+    with pytest.raises(SourceError, match="both CATO_SOURCE_USER and CATO_SOURCE_PASSWORD"):
+        HttpSource("https://x", username="cato")
+    with pytest.raises(SourceError, match="not both"):
+        HttpSource("https://x", "key", username="cato", password="pw")
+    with pytest.raises(SourceError) as exc:
+        source_from_env({"CATO_SOURCE": "http", "CATO_SOURCE_URL": "https://x", "CATO_SOURCE_PASSWORD": "s3cr3t"})
+    assert "s3cr3t" not in str(exc.value)
+    env = {"CATO_SOURCE": "http", "CATO_SOURCE_URL": "https://x", "CATO_SOURCE_USER": "cato",
+           "CATO_SOURCE_PASSWORD": "pw"}
+    assert source_from_env(env).kind == "http"
+
+
 LF_SESSION = {
     "id": "lf-sess", "createdAt": "2026-11-10T09:00:00.000Z",
     "traces": [

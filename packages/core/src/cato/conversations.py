@@ -12,8 +12,9 @@ and every caller (REST, MCP). Guarantees:
   does not allow comes back as ``content: null`` with the reason.
 * **Metadata is an allow-list** (day, message count, language, channel,
   tags, prompt, prompt version). Timestamps are coarsened to the day; message
-  times become minute offsets from the first message. Tags and prompt names
-  with a detection are dropped.
+  times become minute offsets from the first message. Tags, prompt names and
+  per-message labels (agent, action, subtopic) with a detection are dropped,
+  unless they are listed verbatim in ``CATO_CONVERSATIONS_LABELS``.
 * **Quota** per principal and UTC day for full conversation reads.
 * **k-anonymity** for statistics: groups below ``min_group`` are suppressed.
 * **Trace and audit entry** for every read (counts and ids, never content).
@@ -65,6 +66,9 @@ class ConversationConfig:
     stats_scan: int = 5000          # max. heads scanned for one statistics request
     max_messages: int = 500         # per conversation; the rest is cut off and flagged
     max_message_chars: int = 50_000
+    # Labels an admin declared safe (exact strings). They skip detection, which mistakes code-like
+    # identifiers such as "TRANSACTION" or "CARD_LOCK_EMB" for names and organizations.
+    known_labels: frozenset[str] = frozenset()
 
     @classmethod
     def from_env(cls, env: dict[str, str]) -> "ConversationConfig":
@@ -73,7 +77,31 @@ class ConversationConfig:
             min_group=max(1, int(env.get("CATO_CONVERSATIONS_MIN_GROUP", "10"))),
             stats_scan=int(env.get("CATO_CONVERSATIONS_STATS_SCAN", "5000")),
             max_messages=int(env.get("CATO_CONVERSATIONS_MAX_MESSAGES", "500")),
+            known_labels=load_labels(env.get("CATO_CONVERSATIONS_LABELS")),
         )
+
+
+def load_labels(path: str | None) -> frozenset[str]:
+    """Read a label allow-list: one label per line, exact match, ``#`` starts a comment line.
+
+    Patterns are deliberately not supported: ``agent:[A-Z_]+`` would also let ``agent:MAX_MUSTERMANN``
+    through. Lines that are no valid label fail loudly instead of being ignored.
+    """
+    if not path:
+        return frozenset()
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        raise ConversationError("CATO_CONVERSATIONS_LABELS does not point to a readable file", 500) from None
+    out = set()
+    for n, line in enumerate(lines, 1):
+        label = line.strip()
+        if not label or label.startswith("#"):
+            continue
+        if not _TAG.fullmatch(label):
+            raise ConversationError(f"line {n} of CATO_CONVERSATIONS_LABELS is not a valid label", 500)
+        out.add(label)
+    return frozenset(out)
 
 
 def _day(ts: float) -> str:
@@ -209,6 +237,8 @@ class ConversationService:
         text = str(value).strip()
         if not _TAG.fullmatch(text):
             return None
+        if text in self.config.known_labels:
+            return text
         with self._lock:
             known = self._label_cache.get(text)
         if known is None:
@@ -296,6 +326,10 @@ class ConversationService:
         with ctx:
             for m in msgs:
                 item: dict[str, Any] = {"role": m.role}
+                for key in ("agent", "action", "subtopic"):
+                    label = self._safe_label(getattr(m, key))
+                    if label:
+                        item[key] = label
                 if m.created_at and first_ts:
                     item["minute"] = int((m.created_at - first_ts) // 60)
                 if not m.content.strip():

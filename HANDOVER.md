@@ -193,6 +193,8 @@ Ihr baut neben der Chat-DB zwei GET-Endpunkte mit einem **read-only DB-User**. V
 export CATO_SOURCE=http
 export CATO_SOURCE_URL=https://chat-export-sbx.firma.intern/api
 export CATO_SOURCE_KEY=...            # Bearer-Key, den euer Endpunkt prüft
+# oder HTTP Basic (z. B. technischer Nutzer), nicht beides:
+# export CATO_SOURCE_USER=cato CATO_SOURCE_PASSWORD=...
 ```
 
 Tipps:
@@ -201,6 +203,8 @@ Tipps:
 - `tags` (Kategorie, Intent, Ergebnis) mitliefern, das macht die Auswertung viel nützlicher.
 - `next_cursor` darf eure interne ID sein. Cato gibt ihn nie nach außen.
 - Neueste Konversationen zuerst.
+- Multi-Agent-Bots: pro Nachricht `agent`, `action` und `subtopic` mitliefern. Nur Enum-Werte, nie Freitext.
+- Bezeichner wie `TRANSACTION` oder `CARD_LOCK_EMB` hält die Erkennung oft für Organisationen und verwirft sie. Die festen Namen in eine Datei unter `local/` schreiben, eine pro Zeile, exakt so wie im Tag (`agent:TRANSACTION`) bzw. im Feld (`TRANSACTION`), und `CATO_CONVERSATIONS_LABELS` darauf setzen. `cato source-check --protect` zeigt unter `labels`, wie viele noch wegfallen.
 
 ### 4.4 Eigene Muster (Bestellnummern usw.)
 

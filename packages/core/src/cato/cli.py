@@ -236,6 +236,7 @@ def _source_check(protect: bool) -> int:
     """Connectivity and shape check for the configured source. Prints counts and ids' shape, never content."""
     import os
 
+    from cato.conversations import ConversationError
     from cato.sources import SourceError, source_from_env
 
     try:
@@ -253,7 +254,7 @@ def _source_check(protect: bool) -> int:
             out["roles"] = sorted({m.role for m in conv.messages})
             if protect:
                 from cato.classify import Classifier
-                from cato.conversations import ConversationService, ConversationStore
+                from cato.conversations import ConversationConfig, ConversationService, ConversationStore
                 from cato.detect import DetectorConfig, load_custom_patterns
                 from cato.pipeline import Pipeline
                 from cato.policy import builtin_policy
@@ -264,14 +265,21 @@ def _source_check(protect: bool) -> int:
                 policy = builtin_policy(os.environ.get("CATO_CONVERSATIONS_POLICY", "support-default"))
                 svc = ConversationService(source, lambda v: Pipeline(policy, detector=detector,
                                                                     classifier=Classifier(), vault=v),
-                                          ConversationStore())
+                                          ConversationStore(), ConversationConfig.from_env(dict(os.environ)))
                 from cato.conversations import LOCAL_PRINCIPAL
+
+                # Counts only: a dropped label may be personal data, so its value is never printed.
+                raw = [t for h in page.data for t in h.tags[:20]]
+                raw += [x for m in conv.messages for x in (m.agent, m.action, m.subtopic) if x]
+                kept = sum(1 for x in raw if svc._safe_label(x))
+                out["labels"] = {"checked": len(raw), "dropped": len(raw) - kept,
+                                 "allow_listed": len(svc.config.known_labels)}
 
                 cid = svc.list(LOCAL_PRINCIPAL, limit=1)["data"][0]["id"]
                 result = svc.get(LOCAL_PRINCIPAL, cid)
                 out["protected"] = {"outcome": result["outcome"], "risk": result["risk"],
                                     "withheld": result["withheld"]}
-    except SourceError as exc:
+    except (SourceError, ConversationError) as exc:
         print(f"source error: {exc}", file=sys.stderr)
         return 1
     json.dump(out, sys.stdout, indent=2)

@@ -41,7 +41,7 @@ CATO_SOURCE=... cato source-check --protect
 | `CATO_SOURCE` | Settings | Use |
 |---|---|---|
 | `jsonl` | `CATO_SOURCE_PATH` | Exports, tests, demos. One conversation per line (format below). Re-read on every call |
-| `http` | `CATO_SOURCE_URL`, `CATO_SOURCE_KEY` | Any chat database: you implement two read-only endpoints (contract below) |
+| `http` | `CATO_SOURCE_URL` plus `CATO_SOURCE_KEY` (bearer) or `CATO_SOURCE_USER` and `CATO_SOURCE_PASSWORD` (HTTP basic) | Any chat database: you implement two read-only endpoints (contract below). Set one kind of credentials, not both |
 | `langfuse` | `CATO_SOURCE_URL`, `CATO_SOURCE_PUBLIC_KEY`, `CATO_SOURCE_SECRET_KEY` | Langfuse sessions as conversations, traces as turns |
 
 `CATO_SOURCE_TIMEOUT` (seconds, default 30) applies to `http` and `langfuse`.
@@ -52,14 +52,34 @@ CATO_SOURCE=... cato source-check --protect
 {"id": "sess-0001", "created_at": 1762905600, "language": "de", "channel": "web",
  "tags": ["billing"], "prompt": "support-bot", "prompt_version": 12,
  "messages": [{"role": "user", "content": "...", "created_at": 1762905600},
-              {"role": "assistant", "content": "...", "created_at": 1762905690}]}
+              {"role": "assistant", "content": "...", "created_at": 1762905690,
+               "agent": "billing", "action": "refund_flow", "subtopic": "double_charge"}]}
 ```
 
 `role` is `user`, `assistant`, `system` or `tool`. Everything except `id`, `created_at` and `messages` is optional.
 
+`agent`, `action` and `subtopic` are optional labels per message for multi-agent bots: which agent answered, which workflow ran, which subtopic it chose. They are handled like tags (see "Labels" below). Other fields are ignored, so free text must go into `content`, where it is protected.
+
+### Labels
+
+Tags, channel, prompt names and the per-message labels pass only if detection finds nothing in them. Code-like identifiers trip statistical NER: `TRANSACTION`, `ORCHESTRATOR` or `CARD_LOCK_EMB` are taken for organizations and dropped, and statistics by agent come out empty.
+
+`CATO_CONVERSATIONS_LABELS` points to a text file with labels you declare safe, one per line, exact match, `#` for comments:
+
+```
+# agents
+TRANSACTION
+agent:TRANSACTION
+# actions
+CARD_LOCK_EMB
+action:CARD_LOCK_EMB
+```
+
+Listed labels skip detection; everything else is still checked. Patterns are deliberately not supported, because `agent:[A-Z_]+` would also let `agent:MAX_MUSTERMANN` through. Detection does not reliably catch names in that spelling either, so the source should put only enum values into labels, never free text. Keep company-specific lists under `local/`. Check which labels get through with `cato source-check`, which reports `with_tags`.
+
 ### HTTP contract
 
-Two read-only endpoints, bearer-authenticated, JSON. Implement them next to your chat database; Cato needs nothing else.
+Two read-only endpoints, bearer- or basic-authenticated, JSON. Implement them next to your chat database; Cato needs nothing else.
 
 ```
 GET {CATO_SOURCE_URL}/conversations?since=<unix>&until=<unix>&limit=<n>&cursor=<opaque>&tag=<t>

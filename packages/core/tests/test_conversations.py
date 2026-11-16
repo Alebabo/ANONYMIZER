@@ -200,3 +200,53 @@ def test_failed_reads_do_not_count(source, tmp_path):
             svc.get(ALICE, cid)
         assert exc.value.status == 404
     assert svc.quota(ALICE)["used"] == 0
+
+
+def test_message_labels_pass_only_when_clean(tmp_path):
+    c = conversation(1)
+    c["messages"][0].update(agent="TRANSACTION", action="TRANSACTION_RECALL_EMB", subtopic="Max Mustermann")
+    c["tags"] = ["agent:TRANSACTION", "agent:Max Mustermann"]
+    c["messages"][1].update(agent="CARD", subtopic="card_lock")
+    p = tmp_path / "c.jsonl"
+    p.write_text(json.dumps(c) + "\n", encoding="utf-8")
+    labels = tmp_path / "labels.txt"
+    labels.write_text("# Babo agents and actions\nTRANSACTION\nTRANSACTION_RECALL_EMB\nagent:TRANSACTION\n\n",
+                      encoding="utf-8")
+    cfg = ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(labels)})
+    assert cfg.known_labels == {"TRANSACTION", "TRANSACTION_RECALL_EMB", "agent:TRANSACTION"}
+    svc = service(JsonlSource(p), known_labels=cfg.known_labels)
+    head = svc.list(ALICE)["data"][0]
+    assert head["tags"] == ["agent:TRANSACTION"]  # unlisted look-alike still goes through detection
+    msgs = svc.get(ALICE, head["id"])["messages"]
+    assert (msgs[0]["agent"], msgs[0]["action"]) == ("TRANSACTION", "TRANSACTION_RECALL_EMB")
+    assert "subtopic" not in msgs[0]  # a label with a name is dropped, the message itself is still protected
+    assert (msgs[1]["agent"], msgs[1]["subtopic"]) == ("CARD", "card_lock") and "action" not in msgs[1]
+    assert not any(k in msgs[2] for k in ("agent", "action", "subtopic"))
+    assert not any(s in dump(msgs) for s in SECRETS)
+
+
+def test_label_allow_list_rejects_bad_files(tmp_path):
+    with pytest.raises(ConversationError, match="readable"):
+        ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(tmp_path / "missing.txt")})
+    bad = tmp_path / "bad.txt"
+    bad.write_text("agent:[A-Z_]+\n", encoding="utf-8")
+    with pytest.raises(ConversationError, match="line 1"):
+        ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(bad)})
+
+
+def test_source_check_counts_dropped_labels_without_values(tmp_path, monkeypatch, capsys):
+    from cato.cli import _source_check
+
+    c = conversation(1, tags=["agent:TRANSACTION", "Max Mustermann"])
+    c["messages"][1]["agent"] = "TRANSACTION"
+    p = tmp_path / "c.jsonl"
+    p.write_text(json.dumps(c) + "\n", encoding="utf-8")
+    labels = tmp_path / "labels.txt"
+    labels.write_text("agent:TRANSACTION\nTRANSACTION\n", encoding="utf-8")
+    monkeypatch.setenv("CATO_SOURCE", "jsonl")
+    monkeypatch.setenv("CATO_SOURCE_PATH", str(p))
+    monkeypatch.setenv("CATO_CONVERSATIONS_LABELS", str(labels))
+    assert _source_check(protect=True) == 0
+    out = capsys.readouterr().out
+    assert json.loads(out)["labels"] == {"checked": 3, "dropped": 1, "allow_listed": 2}
+    assert "Mustermann" not in out

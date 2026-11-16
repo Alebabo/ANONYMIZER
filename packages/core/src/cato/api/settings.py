@@ -51,7 +51,7 @@ class Settings:
     CATO_GATEWAY_RESTORE "0" to return placeholders instead of restored values
     CATO_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
     CATO_SOURCE / CATO_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
-    CATO_CONVERSATIONS_*                policy, quota, k, database for conversation access
+    CATO_CONVERSATIONS_*                policy, quota, k, database, label allow-list for conversation access
     CATO_PROMPTS / CATO_PROMPTS_*       prompt store (local | langfuse), see docs/prompts.md
     CATO_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a Cato API key)
     """
