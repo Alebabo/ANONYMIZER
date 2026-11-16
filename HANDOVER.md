@@ -558,3 +558,77 @@ Werkzeuge, die keine Inhalte ausgeben:
 - Ob der Vertrag mit Anthropic die Übermittlung pseudonymisierter Daten abdeckt.
 
 Cato ist eine technische Schutzmaßnahme, keine Rechtsgrundlage und keine Zertifizierung.
+
+---
+
+## 9. MCP-Proxy testen (andere MCP-Server hinter Cato)
+
+Referenz: [docs/proxy.md](docs/proxy.md). Der Proxy setzt Cato vor fremde MCP-Server (Datenbank, Tickets usw.). Claude sieht deren Tools mit Präfix (`demo__get_customers`), jede Antwort wird vorher gefiltert, jeder Aufruf erscheint im Dashboard unter **MCP Proxy** und **Traces**.
+
+### 9.1 Mit der Demo-Datenbank (synthetische Daten, ca. 10 Minuten)
+
+```bash
+cd Cato
+pip install -e packages/core
+python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
+
+# Prüfen: Upstream verbunden, welche Tools sichtbar sind (delete_customer muss fehlen)
+cato-proxy --config examples/proxy/cato-proxy.yaml --check
+```
+
+**Variante A, über die API (empfohlen, Dashboard live):**
+
+```bash
+cd packages/core
+CATO_API_KEYS=cato_demo_key_change_me_0123456789 \
+CATO_BOOTSTRAP_ADMIN_EMAIL=admin@example.com CATO_BOOTSTRAP_ADMIN_PASSWORD=bitte-aendern-123 \
+CATO_PROXY_CONFIG=../../examples/proxy/cato-proxy.yaml cato-api
+
+claude mcp add --transport http cato-proxy http://127.0.0.1:8080/proxy/mcp \
+  --header "Authorization: Bearer cato_demo_key_change_me_0123456789"
+
+# Dashboard in einem zweiten Terminal (Repo-Wurzel)
+npm install && CATO_API_URL=http://127.0.0.1:8080 npm run dev   # http://localhost:3000, Login mit dem Admin oben
+```
+
+**Variante B, stdio (ohne API-Server):**
+
+```bash
+claude mcp add cato-proxy -- cato-proxy --config "$PWD/examples/proxy/cato-proxy.yaml"
+```
+
+Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config eingestellt). Das Dashboard zeigt sie, wenn die API mit derselben Datei läuft (Standard, wenn `cato-api` in `packages/core` gestartet wird).
+
+**In Claude Code ausprobieren:**
+
+- „Zeig mir alle Kunden aus der Demo-Datenbank.“ Erwartet: `PERSON_001`, `EMAIL_001`, `[REDACTED]` für IBANs, `[WITHHELD]` für die Notiz mit Gesundheitsdaten.
+- „Welche Tickets sind offen, und welcher Kunde gehört dazu?“ Erwartet: konsistente Platzhalter, die IDs bleiben lesbar.
+- „Lösch Kunde 1.“ Erwartet: Tool existiert nicht.
+
+**Im Dashboard prüfen:** `/proxy` zeigt Aufrufe pro Tool und in welchen Feldern was erkannt wurde. `/traces` mit Filter „MCP proxy“ zeigt jeden Aufruf einzeln.
+
+### 9.2 Gegen ein eigenes System
+
+1. Nur gegen **sbx/develop** oder eine Testkopie, nie direkt gegen Prod, solange Abschnitt 2 nicht erledigt ist.
+2. Eigene Config anlegen, z. B. für eine Postgres-Replica mit einem lesenden Benutzer:
+
+   ```yaml
+   policy: support-default
+   upstreams:
+     db:
+       command: ["postgres-mcp", "--access-mode=restricted"]
+       env: { DATABASE_URI: "${REPLICA_URI}" }
+       tools: { allow: ["execute_sql", "list_schemas", "list_objects", "get_object_details"] }
+       field_hints: { name: person }   # nur wenn "name" dort eine Person ist
+   ```
+
+3. Erst `cato-proxy --config … --check`, dann anbinden.
+4. **Modus `observe` nur mit Test- oder synthetischen Daten**: Claude sieht dann die Originaldaten, Cato protokolliert nur, was es geschützt hätte. Sinnvoll, um vor dem Umschalten auf `enforce` zu sehen, welche Felder betroffen sind.
+5. Im Dashboard unter `/proxy` die Spalten mit personenbezogenen Daten prüfen. Fehlt ein Feld (z. B. `kunde_bezeichnung`), in `field_hints` ergänzen.
+
+### 9.3 Bekannte Grenzen
+
+- Freies SQL kann über Aggregation oder `LIKE` Informationen herauslocken. Lesender Benutzer, Replica, Tool-Allow-List.
+- Platzhalter in Abfragen (`WHERE name = 'PERSON_001'`) funktionieren nicht. Die Datenbank kennt nur echte Werte.
+- Unterschiedliche Schreibweisen (`+49 170 …` und `0170 …`) bekommen unterschiedliche Platzhalter.
+- Hat Claude zusätzlich einen direkten MCP-Zugang zum selben System, umgeht es Cato.

@@ -26,6 +26,7 @@ breaks (covered by tests/test_api.py::test_endpoints_require_key).
 
 
 import logging
+import os
 import re
 from contextlib import asynccontextmanager
 import threading
@@ -178,11 +179,23 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        if "server" in mcp_holder:
-            async with mcp_holder["server"].session_manager.run():
+        import anyio
+        from contextlib import AsyncExitStack
+
+        async with AsyncExitStack() as stack:
+            for key in ("server", "proxy_server"):
+                if key in mcp_holder:
+                    await stack.enter_async_context(mcp_holder[key].session_manager.run())
+            proxy = mcp_holder.get("proxy")
+            if proxy is None:
                 yield
-        else:
-            yield
+                return
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(proxy.run)
+                await proxy.wait_ready(10)
+                yield
+                proxy.stop()
+                tg.cancel_scope.cancel()
 
     app = FastAPI(
         lifespan=lifespan,
@@ -726,6 +739,29 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
         mcp_holder["server"] = server
         app.router.routes.append(Route("/mcp", endpoint=endpoint))
+
+    # -- MCP proxy (other MCP servers behind Cato) -----------------------------------------------
+    if settings.env.get("CATO_PROXY_CONFIG"):
+        from starlette.routing import Route
+
+        from cato.proxy import CatoProxy, ProxyConfig, http_proxy
+
+        proxy = CatoProxy(ProxyConfig.load(settings.env["CATO_PROXY_CONFIG"], {**os.environ, **settings.env}),
+                          detector=state.detector, traces=state.traces, audit=state.audit,
+                          vault=state.vault)
+        hosts = [h.strip() for h in settings.env.get("CATO_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        proxy_server, proxy_endpoint = http_proxy(proxy, lambda token: resolve_token(token), hosts)
+        mcp_holder["proxy"], mcp_holder["proxy_server"] = proxy, proxy_server
+        app.router.routes.append(Route("/proxy/mcp", endpoint=proxy_endpoint))
+
+    @app.get("/v1/proxy", tags=["mcp"])
+    def proxy_status(_: User) -> dict:
+        """Upstreams of the MCP proxy: connection, mode, policy, tool counts. 404 if not configured."""
+        if "proxy" not in mcp_holder:
+            raise HTTPException(status_code=404, detail="MCP proxy is not configured (CATO_PROXY_CONFIG)")
+        p = mcp_holder["proxy"]
+        return {"path": "/proxy/mcp", "destination": p.config.destination, "upstreams": p.status(),
+                "tools": [t.name for t in p.list_tools()]}
 
     # -- gateway status --------------------------------------------------------------
     @app.get("/v1/gateway", tags=["gateway"])

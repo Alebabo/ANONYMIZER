@@ -1,7 +1,7 @@
 // Illustrative example data in the shape of the Cato API. No real content.
 import type {
   ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Me, Metrics, PolicySummary,
-  PromptHistoryItem, PromptListItem, PromptVersion, SourcesInfo, Trace, User,
+  PromptHistoryItem, PromptListItem, PromptVersion, ProxyStatus, SourcesInfo, Trace, User,
 } from "@/lib/cato-api";
 
 const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
@@ -33,6 +33,39 @@ export const exampleMetrics: Metrics = {
 
 const base = Date.now() / 1000;
 export const exampleTraces: Trace[] = [
+  {
+    id: "req_5d1a7c3e90b2", created_at: base - 60, route: "/mcp/proxy", outcome: "local_only", allowed: false,
+    risk: "critical", needs_review: false, policy: "support-default@v1", policy_hash: "sha256:4be1…",
+    destination: "external", provider: "mcp", model: "demo", language: "de", latency_ms: 48.2, status: 200,
+    error: null, entity_counts: { person: 7, email: 3, phone: 3, iban: 3, health_data: 1, address: 1 },
+    risk_counts: { critical: 4, sensitive: 14 },
+    actions: { "person:pseudonymize": 7, "email:pseudonymize": 3, "phone:pseudonymize": 3, "iban:redact": 3,
+      "health_data:local_only": 1, "address:pseudonymize": 1 }, transformations: 17, signals: [], warnings: [],
+    upstream: "demo", tool: "get_customers", mode: "enforce",
+    fields: { "$.vorname": { person: 3 }, "$.nachname": { person: 3 }, "$.email": { email: 3 },
+      "$.telefon": { phone: 3 }, "$.iban": { iban: 3 }, "$.notiz": { person: 1, health_data: 1, address: 1 } },
+    steps: [
+      { name: "Tool call", detail: "demo · get_customers", status: "ok" },
+      { name: "Upstream response", detail: "3 content block(s) in 12 ms", status: "ok" },
+      { name: "Privacy detection", detail: "20 values analysed · 19 entities in 6 field(s) · 3 by field name", status: "ok" },
+      { name: "Policy evaluation", detail: "support-default@v1 → local_only · 1 value(s) withheld", status: "blocked" },
+      { name: "Anonymization", detail: "17 transformations · 0 non-text block(s) withheld", status: "ok" },
+    ],
+  },
+  {
+    id: "req_9e4f02b7c6d1", created_at: base - 90, route: "/mcp/proxy", outcome: "allow", allowed: true,
+    risk: "critical", needs_review: false, policy: "support-default@v1", policy_hash: "sha256:4be1…",
+    destination: "external", provider: "mcp", model: "demo", language: "de", latency_ms: 21.6, status: 200,
+    error: null, entity_counts: { person: 3, phone: 1, iban: 1 }, risk_counts: { critical: 1, sensitive: 4 },
+    actions: { "person:pseudonymize": 3, "phone:pseudonymize": 1, "iban:redact": 1 }, transformations: 5,
+    signals: [], warnings: [], upstream: "demo", tool: "get_tickets", mode: "observe",
+    fields: { "$.text": { person: 3, phone: 1, iban: 1 } },
+    steps: [
+      { name: "Tool call", detail: "demo · get_tickets", status: "ok" },
+      { name: "Privacy detection", detail: "6 values analysed · 5 entities in 1 field(s) · 1 known value(s) in free text", status: "ok" },
+      { name: "Observe mode", detail: "original result returned · 2 value(s) would have been changed", status: "warning" },
+    ],
+  },
   {
     id: "req_8f29a1c0d2e4", created_at: base - 120, route: "/v1/chat/completions", outcome: "allow", allowed: true,
     risk: "critical", needs_review: false, policy: "legal-default@v1", policy_hash: "sha256:c9218375…",
@@ -230,3 +263,14 @@ export const examplePromptHistory: PromptHistoryItem[] = [
   { version: 11, labels: [], note: "Initial import", created_by: "admin@kanzlei.example",
     created_at: base - 20 * day, hash: "sha256:19be…", type: "text" },
 ];
+
+export const exampleProxy: ProxyStatus = {
+  path: "/proxy/mcp", destination: "external",
+  upstreams: [
+    { name: "demo", transport: "stdio", mode: "enforce", policy: "support-default", connected: true, error: null,
+      tools_upstream: 5, tools_exposed: 4 },
+    { name: "jira", transport: "http", mode: "observe", policy: "support-default", connected: false,
+      error: "ConnectError", tools_upstream: 0, tools_exposed: 0 },
+  ],
+  tools: ["demo__list_tables", "demo__get_customers", "demo__get_tickets", "demo__export_customer"],
+};

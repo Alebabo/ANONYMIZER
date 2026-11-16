@@ -19,7 +19,7 @@ def _split(value: str | None) -> list[str]:
 
 # Settings handed to the gateway, sources, prompt store and MCP; everything else stays out of ``env``.
 _PASS_THROUGH = ("CATO_UPSTREAM", "CATO_LOCAL", "CATO_GATEWAY", "CATO_SOURCE", "CATO_CONVERSATIONS",
-                 "CATO_PROMPTS", "CATO_MCP")
+                 "CATO_PROMPTS", "CATO_MCP", "CATO_PROXY")
 
 
 class SettingsError(RuntimeError):

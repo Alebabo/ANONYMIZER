@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, BarChart3, FileClock, FileText, Gauge, KeyRound, LogOut, Menu, MessagesSquare, X, Plug, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
+import { Activity, BarChart3, FileClock, FileText, Gauge, KeyRound, LogOut, Menu, MessagesSquare, X, Plug, Network, ScrollText, Settings, ShieldCheck, Waypoints } from "lucide-react";
 import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/logo";
@@ -12,6 +12,7 @@ const workspace = [
   { href: "/gateway", label: "Gateway", icon: Waypoints },
   { href: "/privacy", label: "Privacy", icon: ShieldCheck },
   { href: "/traces", label: "Traces", icon: Activity },
+  { href: "/proxy", label: "MCP Proxy", icon: Network },
   { href: "/conversations", label: "Conversations", icon: MessagesSquare },
   { href: "/metrics", label: "Metrics", icon: BarChart3 },
 ];

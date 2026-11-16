@@ -23,10 +23,11 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 
 | Path | Content |
 |---|---|
-| `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), Dockerfile |
+| `packages/core/` | Python package `cato-core`: engine, CLI (`cato`), REST API (`cato-api`), MCP server (`cato-mcp`), MCP proxy (`cato-proxy`), Dockerfile |
 | `sdk/python/` | Python client `cato-sdk` (`from cato_sdk import Cato`) |
 | `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready) with login: overview, gateway, privacy, traces, conversations, metrics, policies, prompts, API keys, integrations, settings, members, audit log |
 | `examples/support/` | Synthetic support chats and example detection patterns |
+| `examples/proxy/` | Demo upstream (synthetic customer DB as MCP server) and proxy config |
 | `docs/` | Documentation |
 
 ## Documentation
@@ -39,6 +40,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
 - [Accounts & audit log](docs/accounts.md): login, roles, organization scope, API keys, hash-chained audit log
+- [MCP proxy](docs/proxy.md): other MCP servers (databases, tickets, ...) behind Cato, filtered results, traces per tool and field
 - [MCP server](docs/mcp.md): `cato-mcp` (stdio) and `/mcp` (HTTP) for Claude, Cursor & other agents, with protected document access
 - [Conversations](docs/conversations.md): protected access to customer chats (JSONL, HTTP contract, Langfuse) with quota, k-anonymity and audit
 - [Prompts](docs/prompts.md): versions, labels, drafts from agents, promotion by people

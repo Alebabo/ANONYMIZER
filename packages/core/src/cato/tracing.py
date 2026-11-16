@@ -55,6 +55,12 @@ class Trace(BaseModel):
     signals: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     steps: list[TraceStep] = Field(default_factory=list)
+    # MCP proxy: which upstream tool produced the data, and where in the result entities were found
+    # (JSON paths with array indices collapsed, e.g. "$.rows[].email" -> {"email": 12}). No values.
+    upstream: str | None = None
+    tool: str | None = None
+    mode: str | None = None  # enforce | observe
+    fields: dict[str, dict[str, int]] = Field(default_factory=dict)
 
 
 def trace_from_protect(route: str, result: Any, latency_ms: float | None = None, **extra: Any) -> Trace:

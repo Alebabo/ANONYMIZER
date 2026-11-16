@@ -29,6 +29,7 @@ dev = ["pytest>=8", "httpx>=0.27"]
 cato = "cato.cli:main"
 cato-api = "cato.api:run"
 cato-mcp = "cato.mcp:main"
+cato-proxy = "cato.proxy:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -37,6 +37,11 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
           <Card><CardHeader><CardDescription>Summary</CardDescription></CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
+                {t.upstream && <>
+                  <dt className="text-muted-foreground">Upstream</dt><dd className="font-mono">{t.upstream}</dd>
+                  <dt className="text-muted-foreground">Tool</dt><dd className="font-mono break-all">{t.tool}</dd>
+                  <dt className="text-muted-foreground">Mode</dt><dd><Pill value={t.mode} /></dd>
+                </>}
                 <dt className="text-muted-foreground">Risk</dt><dd><Pill value={t.risk} />{t.needs_review && " · needs review"}</dd>
                 <dt className="text-muted-foreground">Policy</dt><dd className="break-all">{t.policy ?? "–"}</dd>
                 <dt className="text-muted-foreground">Hash</dt><dd className="font-mono break-all">{t.policy_hash?.slice(0, 23) ?? "–"}</dd>
@@ -58,6 +63,18 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
               </ul>
               {t.warnings.length > 0 && <p className="text-dark-yellow mt-3 text-xs">{t.warnings.join(" · ")}</p>}
             </CardContent></Card>
+          {t.fields && Object.keys(t.fields).length > 0 && (
+            <Card><CardHeader><CardDescription>Fields with personal data</CardDescription></CardHeader>
+              <CardContent>
+                <ul className="space-y-1.5 text-xs">
+                  {Object.entries(t.fields).map(([path, counts]) => (
+                    <li key={path}>
+                      <div className="font-mono break-all">{path}</div>
+                      <div className="text-muted-foreground">{Object.entries(counts).map(([k, n]) => `${k} ${n}`).join(" · ")}</div>
+                    </li>))}
+                </ul>
+              </CardContent></Card>
+          )}
         </div>
       </div>
     </>

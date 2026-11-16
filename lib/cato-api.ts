@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import {
   exampleApiKeys, exampleAudit, exampleConversation, exampleConversations, exampleConversationStats, exampleGateway,
   exampleMe, exampleMembers, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
-  exampleSources, exampleTraces,
+  exampleProxy, exampleSources, exampleTraces,
 } from "@/lib/mock";
 
 /**
@@ -25,7 +25,16 @@ export type Trace = {
   latency_ms: number | null; status: number; error: string | null; entity_counts: Record<string, number>;
   risk_counts: Record<string, number>; actions: Record<string, number>; transformations: number;
   signals: string[]; warnings: string[]; steps: { name: string; detail: string; status: string }[];
+  /** MCP proxy traces only: upstream system, tool, mode and entity types per JSON field path. */
+  upstream?: string | null; tool?: string | null; mode?: string | null;
+  fields?: Record<string, Record<string, number>>;
 };
+
+export type ProxyUpstream = {
+  name: string; transport: "stdio" | "http"; mode: "enforce" | "observe"; policy: string; connected: boolean;
+  error: string | null; tools_upstream: number; tools_exposed: number;
+};
+export type ProxyStatus = { path: string; destination: string; upstreams: ProxyUpstream[]; tools: string[] };
 
 export type Metrics = {
   window_hours: number; requests: number; requests_with_detections: number; detection_rate: number;
@@ -159,7 +168,9 @@ async function read<T>(path: string, example: () => T): Promise<{ data: T; sourc
 
 export const getMe = () => read<Me>("/v1/auth/me", () => exampleMe);
 export const getMetrics = (hours = 24) => read<Metrics>(`/v1/metrics?hours=${hours}`, () => exampleMetrics);
-export const getTraces = (limit = 50) => read<Trace[]>(`/v1/traces?limit=${limit}`, () => exampleTraces);
+export const getTraces = (limit = 50, route?: string) =>
+  read<Trace[]>(`/v1/traces?limit=${limit}${route ? `&route=${encodeURIComponent(route)}` : ""}`,
+    () => (route ? exampleTraces.filter(t => t.route === route) : exampleTraces));
 export const getTrace = async (id: string) => {
   if (isDemo()) return read<Trace | null>("", () => exampleTraces.find(t => t.id === id) ?? null);
   try {
@@ -187,6 +198,8 @@ async function optional<T>(path: string, example: () => T): Promise<{ data: T | 
     throw e;
   }
 }
+
+export const getProxy = () => optional<ProxyStatus>("/v1/proxy", () => exampleProxy);
 
 export const getConversations = (cursor?: string) =>
   optional<ConversationPage>(`/v1/conversations?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
