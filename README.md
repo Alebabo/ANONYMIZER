@@ -1,6 +1,6 @@
-# Cato — Privacy Infrastructure for Legal AI
+# Cato — the open-source privacy layer for AI
 
-Cato detects, classifies, anonymizes and controls sensitive legal information before AI models or agents process it. Cato is an infrastructure component that legal-tech products integrate. It is not a legal-tech application itself.
+Cato detects, classifies, anonymizes and controls sensitive data before AI models or agents process it: "Langfuse for privacy and data protection". Self-hosted, auditable, deterministic. First use case: protected access to production data over MCP. Verticals: legal work, recruiting. See [positioning](docs/positioning.md).
 
 **Status:** Phase 1 (functional core) is implemented and tested on synthetic data. It has not been validated on real legal documents yet, and it is not a compliance certification.
 
@@ -31,6 +31,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $CATO_API_KEY" -H 'C
 
 ## Documentation
 
+- [Positioning](docs/positioning.md): market, use cases, competitors, risks
 - [API & self-hosting](docs/API.md)
 - [Gateway](docs/gateway.md): OpenAI-compatible, local routing, traces & metrics
 - [Detection](docs/detection.md): DE/EN, rules + spaCy NER, context signals, roles
