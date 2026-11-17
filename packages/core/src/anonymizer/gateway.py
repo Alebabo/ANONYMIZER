@@ -148,7 +148,8 @@ class Gateway:
             work, slots, results, vault = self._protect_all(body, destination)
             outcome = max((r.decision.outcome.value for r in results), key=_ORDER.index, default="allow")
 
-        parts = [trace_from_protect("/v1/chat/completions", r) for r in results]
+        parts = [trace_from_protect("/v1/chat/completions", r, original=text, label=f"message {i + 1}")
+                 for i, ((_, _, text), r) in enumerate(zip(slots, results))]
         model = upstream.model or body.get("model")
         trace = merge_traces("/v1/chat/completions", parts, provider=upstream.provider, model=model)
         trace.destination = destination

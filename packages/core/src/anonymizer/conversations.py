@@ -339,7 +339,7 @@ class ConversationService:
                     withheld += 1
                 else:
                     r = pipeline.protect(m.content, "external", namespace=namespace)
-                    parts.append(trace_from_protect("/v1/conversations", r))
+                    parts.append(trace_from_protect("/v1/conversations", r, original=m.content, label=m.role))
                     if r.allowed:
                         item["content"] = r.text
                     else:
@@ -349,6 +349,7 @@ class ConversationService:
                 out.append(item)
 
         trace = self._trace(parts, len(msgs), withheld, round((time.perf_counter() - t0) * 1000, 1))
+        trace.resource = conv_id
         if self.traces is not None:
             self.traces.add(trace, principal.org_id)
         if self.audit is not None:

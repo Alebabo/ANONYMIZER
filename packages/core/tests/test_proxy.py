@@ -65,7 +65,8 @@ def test_json_rows_are_protected_field_by_field(pipeline):
     assert report.withheld == 1 and report.hinted >= 1
     trace = report.trace()
     assert trace.fields["$[].email"] == {"email": 2} and "health_data" in trace.entity_counts
-    assert not leaks(trace.model_dump_json())             # traces carry types and paths only
+    stored = TraceStore().add(trace)                      # content traces are off by default
+    assert not leaks(stored.model_dump_json())            # stored traces carry types and paths only
 
 
 def test_same_value_same_placeholder_across_calls(pipeline):

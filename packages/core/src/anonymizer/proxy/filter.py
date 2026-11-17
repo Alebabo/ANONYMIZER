@@ -268,7 +268,7 @@ class ResultFilter:
             return text
         result: ProtectResult = self.pipeline.protect_scan(text, scan, self.destination, self.namespace,
                                                            dry_run=self.observe)
-        report.parts.append(trace_from_protect("/mcp/proxy", result))
+        report.parts.append(trace_from_protect("/mcp/proxy", result, original=text, label=path))
         report.fields[path].update(d.entity_type for d in scan.detections)
         if scan.detections:
             report.changed += 1

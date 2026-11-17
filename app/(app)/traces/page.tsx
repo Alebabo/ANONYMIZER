@@ -32,6 +32,7 @@ export default async function Traces({ searchParams }: { searchParams: Promise<{
               <TableCell className="font-mono"><Link className="text-link hover:text-link-hover" href={`/traces/${t.id}`}>{t.id}</Link></TableCell>
               <TableCell>{time(t.created_at)}</TableCell>
               <TableCell>{t.upstream ? <span className="font-mono">{t.upstream}__{t.tool}</span> : t.route}
+                {t.resource && <span className="text-muted-foreground font-mono"> · {t.resource}</span>}
                 {t.mode === "observe" && <> <Pill value="observe" /></>}</TableCell>
               <TableCell><Pill value={t.risk} /></TableCell>
               <TableCell><Pill value={t.outcome} /></TableCell>

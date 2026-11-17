@@ -28,6 +28,15 @@ export type Trace = {
   /** MCP proxy traces only: upstream system, tool, mode and entity types per JSON field path. */
   upstream?: string | null; tool?: string | null; mode?: string | null;
   fields?: Record<string, Record<string, number>>;
+  /** What was read, e.g. a conversation id. */
+  resource?: string | null;
+  /** Only with ANONYMIZER_TRACE_CONTENT=1 and for admins: protected text and original values. */
+  content?: TraceContent[];
+};
+
+export type TraceContent = {
+  label: string | null; output: string | null; withheld: boolean;
+  replacements: { type: string; original: string; replacement: string | null; method: string | null }[];
 };
 
 export type ProxyUpstream = {

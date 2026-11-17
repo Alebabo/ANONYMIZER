@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Pill, SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getTrace } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +29,40 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                   <div className="text-muted-foreground text-xs">{s.detail}</div>
                 </li>))}
             </ol>
-            <p className="text-muted-foreground border-t pt-3 text-xs">
-              Anonymizer does not store request content, detected values or placeholders. Original and anonymized
-              text are only visible to the calling application (privacy by design).
-            </p>
+            {!t.content?.length && (
+              <p className="text-muted-foreground border-t pt-3 text-xs">
+                No content stored for this trace. Content traces are off by default; with
+                ANONYMIZER_TRACE_CONTENT=1 admins see what went through and which values were replaced.
+              </p>)}
           </CardContent></Card>
+        {!!t.content?.length && (
+          <Card className="lg:col-span-3"><CardHeader><CardDescription>What went through</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-dark-yellow text-xs">
+                Content trace: shows original values in clear text. Use with test data only (ANONYMIZER_TRACE_CONTENT=1).
+              </p>
+              {t.content.map((c, i) => (
+                <div key={i} className="space-y-2 border-t pt-3 first:border-t-0 first:pt-0">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-mono break-all">{c.label ?? `#${i + 1}`}</span>
+                    {c.withheld && <Pill value="withheld" />}
+                  </div>
+                  <pre className="bg-muted max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap break-words">
+                    {c.output ?? "– not sent (withheld by policy) –"}</pre>
+                  {c.replacements.length > 0 && (
+                    <TableScroll minWidth={420}><Table><TableHeader><TableRow>
+                      <TableHead>Type</TableHead><TableHead>Original</TableHead><TableHead>Sent as</TableHead><TableHead>Method</TableHead>
+                    </TableRow></TableHeader>
+                      <TableBody>{c.replacements.map((r, j) => (
+                        <TableRow key={j}>
+                          <TableCell>{r.type}</TableCell>
+                          <TableCell className="font-mono break-all">{r.original}</TableCell>
+                          <TableCell className="font-mono break-all">{r.replacement ?? "withheld"}</TableCell>
+                          <TableCell>{r.method ?? "–"}</TableCell>
+                        </TableRow>))}
+                      </TableBody></Table></TableScroll>)}
+                </div>))}
+            </CardContent></Card>)}
         <div className="space-y-4">
           <Card><CardHeader><CardDescription>Summary</CardDescription></CardHeader>
             <CardContent>
@@ -41,6 +71,9 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                   <dt className="text-muted-foreground">Upstream</dt><dd className="font-mono">{t.upstream}</dd>
                   <dt className="text-muted-foreground">Tool</dt><dd className="font-mono break-all">{t.tool}</dd>
                   <dt className="text-muted-foreground">Mode</dt><dd><Pill value={t.mode} /></dd>
+                </>}
+                {t.resource && <>
+                  <dt className="text-muted-foreground">Resource</dt><dd className="font-mono break-all">{t.resource}</dd>
                 </>}
                 <dt className="text-muted-foreground">Risk</dt><dd><Pill value={t.risk} />{t.needs_review && " · needs review"}</dd>
                 <dt className="text-muted-foreground">Policy</dt><dd className="break-all">{t.policy ?? "–"}</dd>

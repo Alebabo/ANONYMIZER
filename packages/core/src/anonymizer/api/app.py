@@ -80,7 +80,8 @@ class State:
         self.settings = settings
         self.accounts = AccountStore(settings.accounts_db, settings.session_hours)
         self.audit = AuditLog(settings.audit_db)
-        self.traces = TraceStore(settings.trace_db, settings.trace_retention_days, retention_for=self._retention)
+        self.traces = TraceStore(settings.trace_db, settings.trace_retention_days, retention_for=self._retention,
+                                 store_content=settings.trace_content)
         if settings.bootstrap_admin and self.accounts.count_users() == 0:
             email, password = settings.bootstrap_admin
             user = self.accounts.create_user(DEFAULT_ORG, email, email.split("@")[0], password, "admin")
@@ -385,8 +386,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         result = pipeline.protect(req.text, req.destination, namespace=scoped(p, req.namespace),
                                   language=req.language, dry_run=req.dry_run)
         if not req.dry_run:
-            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1)),
-                             p.org_id)
+            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1),
+                                                original=req.text), p.org_id)
         text = None if req.dry_run else result.text
         return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text,
                                risk=result.classification.risk, decision=result.decision,
@@ -469,14 +470,18 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
     def list_traces(p: User, limit: int = 50, outcome: str | None = None, route: str | None = None,
                     since: float | None = None) -> list[Trace]:
-        return state.traces.list(limit, outcome, route, since, org_id=p.org_id)
+        return [_visible(t, p) for t in state.traces.list(limit, outcome, route, since, org_id=p.org_id)]
 
     @app.get("/v1/traces/{trace_id}", response_model=Trace, tags=["observability"])
     def get_trace(trace_id: str, p: User) -> Trace:
         trace = state.traces.get(trace_id, p.org_id)
         if trace is None:
             raise HTTPException(status_code=404, detail="trace not found")
-        return trace
+        return _visible(trace, p)
+
+    def _visible(trace: Trace, p: Principal) -> Trace:
+        """Content traces hold original values: admins only."""
+        return trace if p.is_admin or not trace.content else trace.model_copy(update={"content": []})
 
     @app.get("/v1/metrics", tags=["observability"])
     def metrics(p: User, hours: int = 24) -> dict:

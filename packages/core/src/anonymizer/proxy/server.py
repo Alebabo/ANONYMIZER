@@ -419,7 +419,8 @@ def proxy_from_config(path: str | Path, env: dict[str, str] | None = None) -> An
              if env.get("ANONYMIZER_VAULT_KEY") else None)
     if not trace_db:
         log.warning("no trace_db / ANONYMIZER_TRACE_DB configured: proxy calls will not appear in the dashboard")
-    return AnonymizerProxy(config, traces=TraceStore(trace_db) if trace_db else None,
+    content = env.get("ANONYMIZER_TRACE_CONTENT", "0") == "1"
+    return AnonymizerProxy(config, traces=TraceStore(trace_db, store_content=content) if trace_db else None,
                      audit=AuditLog(audit_db) if audit_db else None, vault=vault)
 
 

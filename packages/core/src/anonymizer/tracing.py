@@ -1,9 +1,14 @@
-"""Privacy traces: one record per processed request, metadata only.
+"""Privacy traces: one record per processed request.
 
 A trace contains entity types and counts, risk, policy name/version/hash,
-outcome, actions, provider, model, latency and errors. It never contains
-the submitted text, detected values, placeholders or vault data, so the
-trace store itself does not become a privacy risk.
+outcome, actions, provider, model, latency and errors. By default it never
+contains the submitted text, detected values, placeholders or vault data,
+so the trace store itself does not become a privacy risk.
+
+Opt-in content traces (``ANONYMIZER_TRACE_CONTENT=1``, test data only):
+the store then also keeps what left Anonymizer (the protected text) and
+each replacement with its original value. The trace store then holds
+personal data in clear text; only admins can read it.
 
 Storage: SQLite (stdlib). Retention is enforced on write
 (``retention_days``). PostgreSQL/ClickHouse can replace it later behind
@@ -29,6 +34,21 @@ class TraceStep(BaseModel):
     name: str
     detail: str
     status: str = "ok"  # ok | warning | blocked | error
+
+
+class Replacement(BaseModel):
+    type: str
+    original: str
+    replacement: str | None  # None: value withheld together with its text
+    method: str | None = None
+
+
+class ContentItem(BaseModel):
+    """One protected text: where it came from, what was sent on and what was replaced."""
+    label: str | None = None       # e.g. message role or JSON path
+    output: str | None = None      # text as it left Anonymizer; None if withheld
+    withheld: bool = False
+    replacements: list[Replacement] = Field(default_factory=list)
 
 
 class Trace(BaseModel):
@@ -61,10 +81,28 @@ class Trace(BaseModel):
     tool: str | None = None
     mode: str | None = None  # enforce | observe
     fields: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # What was read (e.g. conversation id). Content: only kept when the store allows it (see module doc).
+    resource: str | None = None
+    content: list[ContentItem] = Field(default_factory=list)
 
 
-def trace_from_protect(route: str, result: Any, latency_ms: float | None = None, **extra: Any) -> Trace:
-    """Build a trace from a :class:`anonymizer.pipeline.ProtectResult`."""
+def content_item(result: Any, original: str, label: str | None = None) -> ContentItem:
+    """Output text and replacements (with original values) of one protected text."""
+    reps: list[Replacement] = []
+    if result.anonymization is not None:
+        reps = [Replacement(type=t.entity_type, original=original[t.start:t.end], replacement=t.replacement,
+                            method=t.method.value) for t in result.anonymization.transformations]
+    else:
+        reps = [Replacement(type=e.entity_type, original=original[e.start:e.end], replacement=None)
+                for e in result.classification.entities]
+    return ContentItem(label=label, output=result.text if result.allowed else None,
+                       withheld=not result.allowed, replacements=reps)
+
+
+def trace_from_protect(route: str, result: Any, latency_ms: float | None = None, *, original: str | None = None,
+                       label: str | None = None, **extra: Any) -> Trace:
+    """Build a trace from a :class:`anonymizer.pipeline.ProtectResult`. With ``original`` the trace also
+    carries the content item; :class:`TraceStore` drops it unless content traces are enabled."""
     c, d = result.classification, result.decision
     entity_counts = dict(Counter(e.entity_type for e in c.entities))
     risk_counts = {k.value: v for k, v in c.counts.items() if v}
@@ -87,7 +125,8 @@ def trace_from_protect(route: str, result: Any, latency_ms: float | None = None,
         route=route, outcome=d.outcome.value, allowed=result.allowed, risk=c.risk.value,
         needs_review=c.needs_review, policy=d.policy, policy_hash=d.policy_hash, destination=d.destination,
         language=c.language, latency_ms=latency_ms, entity_counts=entity_counts, risk_counts=risk_counts,
-        actions=actions, transformations=n_trans, signals=c.signals, warnings=c.warnings, steps=steps, **extra,
+        actions=actions, transformations=n_trans, signals=c.signals, warnings=c.warnings, steps=steps,
+        content=[content_item(result, original, label)] if original is not None else [], **extra,
     )
 
 
@@ -110,7 +149,7 @@ def merge_traces(route: str, parts: list[Trace], **extra: Any) -> Trace:
         entity_counts=add("entity_counts"), risk_counts=add("risk_counts"), actions=add("actions"),
         transformations=sum(p.transformations for p in parts),
         signals=sorted({s for p in parts for s in p.signals}), warnings=sorted({w for p in parts for w in p.warnings}),
-        **extra,
+        content=[c for p in parts for c in p.content], **extra,
     )
 
 
@@ -121,12 +160,13 @@ class TraceStore:
     """Traces are stored per organization (``org_id``); every read is scoped to one.
 
     ``retention_for`` maps an organization to its retention in days (falls back
-    to ``retention_days``).
+    to ``retention_days``). ``store_content`` keeps :attr:`Trace.content`; off by default.
     """
 
     def __init__(self, path: str | Path = ":memory:", retention_days: int = 30,
-                 retention_for: Callable[[str], int | None] | None = None) -> None:
+                 retention_for: Callable[[str], int | None] | None = None, store_content: bool = False) -> None:
         self.path = str(path)
+        self.store_content = store_content
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.retention_days = retention_days
@@ -145,6 +185,8 @@ class TraceStore:
         self._writes = 0
 
     def add(self, trace: Trace, org_id: str = DEFAULT_ORG) -> Trace:
+        if not self.store_content and trace.content:
+            trace = trace.model_copy(update={"content": []})
         with self._lock:
             self._db.execute(
                 "INSERT INTO traces (id, created_at, route, outcome, risk, provider, status, data, org_id) "

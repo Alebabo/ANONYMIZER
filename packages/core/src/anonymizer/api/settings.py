@@ -46,6 +46,8 @@ class Settings:
     ANONYMIZER_ENABLE_NER      "0" to disable spaCy NER (not recommended)
     ANONYMIZER_TRACE_DB        SQLite file for metadata-only traces (default data/traces.db)
     ANONYMIZER_TRACE_RETENTION_DAYS  default 30
+    ANONYMIZER_TRACE_CONTENT   "1" also stores protected text and original values per trace
+                               (clear-text personal data, admins only; test data only)
     ANONYMIZER_UPSTREAM_URL / _KEY / _PROVIDER            external OpenAI-compatible provider
     ANONYMIZER_LOCAL_UPSTREAM_URL / _KEY / ANONYMIZER_LOCAL_MODEL  optional local model for local_only content
     ANONYMIZER_GATEWAY_RESTORE "0" to return placeholders instead of restored values
@@ -67,6 +69,7 @@ class Settings:
     enable_ner: bool = True
     trace_db: str = "data/traces.db"
     trace_retention_days: int = 30
+    trace_content: bool = False
     accounts_db: str = "data/accounts.db"
     audit_db: str = "data/audit.db"
     session_hours: float = 12
@@ -98,6 +101,7 @@ class Settings:
             enable_ner=env.get("ANONYMIZER_ENABLE_NER", "1") != "0",
             trace_db=env.get("ANONYMIZER_TRACE_DB", "data/traces.db"),
             trace_retention_days=int(env.get("ANONYMIZER_TRACE_RETENTION_DAYS", "30")),
+            trace_content=env.get("ANONYMIZER_TRACE_CONTENT", "0") == "1",
             accounts_db=env.get("ANONYMIZER_ACCOUNTS_DB", "data/accounts.db"),
             audit_db=env.get("ANONYMIZER_AUDIT_DB", "data/audit.db"),
             session_hours=float(env.get("ANONYMIZER_SESSION_HOURS", "12")),

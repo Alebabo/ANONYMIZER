@@ -515,7 +515,8 @@ def tools_from_env(env: dict[str, str] | None = None) -> AnonymizerTools:
             source, lambda v: Pipeline(conv_policy, detector=detector, classifier=classifier, vault=v),
             ConversationStore(env.get("ANONYMIZER_CONVERSATIONS_DB", "data/conversations.db")),
             ConversationConfig.from_env(env), vault=vault,
-            traces=TraceStore(env["ANONYMIZER_TRACE_DB"]) if env.get("ANONYMIZER_TRACE_DB") else None, audit=audit)
+            traces=TraceStore(env["ANONYMIZER_TRACE_DB"], store_content=env.get("ANONYMIZER_TRACE_CONTENT", "0") == "1")
+            if env.get("ANONYMIZER_TRACE_DB") else None, audit=audit)
     try:
         backend = backend_from_env(env)
     except PromptError as exc:
