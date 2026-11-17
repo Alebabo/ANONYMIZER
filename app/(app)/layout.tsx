@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { getMe, isDemo } from "@/lib/cato-api";
+import { getMe, isDemo } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

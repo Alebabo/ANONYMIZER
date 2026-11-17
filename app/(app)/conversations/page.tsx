@@ -3,7 +3,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Notice, SourceBanner, Stat, fmt } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getConversationStats, getConversations, getQuota, getSources } from "@/lib/cato-api";
+import { getConversationStats, getConversations, getQuota, getSources } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export default async function Conversations({ searchParams }: { searchParams: Pr
         <PageHeader title="Conversations" description="Protected access to customer chat history" />
         <div className="space-y-4 p-4 md:p-6">
           <Notice>
-            No conversation source is configured. Set <code>CATO_SOURCE</code> (jsonl, http or langfuse) on the API,
+            No conversation source is configured. Set <code>ANONYMIZER_SOURCE</code> (jsonl, http or langfuse) on the API,
             see docs/conversations.md.
           </Notice>
         </div>
@@ -79,7 +79,7 @@ export default async function Conversations({ searchParams }: { searchParams: Pr
             )}
           </CardContent></Card>
         <p className="text-muted-foreground text-xs">
-          Source ids never leave Cato; the ids shown here are opaque. Tags or prompt names that contain detectable data are dropped.
+          Source ids never leave Anonymizer; the ids shown here are opaque. Tags or prompt names that contain detectable data are dropped.
           {sources.mcp_http ? " Agents use the same data through the MCP endpoint /mcp with their own API key and quota." : ""}
         </p>
       </div>

@@ -1,4 +1,4 @@
-# Cato REST API
+# Anonymizer REST API
 
 The Python API lives in `packages/core` (FastAPI). The full OpenAPI spec is at `/openapi.json`, with interactive docs at `/docs`.
 
@@ -6,7 +6,7 @@ The Python API lives in `packages/core` (FastAPI). The full OpenAPI spec is at `
 
 ```bash
 cp .env.example .env
-# Set CATO_BOOTSTRAP_ADMIN_EMAIL/_PASSWORD (first dashboard admin), optionally CATO_ADMIN_KEYS and CATO_VAULT_KEY
+# Set ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL/_PASSWORD (first dashboard admin), optionally ANONYMIZER_ADMIN_KEYS and ANONYMIZER_VAULT_KEY
 docker compose up -d --build
 curl -s localhost:8080/health
 ```
@@ -17,7 +17,7 @@ curl -s localhost:8080/health
   - Runs as a non-root user.
   - Read-only filesystem, no Linux capabilities.
   - Port only on `127.0.0.1`.
-  - Vault, policies, traces, accounts and the audit log live in the `cato-data` volume.
+  - Vault, policies, traces, accounts and the audit log live in the `anonymizer-data` volume.
 
 Without Docker:
 
@@ -25,15 +25,15 @@ Without Docker:
 cd packages/core
 pip install -e .
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
-CATO_API_KEYS=... cato-api          # binds to 127.0.0.1:8080
+ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 ```
 
 ## Authentication
 
 - **Header:** `Authorization: Bearer <key>` or `X-API-Key: <key>`. The same header carries dashboard session tokens.
 - **API keys** are created in the dashboard (API Keys) or set as environment variables. Every key belongs to one organization; see [accounts.md](accounts.md).
-- **User keys** (`CATO_API_KEYS` or role `user`): scan, classify, anonymize, protect, documents, gateway, read traces and policies.
-- **Admin keys** (`CATO_ADMIN_KEYS` or role `admin`): in addition `POST /v1/restore`, `POST /v1/policies` and account management. If no admin key exists, restore and policy writes are disabled.
+- **User keys** (`ANONYMIZER_API_KEYS` or role `user`): scan, classify, anonymize, protect, documents, gateway, read traces and policies.
+- **Admin keys** (`ANONYMIZER_ADMIN_KEYS` or role `admin`): in addition `POST /v1/restore`, `POST /v1/policies` and account management. If no admin key exists, restore and policy writes are disabled.
 - **Environment keys are optional.** Without any key the API starts but refuses every request. Keys need at least 24 characters, and admin keys must differ from API keys.
 
 ## Endpoints
@@ -61,7 +61,7 @@ CATO_API_KEYS=... cato-api          # binds to 127.0.0.1:8080
 | GET | `/v1/conversations`, `/v1/conversations/{id}`, `/v1/conversations/stats`, `/v1/conversations/quota` | API | Protected customer conversations, see [conversations.md](conversations.md) |
 | GET/POST | `/v1/prompts`, `/v1/prompts/{name}`, `.../history`, `.../diff` | API | Prompt versions and drafts, see [prompts.md](prompts.md) |
 | POST | `/v1/prompts/{name}/labels` | Admin | Promote a prompt version (audited) |
-| POST | `/mcp` | API | MCP over streamable HTTP when `CATO_MCP_HTTP=1`, see [mcp.md](mcp.md) |
+| POST | `/mcp` | API | MCP over streamable HTTP when `ANONYMIZER_MCP_HTTP=1`, see [mcp.md](mcp.md) |
 
 Login, members, API keys and the audit log: [accounts.md](accounts.md).
 
@@ -70,7 +70,7 @@ The gateway from the spec is implemented as the OpenAI-compatible `POST /v1/chat
 ### Examples
 
 ```bash
-KEY=cato_...
+KEY=anonymizer_...
 curl -s localhost:8080/v1/protect -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
   -d '{"text":"Unser Mandant Herr Max Mustermann bittet um Rückruf.","destination":"external","namespace":"matter-17"}'
 ```
@@ -94,13 +94,13 @@ If the outcome is `review`, `local_only` or `block`, the response has `allowed: 
 - **Validation errors (422) don't echo the input.** FastAPI's default behavior would return the submitted text in the error message.
 - **The access log contains only** method, path, status, latency and request ID: no bodies, no query strings, no keys. `restore` and policy changes are logged as events, without content.
 - **Every response carries an `X-Request-ID` header.** An incoming `X-Request-ID` is passed through if it is 1-64 characters of `A-Z a-z 0-9 _ . : -`; otherwise a new id is generated.
-- **Text length is limited** by `CATO_MAX_CHARS` (default 200,000). Longer texts get 413. Bodies whose `Content-Length` exceeds 4 bytes per allowed character plus 512 kB (document uploads: `CATO_MAX_UPLOAD_BYTES` plus 64 kB) are refused with 413 before authentication and parsing. Chunked uploads carry no length; cap those at the reverse proxy.
+- **Text length is limited** by `ANONYMIZER_MAX_CHARS` (default 200,000). Longer texts get 413. Bodies whose `Content-Length` exceeds 4 bytes per allowed character plus 512 kB (document uploads: `ANONYMIZER_MAX_UPLOAD_BYTES` plus 64 kB) are refused with 413 before authentication and parsing. Chunked uploads carry no length; cap those at the reverse proxy.
 - **`dry_run` on `/v1/protect`** returns the decision only: no text and no vault entries.
 - **If the leak check fails**, the API returns 500 without any text.
 
 ## Configuration
 
-See `.env.example` and `cato.api.settings.Settings`.
+See `.env.example` and `anonymizer.api.settings.Settings`.
 
 ## Not included yet
 

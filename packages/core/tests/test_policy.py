@@ -3,11 +3,11 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from cato import scan
-from cato.anonymize import Method
-from cato.classify import Classifier
-from cato.pipeline import Pipeline
-from cato.policy import (
+from anonymizer import scan
+from anonymizer.anonymize import Method
+from anonymizer.classify import Classifier
+from anonymizer.pipeline import Pipeline
+from anonymizer.policy import (
     Action, FilePolicyStore, InMemoryPolicyStore, Outcome, Policy, PolicyEngine, PolicyError, builtin_policy,
     diff_decisions,
 )

@@ -4,10 +4,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.api import create_app
-from cato.api.settings import Settings
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
 
-KEY = "cato_test_user_key_0123456789abcdef"
+KEY = "anonymizer_test_user_key_0123456789abcdef"
 H = {"Authorization": f"Bearer {KEY}"}
 
 
@@ -34,14 +34,14 @@ class FakeProvider:
 
 def make_client(tmp_path, provider: FakeProvider, local: bool = False, restore: bool = True):
     env = {
-        "CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
-        "CATO_UPSTREAM_URL": "https://api.provider.test/v1", "CATO_UPSTREAM_KEY": "sk-upstream-secret",
-        "CATO_UPSTREAM_PROVIDER": "openai",
+        "ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:",
+        "ANONYMIZER_UPSTREAM_URL": "https://api.provider.test/v1", "ANONYMIZER_UPSTREAM_KEY": "sk-upstream-secret",
+        "ANONYMIZER_UPSTREAM_PROVIDER": "openai",
     }
     if local:
-        env |= {"CATO_LOCAL_UPSTREAM_URL": "http://ollama.local/v1", "CATO_LOCAL_MODEL": "llama3.1"}
+        env |= {"ANONYMIZER_LOCAL_UPSTREAM_URL": "http://ollama.local/v1", "ANONYMIZER_LOCAL_MODEL": "llama3.1"}
     if not restore:
-        env["CATO_GATEWAY_RESTORE"] = "0"
+        env["ANONYMIZER_GATEWAY_RESTORE"] = "0"
     return TestClient(create_app(Settings.from_env(env), gateway_transport=httpx.MockTransport(provider.handler)))
 
 
@@ -60,7 +60,7 @@ def test_messages_are_protected_before_reaching_provider_and_restored(tmp_path):
     assert "Mustermann" not in sent and "DE89" not in sent and "PERSON_001" in sent
     assert provider.requests[0]["auth"] == "Bearer sk-upstream-secret"  # provider key stays server-side
     assert r.json()["choices"][0]["message"]["content"] == "Antwort an Max Mustermann: Ihr Anliegen wird bearbeitet."
-    assert r.headers["X-Cato-Outcome"] == "allow"
+    assert r.headers["X-Anonymizer-Outcome"] == "allow"
 
 
 def test_placeholders_consistent_across_messages(tmp_path):
@@ -83,7 +83,7 @@ def test_local_only_content_is_refused_without_local_model(tmp_path):
     provider = FakeProvider()
     c = make_client(tmp_path, provider)
     r = chat(c, "Herr Max Mustermann leidet an einer Depression.")
-    assert r.status_code == 403 and r.json()["error"]["type"] == "cato_policy_violation"
+    assert r.status_code == 403 and r.json()["error"]["type"] == "anonymizer_policy_violation"
     assert r.json()["error"]["code"] == "local_only" and provider.requests == []
     assert "Mustermann" not in r.text and "Depression" not in r.text
 
@@ -95,7 +95,7 @@ def test_local_only_content_is_routed_to_local_model(tmp_path):
     assert r.status_code == 200
     req = provider.requests[0]
     assert req["url"].startswith("http://ollama.local/v1") and req["body"]["model"] == "llama3.1"
-    trace = c.get(f"/v1/traces/{r.headers['X-Cato-Trace-Id']}", headers=H).json()
+    trace = c.get(f"/v1/traces/{r.headers['X-Anonymizer-Trace-Id']}", headers=H).json()
     assert trace["destination"] == "local" and "routed to local model" in json.dumps(trace["steps"])
 
 
@@ -135,19 +135,19 @@ def test_upstream_error_and_unreachable(tmp_path):
 
     def down(request):
         raise httpx.ConnectError("refused")
-    env = {"CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "q"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
-           "CATO_UPSTREAM_URL": "https://api.provider.test/v1"}
+    env = {"ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "q"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:",
+           "ANONYMIZER_UPSTREAM_URL": "https://api.provider.test/v1"}
     c2 = TestClient(create_app(Settings.from_env(env), gateway_transport=httpx.MockTransport(down)))
     assert chat(c2, "Hallo Welt, wie geht es?").status_code == 502
 
 
 def test_no_upstream_configured(tmp_path):
-    c = TestClient(create_app(Settings.from_env({"CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"),
-                                                 "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})))
+    c = TestClient(create_app(Settings.from_env({"ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"),
+                                                 "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:"})))
     assert chat(c, "Hallo").status_code == 503
 
 
-def test_gateway_requires_cato_key(tmp_path):
+def test_gateway_requires_anonymizer_key(tmp_path):
     c = make_client(tmp_path, FakeProvider())
     r = c.post("/v1/chat/completions", json={"model": "m", "messages": [{"role": "user", "content": "x"}]})
     assert r.status_code == 401

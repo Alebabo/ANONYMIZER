@@ -1,6 +1,6 @@
-# Cato as an MCP server
+# Anonymizer as an MCP server
 
-`cato-mcp` provides Cato as a Model Context Protocol server (stdio). AI agents in Claude Desktop, Claude Code, Cursor or other MCP clients can use it to check and anonymize legal content before they process it.
+`anonymizer-mcp` provides Anonymizer as a Model Context Protocol server (stdio). AI agents in Claude Desktop, Claude Code, Cursor or other MCP clients can use it to check and anonymize legal content before they process it.
 
 ## Threat model
 
@@ -12,11 +12,11 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | The model weakens the policy via an argument | No tool has `destination`, `policy` or `namespace` parameters. The operator sets them in the environment. Tested |
 | Re-identification through the agent | **No restore tool.** Restore only happens in the protected environment via the admin API |
 | Agent reads client files raw | `read_document_protected` returns only the anonymized version. Use it instead of raw file tools |
-| Path traversal / symlink escape | Access only inside `CATO_MCP_ROOT`, paths resolved including symlinks, only text formats. Tested |
+| Path traversal / symlink escape | Access only inside `ANONYMIZER_MCP_ROOT`, paths resolved including symlinks, only text formats. Tested |
 | Prompt injection in documents | Results carry a notice that the content is data, not instructions. The server instructions say so too |
 | Unwanted side effects | All tools are marked read-only and not open-world. No network access, no write access |
 
-**Limitation:** if the agent already has a document's raw text in its context (e.g. pasted by the user), it was already sent to the provider. Cato only protects what goes through Cato. For client documents that means: use the folder plus `read_document_protected`, not copy-paste.
+**Limitation:** if the agent already has a document's raw text in its context (e.g. pasted by the user), it was already sent to the provider. Anonymizer only protects what goes through Anonymizer. For client documents that means: use the folder plus `read_document_protected`, not copy-paste.
 
 ## Tools
 
@@ -27,19 +27,19 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | `anonymize_content(text, language?)` | Anonymized text, or `text: null` with the reason |
 | `check_privacy_policy(text, language?)` | Policy outcome and actions per type, no text |
 | `get_privacy_report(text, language?)` | Markdown report without raw values |
-| `list_documents()` | Readable files in `CATO_MCP_ROOT` (only if configured) |
+| `list_documents()` | Readable files in `ANONYMIZER_MCP_ROOT` (only if configured) |
 | `read_document_protected(path, language?)` | Anonymized file contents or refusal (only if configured) |
 
 ## Configuration (operator)
 
 | Variable | Meaning |
 |---|---|
-| `CATO_MCP_DESTINATION` | `external` (default) or `local`. Use `local` only if the client runs exclusively on a local model |
-| `CATO_MCP_POLICY` | Path to a policy YAML. Default: `legal-default` |
-| `CATO_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
-| `CATO_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
-| `CATO_VAULT_KEY`, `CATO_VAULT_PATH`, `CATO_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |
-| `CATO_SOURCE`, `CATO_PROMPTS`, `CATO_CUSTOM_PATTERNS`, `CATO_CONVERSATIONS_*` | Optional: conversation and prompt tools (stdio reads them from the environment) |
+| `ANONYMIZER_MCP_DESTINATION` | `external` (default) or `local`. Use `local` only if the client runs exclusively on a local model |
+| `ANONYMIZER_MCP_POLICY` | Path to a policy YAML. Default: `legal-default` |
+| `ANONYMIZER_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
+| `ANONYMIZER_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
+| `ANONYMIZER_VAULT_KEY`, `ANONYMIZER_VAULT_PATH`, `ANONYMIZER_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |
+| `ANONYMIZER_SOURCE`, `ANONYMIZER_PROMPTS`, `ANONYMIZER_CUSTOM_PATTERNS`, `ANONYMIZER_CONVERSATIONS_*` | Optional: conversation and prompt tools (stdio reads them from the environment) |
 
 ## Setup
 
@@ -53,7 +53,7 @@ python -m spacy download de_core_news_lg && python -m spacy download en_core_web
 **Claude Code:**
 
 ```bash
-claude mcp add cato --env CATO_MCP_ROOT=/path/to/matter-folder -- cato-mcp
+claude mcp add anonymizer --env ANONYMIZER_MCP_ROOT=/path/to/matter-folder -- anonymizer-mcp
 ```
 
 **Claude Desktop** (`claude_desktop_config.json`):
@@ -61,11 +61,11 @@ claude mcp add cato --env CATO_MCP_ROOT=/path/to/matter-folder -- cato-mcp
 ```json
 {
   "mcpServers": {
-    "cato": {
-      "command": "cato-mcp",
+    "anonymizer": {
+      "command": "anonymizer-mcp",
       "env": {
-        "CATO_MCP_ROOT": "/Users/kanzlei/Akten/2024-017",
-        "CATO_MCP_DESTINATION": "external"
+        "ANONYMIZER_MCP_ROOT": "/Users/kanzlei/Akten/2024-017",
+        "ANONYMIZER_MCP_DESTINATION": "external"
       }
     }
   }
@@ -75,7 +75,7 @@ claude mcp add cato --env CATO_MCP_ROOT=/path/to/matter-folder -- cato-mcp
 **Docker** (same image as the API, models included):
 
 ```bash
-docker run -i --rm -v /path/to/matter-folder:/docs:ro -e CATO_MCP_ROOT=/docs cato-api:local cato-mcp
+docker run -i --rm -v /path/to/matter-folder:/docs:ro -e ANONYMIZER_MCP_ROOT=/docs anonymizer-api:local anonymizer-mcp
 ```
 
 ## Recommended agent workflow
@@ -84,11 +84,11 @@ docker run -i --rm -v /path/to/matter-folder:/docs:ro -e CATO_MCP_ROOT=/docs cat
 2. `read_document_protected("klage.txt")` returns the anonymized text with `PERSON_001`, `CASE_NUMBER_001`, ...
 3. The agent works only with the placeholders.
 4. If the result is `review` / `local_only` / `block`, the agent stops and asks the user.
-5. A lawyer restores the original names in the final document via the admin API or `cato restore`, outside the agent.
+5. A lawyer restores the original names in the final document via the admin API or `anonymizer restore`, outside the agent.
 
 ## Conversations and prompts
 
-With a conversation source (`CATO_SOURCE`) and/or a prompt store (`CATO_PROMPTS`) the server offers more tools. Setup and the guarantees behind them: [conversations.md](conversations.md), [prompts.md](prompts.md).
+With a conversation source (`ANONYMIZER_SOURCE`) and/or a prompt store (`ANONYMIZER_PROMPTS`) the server offers more tools. Setup and the guarantees behind them: [conversations.md](conversations.md), [prompts.md](prompts.md).
 
 | Tool | Returns | Annotation |
 |---|---|---|
@@ -102,22 +102,22 @@ Not available over MCP on purpose: moving a label (promotion), restore, and ever
 
 ## HTTP transport (remote MCP)
 
-`CATO_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a Cato API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
+`ANONYMIZER_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a Anonymizer API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
 
 ```bash
-claude mcp add --transport http cato https://cato.internal.example/mcp \
-  --header "Authorization: Bearer cato_..."
+claude mcp add --transport http anonymizer https://anonymizer.internal.example/mcp \
+  --header "Authorization: Bearer anonymizer_..."
 ```
 
 Cursor (`.cursor/mcp.json`):
 
 ```json
-{ "mcpServers": { "cato": { "url": "https://cato.internal.example/mcp",
-                            "headers": { "Authorization": "Bearer cato_..." } } } }
+{ "mcpServers": { "anonymizer": { "url": "https://anonymizer.internal.example/mcp",
+                            "headers": { "Authorization": "Bearer anonymizer_..." } } } }
 ```
 
 - Put TLS in front (reverse proxy), as for the rest of the API.
-- `CATO_MCP_ALLOWED_HOSTS=cato.internal.example` enables DNS-rebinding protection for those hosts.
+- `ANONYMIZER_MCP_ALLOWED_HOSTS=anonymizer.internal.example` enables DNS-rebinding protection for those hosts.
 - One key per person: the quota and the audit log are per key.
 - Claude Desktop and claude.ai custom connectors need OAuth; that is not included yet. Claude Code, Cursor and other clients that send a header work.
 

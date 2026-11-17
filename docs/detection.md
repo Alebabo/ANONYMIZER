@@ -1,6 +1,6 @@
 # Detection Engine
 
-The engine lives in `packages/core/src/cato/detect/`. It's deterministic: the same input and configuration always give the same output.
+The engine lives in `packages/core/src/anonymizer/detect/`. It's deterministic: the same input and configuration always give the same output.
 
 ## Pipeline
 
@@ -44,9 +44,9 @@ The engine lives in `packages/core/src/cato/detect/`. It's deterministic: the sa
 
 Names in chat self-introductions ("mein Name ist anna müller", "ich heiße …", "my name is …", "ich bin Lena Probe") are found by the `person_self_intro` recognizer. Strong cues also accept lowercase names; weak cues ("ich bin", "I am", "this is") need two capitalised tokens.
 
-### Deployment patterns (`CATO_CUSTOM_PATTERNS`)
+### Deployment patterns (`ANONYMIZER_CUSTOM_PATTERNS`)
 
-House formats such as order numbers or customer ids are configured in a YAML file. The API, `cato-mcp` and `cato source-check` load it from `CATO_CUSTOM_PATTERNS`; an invalid file stops the server, because a silently missing pattern would let identifiers through.
+House formats such as order numbers or customer ids are configured in a YAML file. The API, `anonymizer-mcp` and `anonymizer source-check` load it from `ANONYMIZER_CUSTOM_PATTERNS`; an invalid file stops the server, because a silently missing pattern would let identifiers through.
 
 ```yaml
 patterns:
@@ -102,7 +102,7 @@ The limitations are tracked as `known_false_negatives` / `known_false_positives`
 
 ```bash
 cd packages/core
-cato eval tests/corpus
+anonymizer eval tests/corpus
 ```
 
 Current state, on synthetic data only, with NER: 7 documents, 78 labelled entities, recall 0.97, 0 hits on `must_not_detect`. Without NER: recall 0.96. Entries marked `requires: ner` are skipped in rule-only mode. These numbers are **not** a statement about quality on real legal documents. A validation on real, anonymized documents is still outstanding.

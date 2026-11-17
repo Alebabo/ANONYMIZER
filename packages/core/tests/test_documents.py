@@ -6,13 +6,13 @@ import docx
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.anonymize import LeakError
-from cato.api import create_app
-from cato.api.settings import Settings
-from cato.documents import DocumentError, extract, extract_docx, protect_document, sniff
-from cato.mcp import CatoTools, MCPConfig
-from cato.pipeline import Pipeline
-from cato.policy import Outcome
+from anonymizer.anonymize import LeakError
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
+from anonymizer.documents import DocumentError, extract, extract_docx, protect_document, sniff
+from anonymizer.mcp import AnonymizerTools, MCPConfig
+from anonymizer.pipeline import Pipeline
+from anonymizer.policy import Outcome
 
 SECRETS = ["Mustermann", "DE89 3704", "Anna Schmidt"]
 
@@ -155,9 +155,9 @@ def test_size_limit():
 
 @pytest.fixture
 def client(tmp_path):
-    key = "cato_test_user_key_0123456789abcdef"
-    s = Settings.from_env({"CATO_API_KEYS": key, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
-                           "CATO_MAX_UPLOAD_BYTES": "2000000"})
+    key = "anonymizer_test_user_key_0123456789abcdef"
+    s = Settings.from_env({"ANONYMIZER_API_KEYS": key, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:",
+                           "ANONYMIZER_MAX_UPLOAD_BYTES": "2000000"})
     return TestClient(create_app(s)), {"Authorization": f"Bearer {key}"}
 
 
@@ -187,7 +187,7 @@ def test_api_document_upload_rejects_bad_input(client):
 def test_mcp_reads_docx_and_pdf(tmp_path):
     (tmp_path / "brief.docx").write_bytes(make_docx())
     (tmp_path / "scan.pdf").write_bytes(make_pdf(["Herr Max Mustermann ist unser Mandant.", ""]))
-    tools = CatoTools(MCPConfig(root=tmp_path.resolve()))
+    tools = AnonymizerTools(MCPConfig(root=tmp_path.resolve()))
     r = tools.read_document_protected("brief.docx")
     assert r["allowed"] and r["format"] == "docx" and "PERSON_001" in r["text"]
     assert not any(s in str(r) for s in SECRETS)

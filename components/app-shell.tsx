@@ -89,7 +89,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
           type="button"
           aria-label={open ? "Close navigation" : "Open navigation"}
           aria-expanded={open}
-          aria-controls="cato-nav"
+          aria-controls="anonymizer-nav"
           onClick={() => setOpen(o => !o)}
           className="hover:bg-sidebar-accent flex h-9 w-9 items-center justify-center rounded-md"
         >
@@ -101,7 +101,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
       {open && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setOpen(false)} aria-hidden />}
 
       <aside
-        id="cato-nav"
+        id="anonymizer-nav"
         className={cn(
           "bg-sidebar border-sidebar-border z-40 flex w-64 shrink-0 flex-col overflow-y-auto border-r md:static md:w-56 md:translate-x-0",
           "fixed inset-y-0 left-0 transition-transform duration-150 md:transition-none",
@@ -122,7 +122,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
 function Logo() {
   return (
     <>
-      <Link href="/" aria-label="Cato – Overview" className="text-foreground flex items-center">
+      <Link href="/" aria-label="Anonymizer – Overview" className="text-foreground flex items-center">
         <Wordmark />
       </Link>
       <span className="text-muted-foreground ml-auto hidden text-2xs md:block">Workspace</span>

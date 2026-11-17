@@ -1,5 +1,5 @@
 # Support chat (synthetic): informal, partly lowercase, self-introductions instead of
-# honorifics. Order numbers need deployment patterns (CATO_CUSTOM_PATTERNS) and are
+# honorifics. Order numbers need deployment patterns (ANONYMIZER_CUSTOM_PATTERNS) and are
 # therefore documented as misses of the default detector.
 id: de_support
 language: de

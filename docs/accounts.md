@@ -1,6 +1,6 @@
 # Accounts, login and audit log
 
-Cato has organizations, users with a simple e-mail/password login, organization-scoped API keys and an append-only audit log. Everything is stored in SQLite next to the traces (`/data` in Docker).
+Anonymizer has organizations, users with a simple e-mail/password login, organization-scoped API keys and an append-only audit log. Everything is stored in SQLite next to the traces (`/data` in Docker).
 
 ## Model
 
@@ -8,7 +8,7 @@ Cato has organizations, users with a simple e-mail/password login, organization-
 |---|---|---|
 | Organization | Name, trace retention | Owns all data below |
 | User | E-mail, name, role `admin` or `member`, scrypt password hash | One organization |
-| Session | SHA-256 of a random token, expiry (`CATO_SESSION_HOURS`, default 12) | One user |
+| Session | SHA-256 of a random token, expiry (`ANONYMIZER_SESSION_HOURS`, default 12) | One user |
 | API key | Name, prefix, role `user` or `admin`, SHA-256 of the key, last use, revocation time | One organization |
 | Audit entry | Actor, resource, action, before/after snapshot, hash chain | One organization |
 
@@ -17,7 +17,7 @@ Isolation:
 - **Traces and metrics** carry the organization of the calling key or session. Every read is scoped to it.
 - **Vault namespaces** are isolated per organization: the same namespace name in two organizations resolves to different vault entries. Namespaces containing control characters are rejected, so a prefix cannot be forged.
 - **Policies are shared** by the installation. Only admins of the `default` organization may write them.
-- **Environment keys** (`CATO_API_KEYS`, `CATO_ADMIN_KEYS`) belong to the `default` organization. They are still supported, and existing traces and vaults migrate to `default` without changes.
+- **Environment keys** (`ANONYMIZER_API_KEYS`, `ANONYMIZER_ADMIN_KEYS`) belong to the `default` organization. They are still supported, and existing traces and vaults migrate to `default` without changes.
 
 ## Roles
 
@@ -35,19 +35,19 @@ Restore needs an **admin API key**, never a dashboard session. Re-identification
 
 ```bash
 # Docker: first admin via environment (only used while no user exists)
-CATO_BOOTSTRAP_ADMIN_EMAIL=admin@kanzlei.example
-CATO_BOOTSTRAP_ADMIN_PASSWORD=...   # min. 12 characters; change it after the first login
+ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=admin@kanzlei.example
+ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD=...   # min. 12 characters; change it after the first login
 
 # or with the CLI (password is prompted)
-docker compose exec api cato user create --email admin@kanzlei.example --role admin
+docker compose exec api anonymizer user create --email admin@kanzlei.example --role admin
 
 # more organizations, users and demo traces
-cato org create "Kanzlei B" --id kanzlei-b
-cato user create --email b@kanzlei-b.example --org kanzlei-b
-cato seed-demo --org kanzlei-b --count 400      # synthetic metadata-only traces
+anonymizer org create "Kanzlei B" --id kanzlei-b
+anonymizer user create --email b@kanzlei-b.example --org kanzlei-b
+anonymizer seed-demo --org kanzlei-b --count 400      # synthetic metadata-only traces
 ```
 
-The dashboard needs `CATO_API_URL`. With it, every page requires a login; without it, the dashboard runs in demo mode with example data.
+The dashboard needs `ANONYMIZER_API_URL`. With it, every page requires a login; without it, the dashboard runs in demo mode with example data.
 
 ## Login security
 
@@ -61,7 +61,7 @@ The dashboard needs `CATO_API_URL`. With it, every page requires a login; withou
 
 ## Audit log
 
-The record shape follows Langfuse's audit log (`resourceType`, `resourceId`, `action`, `before`, `after`, actor = user / API key / system). The dashboard viewer under **Settings → Audit Logs** uses the same columns. It is Cato's own implementation: Langfuse's viewer is in its `ee/` directory and is not MIT-licensed.
+The record shape follows Langfuse's audit log (`resourceType`, `resourceId`, `action`, `before`, `after`, actor = user / API key / system). The dashboard viewer under **Settings → Audit Logs** uses the same columns. It is Anonymizer's own implementation: Langfuse's viewer is in its `ee/` directory and is not MIT-licensed.
 
 | Resource | Actions |
 |---|---|

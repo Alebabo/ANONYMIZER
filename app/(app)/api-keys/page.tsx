@@ -5,7 +5,7 @@ import { Notice, Pill, SourceBanner, ago, dateTime } from "@/components/dashboar
 import { InlineAction } from "@/components/forms";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getApiKeys, getMe, getMembers } from "@/lib/cato-api";
+import { getApiKeys, getMe, getMembers } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +48,7 @@ export default async function ApiKeys() {
               </TableBody></Table></TableScroll>
           </CardContent></Card>
         <p className="text-muted-foreground text-xs">
-          Keys are shown once and stored as SHA-256 hashes. Keys from <code>CATO_API_KEYS</code> / <code>CATO_ADMIN_KEYS</code> keep
+          Keys are shown once and stored as SHA-256 hashes. Keys from <code>ANONYMIZER_API_KEYS</code> / <code>ANONYMIZER_ADMIN_KEYS</code> keep
           working and are not listed here. Creating and revoking keys is recorded in the audit log.
         </p>
       </div>

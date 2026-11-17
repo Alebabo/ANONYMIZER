@@ -1,5 +1,5 @@
 import { Bot, KeyRound, User, UserX } from "lucide-react";
-import type { AuditEntry } from "@/lib/cato-api";
+import type { AuditEntry } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 const NOISE = new Set(["created_at", "created_by", "org_id", "id"]);

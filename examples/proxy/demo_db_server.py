@@ -1,8 +1,8 @@
-"""Demo upstream for the Cato proxy: a fake customer database as an MCP server (stdio).
+"""Demo upstream for the Anonymizer proxy: a fake customer database as an MCP server (stdio).
 
 All data is synthetic. Use it to try the proxy before connecting a real system:
 
-    cato-proxy --config examples/proxy/cato-proxy.yaml
+    anonymizer-proxy --config examples/proxy/anonymizer-proxy.yaml
 """
 
 from mcp.server.mcpserver import MCPServer
@@ -26,7 +26,7 @@ TICKETS = [
      "text": "Überweisung an DE75 5121 0800 1245 1261 99 ist nicht angekommen. Gruß, Jonas Beispiel"},
 ]
 
-server = MCPServer(name="demo-db", instructions="Synthetic customer database for testing the Cato proxy.")
+server = MCPServer(name="demo-db", instructions="Synthetic customer database for testing the Anonymizer proxy.")
 
 
 @server.tool(description="List tables and their columns.")

@@ -3,7 +3,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Distribution, Pill, SourceBanner, Stat, fmt, time } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getProxy, getTraces, type Trace } from "@/lib/cato-api";
+import { getProxy, getTraces, type Trace } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +51,7 @@ export default async function Proxy() {
   const observe = status?.upstreams.filter(u => u.mode === "observe") ?? [];
   return (
     <>
-      <PageHeader title="MCP Proxy" description="Other MCP servers behind Cato · metadata only, no values stored" />
+      <PageHeader title="MCP Proxy" description="Other MCP servers behind Anonymizer · metadata only, no values stored" />
       <SourceBanner source={source} />
       {observe.length > 0 && (
         <div className="bg-light-yellow text-dark-yellow border-b px-4 py-2 text-xs md:px-6">
@@ -88,8 +88,8 @@ export default async function Proxy() {
                 </TableScroll>
               ) : (
                 <p className="text-muted-foreground text-xs">
-                  The API does not run a proxy (CATO_PROXY_CONFIG not set). Calls from a stdio proxy
-                  (<code>cato-proxy --config …</code>) still appear below if it writes to the same trace database.
+                  The API does not run a proxy (ANONYMIZER_PROXY_CONFIG not set). Calls from a stdio proxy
+                  (<code>anonymizer-proxy --config …</code>) still appear below if it writes to the same trace database.
                 </p>
               )}
             </CardContent></Card>
@@ -133,7 +133,7 @@ export default async function Proxy() {
                 </TableBody></Table>
             </TableScroll>
             <p className="text-muted-foreground mt-3 text-xs">
-              Cato stores types, counts and field paths only. Values, placeholders and results are never stored.
+              Anonymizer stores types, counts and field paths only. Values, placeholders and results are never stored.
               Single calls: <Link className="text-link hover:text-link-hover" href="/traces?route=/mcp/proxy">traces of the proxy</Link>.
             </p>
           </CardContent></Card>

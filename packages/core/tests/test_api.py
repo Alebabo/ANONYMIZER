@@ -4,12 +4,12 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.api import create_app
-from cato.api.settings import Settings, SettingsError
-from cato.vault import VaultKey
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings, SettingsError
+from anonymizer.vault import VaultKey
 
-API_KEY = "cato_test_user_key_0123456789abcdef"
-ADMIN_KEY = "cato_test_admin_key_0123456789abcdef"
+API_KEY = "anonymizer_test_user_key_0123456789abcdef"
+ADMIN_KEY = "anonymizer_test_admin_key_0123456789abcdef"
 USER = {"Authorization": f"Bearer {API_KEY}"}
 ADMIN = {"X-API-Key": ADMIN_KEY}
 
@@ -21,13 +21,13 @@ SECRETS = ["Mustermann", "DE89 3704", "max@example.org"]
 @pytest.fixture
 def client(tmp_path):
     settings = Settings.from_env({
-        "CATO_API_KEYS": API_KEY,
-        "CATO_ADMIN_KEYS": ADMIN_KEY,
-        "CATO_VAULT_KEY": VaultKey.generate().to_b64(),
-        "CATO_VAULT_PATH": str(tmp_path / "vault.json"),
-        "CATO_POLICY_DIR": str(tmp_path / "policies"),
-        "CATO_MAX_CHARS": "5000",
-        "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": str(tmp_path / "traces.db"),
+        "ANONYMIZER_API_KEYS": API_KEY,
+        "ANONYMIZER_ADMIN_KEYS": ADMIN_KEY,
+        "ANONYMIZER_VAULT_KEY": VaultKey.generate().to_b64(),
+        "ANONYMIZER_VAULT_PATH": str(tmp_path / "vault.json"),
+        "ANONYMIZER_POLICY_DIR": str(tmp_path / "policies"),
+        "ANONYMIZER_MAX_CHARS": "5000",
+        "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": str(tmp_path / "traces.db"),
     })
     return TestClient(create_app(settings))
 
@@ -35,9 +35,9 @@ def client(tmp_path):
 # --- settings ------------------------------------------------------------------
 
 @pytest.mark.parametrize("env", [
-    {"CATO_API_KEYS": "short"},
-    {"CATO_BOOTSTRAP_ADMIN_EMAIL": "a@example.org"},
-    {"CATO_API_KEYS": API_KEY, "CATO_ADMIN_KEYS": API_KEY},
+    {"ANONYMIZER_API_KEYS": "short"},
+    {"ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL": "a@example.org"},
+    {"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_ADMIN_KEYS": API_KEY},
 ])
 def test_settings_fail_closed(env):
     with pytest.raises(SettingsError):
@@ -66,7 +66,7 @@ def test_admin_key_can_use_user_endpoints(client):
 
 
 def test_admin_disabled_without_admin_keys(tmp_path):
-    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})
+    settings = Settings.from_env({"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))
     r = c.post("/v1/restore", json={"text": "x", "namespace": "m"}, headers=USER)
     assert r.status_code == 403 and "disabled" in r.json()["detail"]
@@ -129,7 +129,7 @@ def test_protect_dry_run_returns_no_text(client):
 
 
 def test_namespace_without_vault_is_rejected(tmp_path):
-    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:"})
+    settings = Settings.from_env({"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))
     r = c.post("/v1/anonymize", json={"text": LETTER, "namespace": "m"}, headers=USER)
     assert r.status_code == 400

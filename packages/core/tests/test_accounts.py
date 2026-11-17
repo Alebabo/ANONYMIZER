@@ -4,14 +4,14 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.accounts import AccountError, AccountStore, hash_password, verify_password
-from cato.api import create_app
-from cato.api.settings import Settings
-from cato.audit import AuditLog
-from cato.cli import main as cli
-from cato.vault import VaultKey
+from anonymizer.accounts import AccountError, AccountStore, hash_password, verify_password
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
+from anonymizer.audit import AuditLog
+from anonymizer.cli import main as cli
+from anonymizer.vault import VaultKey
 
-ADMIN_KEY = "cato_test_admin_key_0123456789abcdef"
+ADMIN_KEY = "anonymizer_test_admin_key_0123456789abcdef"
 PW = "correct horse battery"
 LETTER = "Unser Mandant Herr Max Mustermann, IBAN DE89 3704 0044 0532 0130 00."
 
@@ -19,15 +19,15 @@ LETTER = "Unser Mandant Herr Max Mustermann, IBAN DE89 3704 0044 0532 0130 00."
 @pytest.fixture
 def env(tmp_path):
     return {
-        "CATO_ADMIN_KEYS": ADMIN_KEY,
-        "CATO_VAULT_KEY": VaultKey.generate().to_b64(),
-        "CATO_VAULT_PATH": str(tmp_path / "vault.json"),
-        "CATO_POLICY_DIR": str(tmp_path / "policies"),
-        "CATO_TRACE_DB": str(tmp_path / "traces.db"),
-        "CATO_ACCOUNTS_DB": str(tmp_path / "accounts.db"),
-        "CATO_AUDIT_DB": str(tmp_path / "audit.db"),
-        "CATO_BOOTSTRAP_ADMIN_EMAIL": "admin@example.org",
-        "CATO_BOOTSTRAP_ADMIN_PASSWORD": PW,
+        "ANONYMIZER_ADMIN_KEYS": ADMIN_KEY,
+        "ANONYMIZER_VAULT_KEY": VaultKey.generate().to_b64(),
+        "ANONYMIZER_VAULT_PATH": str(tmp_path / "vault.json"),
+        "ANONYMIZER_POLICY_DIR": str(tmp_path / "policies"),
+        "ANONYMIZER_TRACE_DB": str(tmp_path / "traces.db"),
+        "ANONYMIZER_ACCOUNTS_DB": str(tmp_path / "accounts.db"),
+        "ANONYMIZER_AUDIT_DB": str(tmp_path / "audit.db"),
+        "ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL": "admin@example.org",
+        "ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD": PW,
     }
 
 
@@ -64,11 +64,11 @@ def test_store_keeps_only_hashes(tmp_path):
 
 
 def test_env_keys_optional_but_no_access(tmp_path):
-    s = Settings.from_env({"CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_TRACE_DB": ":memory:",
-                           "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:"})
+    s = Settings.from_env({"ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_TRACE_DB": ":memory:",
+                           "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:"})
     c = TestClient(create_app(s))
     assert c.post("/v1/scan", json={"text": "x"}).status_code == 401
-    assert c.post("/v1/scan", json={"text": "x"}, headers={"Authorization": "Bearer cato_whatever"}).status_code == 401
+    assert c.post("/v1/scan", json={"text": "x"}, headers={"Authorization": "Bearer anonymizer_whatever"}).status_code == 401
 
 
 # --- login ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ def test_api_key_lifecycle(client):
     h = login(client)
     created = client.post("/v1/api-keys", headers=h, json={"name": "backend", "role": "user"}).json()
     key = created["key"]
-    assert key.startswith("cato_") and created["prefix"] == key[:12]
+    assert key.startswith("anonymizer_") and created["prefix"] == key[:12]
     k = {"Authorization": f"Bearer {key}"}
     assert client.post("/v1/scan", headers=k, json={"text": "Herr Max Mustermann"}).status_code == 200
     listed = client.get("/v1/api-keys", headers=h).json()
@@ -165,7 +165,7 @@ def test_dashboard_admin_cannot_restore(client):
 
 @pytest.fixture
 def two_orgs(env, client):
-    store = AccountStore(env["CATO_ACCOUNTS_DB"])
+    store = AccountStore(env["ANONYMIZER_ACCOUNTS_DB"])
     store.create_org("Firm B", "firm-b")
     store.create_user("firm-b", "b@example.org", "B", PW, "admin")
     return login(client), login(client, "b@example.org")
@@ -251,7 +251,7 @@ def test_audit_chain_detects_tampering(env, client):
     client.post("/v1/api-keys", headers=h, json={"name": "k"})
     v = client.get("/v1/audit-logs/verify", headers=h).json()
     assert v["ok"] and v["entries"] >= 3
-    db = sqlite3.connect(env["CATO_AUDIT_DB"])
+    db = sqlite3.connect(env["ANONYMIZER_AUDIT_DB"])
     db.execute("UPDATE audit_logs SET actor_label = 'someone else' WHERE action = 'login'")
     db.commit()
     v = client.get("/v1/audit-logs/verify", headers=h).json()
@@ -265,7 +265,7 @@ def test_audit_log_has_no_mutation_api():
 # --- gateway status, retention, CLI -----------------------------------------------------------------
 
 def test_gateway_status_hides_credentials(env):
-    env = {**env, "CATO_UPSTREAM_URL": "https://user:pw@api.example.com/v1", "CATO_UPSTREAM_KEY": "sk-secret"}
+    env = {**env, "ANONYMIZER_UPSTREAM_URL": "https://user:pw@api.example.com/v1", "ANONYMIZER_UPSTREAM_KEY": "sk-secret"}
     c = TestClient(create_app(Settings.from_env(env)))
     body = c.get("/v1/gateway", headers=login(c)).json()
     assert body["external"] == {"host": "https://api.example.com", "provider": "openai", "model": None,
@@ -274,11 +274,11 @@ def test_gateway_status_hides_credentials(env):
 
 
 def test_org_retention_is_applied(env, client):
-    from cato.tracing import Trace, TraceStore
+    from anonymizer.tracing import Trace, TraceStore
 
     h = login(client)
     client.patch("/v1/organization", headers=h, json={"trace_retention_days": 1})
-    store = TraceStore(env["CATO_TRACE_DB"], 30, retention_for=lambda o: 1 if o == "default" else None)
+    store = TraceStore(env["ANONYMIZER_TRACE_DB"], 30, retention_for=lambda o: 1 if o == "default" else None)
     import time
     store.add(Trace(route="/old", created_at=time.time() - 3 * 86400), "default")
     store.add(Trace(route="/old", created_at=time.time() - 3 * 86400), "other")
@@ -287,7 +287,7 @@ def test_org_retention_is_applied(env, client):
 
 
 def test_cli_org_user_and_seed(env, monkeypatch, capsys):
-    for k in ("CATO_ACCOUNTS_DB", "CATO_AUDIT_DB", "CATO_TRACE_DB"):
+    for k in ("ANONYMIZER_ACCOUNTS_DB", "ANONYMIZER_AUDIT_DB", "ANONYMIZER_TRACE_DB"):
         monkeypatch.setenv(k, env[k])
     assert cli(["org", "create", "Kanzlei C", "--id", "firm-c"]) == 0
     monkeypatch.setattr("sys.stdin", __import__("io").StringIO(PW + "\n"))

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/app-shell";
 import { Distribution, Pill, SourceBanner, Stat, fmt, pct } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { getGateway, getMetrics, type GatewayStatus } from "@/lib/cato-api";
+import { getGateway, getMetrics, type GatewayStatus } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +40,9 @@ export default async function Gateway() {
                 sub={`avg ${m.latency_ms.avg != null ? `${fmt(Math.round(m.latency_ms.avg))} ms` : "–"}`} />
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          <UpstreamCard title="External provider" up={g.external} note="Set CATO_UPSTREAM_URL and CATO_UPSTREAM_KEY on the API server." />
+          <UpstreamCard title="External provider" up={g.external} note="Set ANONYMIZER_UPSTREAM_URL and ANONYMIZER_UPSTREAM_KEY on the API server." />
           <UpstreamCard title="Local model" up={g.local}
-                        note="Optional. Set CATO_LOCAL_UPSTREAM_URL (e.g. Ollama) so local_only content is answered locally instead of refused." />
+                        note="Optional. Set ANONYMIZER_LOCAL_UPSTREAM_URL (e.g. Ollama) so local_only content is answered locally instead of refused." />
           <Card><CardHeader><CardDescription>Behaviour</CardDescription></CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">

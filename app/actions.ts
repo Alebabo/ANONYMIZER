@@ -2,7 +2,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ApiError, SESSION_COOKIE, api, apiLogin, isDemo, type ApiKey } from "@/lib/cato-api";
+import { ApiError, SESSION_COOKIE, api, apiLogin, isDemo, type ApiKey } from "@/lib/anonymizer-api";
 
 /**
  * Server actions. Next.js checks the Origin header of every action (CSRF protection);
@@ -11,7 +11,7 @@ import { ApiError, SESSION_COOKIE, api, apiLogin, isDemo, type ApiKey } from "@/
 
 export type ActionState = { ok?: boolean; error?: string; message?: string; key?: string; email?: string };
 
-const DEMO: ActionState = { error: "Demo mode: connect the API (CATO_API_URL) to make changes." };
+const DEMO: ActionState = { error: "Demo mode: connect the API (ANONYMIZER_API_URL) to make changes." };
 
 async function run(fn: () => Promise<ActionState | void>, path: string): Promise<ActionState> {
   if (isDemo()) return DEMO;
@@ -37,7 +37,7 @@ export async function login(_: ActionState, form: FormData): Promise<ActionState
   try {
     session = await apiLogin(str(form, "email"), String(form.get("password") ?? ""));
   } catch (e) {
-    return { error: e instanceof ApiError ? e.message : "Cato API not reachable.", email: str(form, "email") };
+    return { error: e instanceof ApiError ? e.message : "Anonymizer API not reachable.", email: str(form, "email") };
   }
   (await cookies()).set(SESSION_COOKIE, session.token, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",

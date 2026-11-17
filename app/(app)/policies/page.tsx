@@ -2,7 +2,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getPolicies, getPolicy } from "@/lib/cato-api";
+import { getPolicies, getPolicy } from "@/lib/anonymizer-api";
 import { examplePolicyYaml } from "@/lib/mock";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export default async function Policies() {
         {active && <Card><CardHeader><CardDescription>{active.name} v{active.version}</CardDescription></CardHeader>
           <CardContent><pre className="bg-surface-code overflow-auto rounded-md p-4 font-mono text-xs">{body}</pre></CardContent></Card>}
         <p className="text-muted-foreground text-xs">
-          New versions are created with <code>POST /v1/policies</code> or <code>cato policy-validate</code> locally;
+          New versions are created with <code>POST /v1/policies</code> or <code>anonymizer policy-validate</code> locally;
           test changes with <code>POST /v1/policies/dry-run</code>. A graphical editor is planned.
         </p>
       </div>

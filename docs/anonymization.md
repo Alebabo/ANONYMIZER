@@ -1,6 +1,6 @@
 # Anonymization & Vault
 
-`packages/core/src/cato/anonymize/` transforms detected values. `packages/core/src/cato/vault/` stores the re-identification mapping in encrypted form.
+`packages/core/src/anonymizer/anonymize/` transforms detected values. `packages/core/src/anonymizer/vault/` stores the re-identification mapping in encrypted form.
 
 ## Methods
 
@@ -37,7 +37,7 @@ The policy engine (step 4) overrides these defaults with a plan per detection.
 ## Vault: security properties
 
 - **AES-256-GCM** per entry, with namespace and placeholder as authenticated data. Swapping entries between placeholders is detected.
-- **Separate key management:** the master key comes from `CATO_VAULT_KEY` (base64, 32 bytes) or a KMS, never from the vault file. HKDF derives separate keys for encryption and the index.
+- **Separate key management:** the master key comes from `ANONYMIZER_VAULT_KEY` (base64, 32 bytes) or a KMS, never from the vault file. HKDF derives separate keys for encryption and the index.
 - **No plaintext in storage:** values and namespace names appear only as HMACs or ciphertext. Tests check the vault file for this, and also that it has permissions `0600`.
 - **Namespace isolation:** a placeholder from `matter-1` can't be resolved in `matter-2`.
 - **Wrong key or tampered data** raise a `VaultError` instead of returning wrong values.
@@ -47,7 +47,7 @@ The policy engine (step 4) overrides these defaults with a plan per detection.
 Generate a key:
 
 ```bash
-export CATO_VAULT_KEY=$(python -c "from cato.vault import VaultKey; print(VaultKey.generate().to_b64())")
+export ANONYMIZER_VAULT_KEY=$(python -c "from anonymizer.vault import VaultKey; print(VaultKey.generate().to_b64())")
 ```
 
 ## Safety net
@@ -72,9 +72,9 @@ The leak check only finds values that were **detected**. A name that detection m
 ## CLI
 
 ```bash
-cato anonymize brief.txt                                   # ephemeral, not reversible
-cato anonymize brief.txt --vault vault.json --namespace matter-17
-cato restore answer.txt --vault vault.json --namespace matter-17
+anonymizer anonymize brief.txt                                   # ephemeral, not reversible
+anonymizer anonymize brief.txt --vault vault.json --namespace matter-17
+anonymizer restore answer.txt --vault vault.json --namespace matter-17
 ```
 
 ## Known limitations
@@ -86,7 +86,7 @@ cato restore answer.txt --vault vault.json --namespace matter-17
 
 ## Documents (PDF, DOCX)
 
-`cato.documents.protect_document()`, `POST /v1/documents/protect` and the MCP tool `read_document_protected` process documents.
+`anonymizer.documents.protect_document()`, `POST /v1/documents/protect` and the MCP tool `read_document_protected` process documents.
 
 | Format | Processing |
 |---|---|

@@ -3,7 +3,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Bars, Distribution, Pill, SourceBanner, Stat, fmt, pct, time } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getMetrics, getTraces } from "@/lib/cato-api";
+import { getMetrics, getTraces } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

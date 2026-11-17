@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Pill, SourceBanner, time } from "@/components/dashboard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getTraces } from "@/lib/cato-api";
+import { getTraces } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

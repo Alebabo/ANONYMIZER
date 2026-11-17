@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import type { Source } from "@/lib/cato-api";
+import type { Source } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 export function SourceBanner({ source }: { source: Source }) {

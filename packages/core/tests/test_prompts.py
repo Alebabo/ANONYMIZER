@@ -3,13 +3,13 @@ import json
 import httpx
 import pytest
 
-from cato.accounts import DEFAULT_ORG, Principal
-from cato.audit import AuditLog
-from cato.classify import Classifier
-from cato.detect import Detector
-from cato.pipeline import Pipeline
-from cato.policy import builtin_policy
-from cato.prompts import (
+from anonymizer.accounts import DEFAULT_ORG, Principal
+from anonymizer.audit import AuditLog
+from anonymizer.classify import Classifier
+from anonymizer.detect import Detector
+from anonymizer.pipeline import Pipeline
+from anonymizer.policy import builtin_policy
+from anonymizer.prompts import (
     LangfusePromptBackend, LocalPromptBackend, PromptError, PromptService, backend_from_env,
 )
 
@@ -172,14 +172,14 @@ def test_langfuse_backend_round_trip():
 
 def test_backend_factory(tmp_path):
     assert backend_from_env({}) is None
-    assert backend_from_env({"CATO_PROMPTS": "local", "CATO_PROMPTS_DB": str(tmp_path / "p.db")}).kind == "local"
-    lf = backend_from_env({"CATO_PROMPTS": "langfuse", "CATO_SOURCE": "langfuse", "CATO_SOURCE_URL": "https://lf",
-                           "CATO_SOURCE_PUBLIC_KEY": "pk", "CATO_SOURCE_SECRET_KEY": "sk"})
+    assert backend_from_env({"ANONYMIZER_PROMPTS": "local", "ANONYMIZER_PROMPTS_DB": str(tmp_path / "p.db")}).kind == "local"
+    lf = backend_from_env({"ANONYMIZER_PROMPTS": "langfuse", "ANONYMIZER_SOURCE": "langfuse", "ANONYMIZER_SOURCE_URL": "https://lf",
+                           "ANONYMIZER_SOURCE_PUBLIC_KEY": "pk", "ANONYMIZER_SOURCE_SECRET_KEY": "sk"})
     assert lf.kind == "langfuse"
     with pytest.raises(PromptError):
-        backend_from_env({"CATO_PROMPTS": "langfuse"})
+        backend_from_env({"ANONYMIZER_PROMPTS": "langfuse"})
     with pytest.raises(PromptError, match="unknown"):
-        backend_from_env({"CATO_PROMPTS": "git"})
+        backend_from_env({"ANONYMIZER_PROMPTS": "git"})
 
 
 def test_notes_and_config_from_outside_are_protected_on_read():

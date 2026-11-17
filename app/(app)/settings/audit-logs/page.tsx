@@ -5,7 +5,7 @@ import { ActionBadge, Actor, JsonCell } from "@/components/audit";
 import { Notice, SourceBanner, dateTime } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ApiError, getAuditLogs, verifyAudit, type AuditQuery } from "@/lib/cato-api";
+import { ApiError, getAuditLogs, verifyAudit, type AuditQuery } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

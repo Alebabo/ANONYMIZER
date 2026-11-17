@@ -2,16 +2,16 @@ import json
 
 import pytest
 
-from cato.accounts import DEFAULT_ORG, Principal
-from cato.audit import AuditLog
-from cato.classify import Classifier
-from cato.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
-from cato.detect import Detector
-from cato.pipeline import Pipeline
-from cato.policy import builtin_policy
-from cato.sources import JsonlSource
-from cato.tracing import TraceStore
-from cato.vault import FileVault, VaultKey
+from anonymizer.accounts import DEFAULT_ORG, Principal
+from anonymizer.audit import AuditLog
+from anonymizer.classify import Classifier
+from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
+from anonymizer.detect import Detector
+from anonymizer.pipeline import Pipeline
+from anonymizer.policy import builtin_policy
+from anonymizer.sources import JsonlSource
+from anonymizer.tracing import TraceStore
+from anonymizer.vault import FileVault, VaultKey
 
 DETECTOR = Detector()
 SECRETS = ["Mustermann", "max.mustermann@example.org", "DE89 3704", "Diabetes", "sess-", "Beispielweg"]
@@ -141,8 +141,8 @@ def test_stats_are_k_anonymous(source):
 
 
 def test_persistent_vault_keeps_placeholders_and_allows_admin_restore(source, tmp_path):
-    from cato.anonymize import restore
-    from cato.conversations import namespace_for
+    from anonymizer.anonymize import restore
+    from anonymizer.conversations import namespace_for
 
     vault = FileVault(tmp_path / "v.json", VaultKey.generate())
     svc = service(source, vault=vault)
@@ -212,7 +212,7 @@ def test_message_labels_pass_only_when_clean(tmp_path):
     labels = tmp_path / "labels.txt"
     labels.write_text("# Babo agents and actions\nTRANSACTION\nTRANSACTION_RECALL_EMB\nagent:TRANSACTION\n\n",
                       encoding="utf-8")
-    cfg = ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(labels)})
+    cfg = ConversationConfig.from_env({"ANONYMIZER_CONVERSATIONS_LABELS": str(labels)})
     assert cfg.known_labels == {"TRANSACTION", "TRANSACTION_RECALL_EMB", "agent:TRANSACTION"}
     svc = service(JsonlSource(p), known_labels=cfg.known_labels)
     head = svc.list(ALICE)["data"][0]
@@ -227,15 +227,15 @@ def test_message_labels_pass_only_when_clean(tmp_path):
 
 def test_label_allow_list_rejects_bad_files(tmp_path):
     with pytest.raises(ConversationError, match="readable"):
-        ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(tmp_path / "missing.txt")})
+        ConversationConfig.from_env({"ANONYMIZER_CONVERSATIONS_LABELS": str(tmp_path / "missing.txt")})
     bad = tmp_path / "bad.txt"
     bad.write_text("agent:[A-Z_]+\n", encoding="utf-8")
     with pytest.raises(ConversationError, match="line 1"):
-        ConversationConfig.from_env({"CATO_CONVERSATIONS_LABELS": str(bad)})
+        ConversationConfig.from_env({"ANONYMIZER_CONVERSATIONS_LABELS": str(bad)})
 
 
 def test_source_check_counts_dropped_labels_without_values(tmp_path, monkeypatch, capsys):
-    from cato.cli import _source_check
+    from anonymizer.cli import _source_check
 
     c = conversation(1, tags=["agent:TRANSACTION", "Max Mustermann"])
     c["messages"][1]["agent"] = "TRANSACTION"
@@ -243,9 +243,9 @@ def test_source_check_counts_dropped_labels_without_values(tmp_path, monkeypatch
     p.write_text(json.dumps(c) + "\n", encoding="utf-8")
     labels = tmp_path / "labels.txt"
     labels.write_text("agent:TRANSACTION\nTRANSACTION\n", encoding="utf-8")
-    monkeypatch.setenv("CATO_SOURCE", "jsonl")
-    monkeypatch.setenv("CATO_SOURCE_PATH", str(p))
-    monkeypatch.setenv("CATO_CONVERSATIONS_LABELS", str(labels))
+    monkeypatch.setenv("ANONYMIZER_SOURCE", "jsonl")
+    monkeypatch.setenv("ANONYMIZER_SOURCE_PATH", str(p))
+    monkeypatch.setenv("ANONYMIZER_CONVERSATIONS_LABELS", str(labels))
     assert _source_check(protect=True) == 0
     out = capsys.readouterr().out
     assert json.loads(out)["labels"] == {"checked": 3, "dropped": 1, "allow_listed": 2}

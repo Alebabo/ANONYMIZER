@@ -11,18 +11,18 @@ import mcp_types as types
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.api import create_app
-from cato.api.settings import Settings
-from cato.pipeline import Pipeline
-from cato.policy import builtin_policy
-from cato.proxy import DEFAULT_FIELD_HINTS, WITHHELD, CatoProxy, ProxyConfig, ResultFilter
-from cato.tracing import TraceStore
-from cato.vault import InMemoryVault, VaultKey
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
+from anonymizer.pipeline import Pipeline
+from anonymizer.policy import builtin_policy
+from anonymizer.proxy import DEFAULT_FIELD_HINTS, WITHHELD, AnonymizerProxy, ProxyConfig, ResultFilter
+from anonymizer.tracing import TraceStore
+from anonymizer.vault import InMemoryVault, VaultKey
 
 DEMO = Path(__file__).resolve().parents[3] / "examples" / "proxy" / "demo_db_server.py"
 SECRETS = ["Mustermann", "Musterfrau", "max.mustermann@example.org", "erika@example.com", "1234567",
            "98765432", "DE89", "0532 0130", "Depression", "Hauptstraße", "Beispiel"]
-API_KEY = "cato_test_user_key_0123456789abcdef"
+API_KEY = "anonymizer_test_user_key_0123456789abcdef"
 MCP_HEADERS = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json",
                "mcp-protocol-version": "2025-06-18"}
 
@@ -147,7 +147,7 @@ def test_config_env_substitution_and_validation(tmp_path):
 def demo_config(tmp_path, **upstream) -> Path:
     cfg = {"policy": "support-default", "trace_db": str(tmp_path / "traces.db"), "audit_db": str(tmp_path / "a.db"),
            "upstreams": {"demo": {"command": [sys.executable, str(DEMO)], **upstream}}}
-    p = tmp_path / "cato-proxy.yaml"
+    p = tmp_path / "anonymizer-proxy.yaml"
     p.write_text(json.dumps(cfg))  # JSON is valid YAML
     return p
 
@@ -159,7 +159,7 @@ def run_stdio(config: Path, calls: list[tuple[str, dict]]):
     from mcp.client.stdio import StdioServerParameters
 
     async def go():
-        params = StdioServerParameters(command=sys.executable, args=["-m", "cato.proxy.server", "--config",
+        params = StdioServerParameters(command=sys.executable, args=["-m", "anonymizer.proxy.server", "--config",
                                                                      str(config)])
         async with Client(params, read_timeout_seconds=120) as c:
             names = [t.name for t in (await c.list_tools()).tools]
@@ -201,8 +201,8 @@ def rpc(client, method, params=None, headers=None):
 
 def test_http_proxy_in_api(tmp_path):
     cfg = demo_config(tmp_path, tools={"allow": ["get_customers", "list_tables"]})
-    env = {"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "pol"), "CATO_ACCOUNTS_DB": ":memory:",
-           "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:", "CATO_PROXY_CONFIG": str(cfg)}
+    env = {"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "pol"), "ANONYMIZER_ACCOUNTS_DB": ":memory:",
+           "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:", "ANONYMIZER_PROXY_CONFIG": str(cfg)}
     with TestClient(create_app(Settings.from_env(env))) as c:
         assert rpc(c, "tools/list", headers={}).status_code == 401
         names = {t["name"] for t in rpc(c, "tools/list").json()["result"]["tools"]}
@@ -221,7 +221,7 @@ def test_http_proxy_in_api(tmp_path):
 
 
 def test_proxy_unknown_upstream_tool():
-    proxy = CatoProxy(ProxyConfig.model_validate({"upstreams": {"db": {"url": "http://127.0.0.1:9/mcp"}}}))
+    proxy = AnonymizerProxy(ProxyConfig.model_validate({"upstreams": {"db": {"url": "http://127.0.0.1:9/mcp"}}}))
     r = anyio.run(proxy.call_tool, "nope__x", {})
     assert r.is_error and "unknown" in r.content[0].text
 
@@ -263,20 +263,20 @@ def test_config_values_with_yaml_characters_and_comments(tmp_path):
 
 
 def test_relative_policy_file_resolves_against_config(tmp_path, monkeypatch):
-    from cato.policy.store import builtin_policy as bp
+    from anonymizer.policy.store import builtin_policy as bp
     import yaml
 
     (tmp_path / "strict.yaml").write_text(yaml.safe_dump(bp("support-default").model_dump(mode="json")))
     p = tmp_path / "p.yaml"
     p.write_text("policy: ./strict.yaml\nupstreams:\n  db:\n    url: http://127.0.0.1:9/mcp\n")
     monkeypatch.chdir("/")
-    assert CatoProxy(ProxyConfig.load(p, {})).pipelines["db"].policy.name == "support-default"
+    assert AnonymizerProxy(ProxyConfig.load(p, {})).pipelines["db"].policy.name == "support-default"
 
 
 def test_known_values_thread_safety():
     import threading
 
-    from cato.proxy.filter import KnownValues
+    from anonymizer.proxy.filter import KnownValues
 
     known, errors = KnownValues(), []
 
@@ -300,7 +300,7 @@ def test_upstream_reconnects_after_exit(tmp_path):
                       "@s.tool()\ndef ping() -> str:\n    return 'pong'\n"
                       "@s.tool()\ndef die() -> str:\n    os._exit(1)\n"
                       "s.run('stdio')\n")
-    proxy = CatoProxy(ProxyConfig.model_validate({"upstreams": {"x": {"command": [sys.executable, str(server)],
+    proxy = AnonymizerProxy(ProxyConfig.model_validate({"upstreams": {"x": {"command": [sys.executable, str(server)],
                                                                       "timeout": 20}}}))
 
     async def go():

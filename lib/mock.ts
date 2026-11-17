@@ -1,8 +1,8 @@
-// Illustrative example data in the shape of the Cato API. No real content.
+// Illustrative example data in the shape of the Anonymizer API. No real content.
 import type {
   ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Me, Metrics, PolicySummary,
   PromptHistoryItem, PromptListItem, PromptVersion, ProxyStatus, SourcesInfo, Trace, User,
-} from "@/lib/cato-api";
+} from "@/lib/anonymizer-api";
 
 const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
 
@@ -155,11 +155,11 @@ export const exampleMe: Me = {
 };
 
 export const exampleApiKeys: ApiKey[] = [
-  { id: "key_a1b2c3d4e5f6", org_id: "default", name: "Contract review backend", prefix: "cato_Xr8vQ2p", role: "user",
+  { id: "key_a1b2c3d4e5f6", org_id: "default", name: "Contract review backend", prefix: "anonymizer_Xr8vQ2p", role: "user",
     created_by: "usr_3f1a9c0b7d2e", created_at: base - 20 * day, last_used_at: base - 120, revoked_at: null },
-  { id: "key_0f9e8d7c6b5a", org_id: "default", name: "Policy deployment (CI)", prefix: "cato_Lm3Tz9a", role: "admin",
+  { id: "key_0f9e8d7c6b5a", org_id: "default", name: "Policy deployment (CI)", prefix: "anonymizer_Lm3Tz9a", role: "admin",
     created_by: "usr_3f1a9c0b7d2e", created_at: base - 9 * day, last_used_at: base - 3 * day, revoked_at: null },
-  { id: "key_5a4b3c2d1e0f", org_id: "default", name: "Old prototype", prefix: "cato_P0qWe7r", role: "user",
+  { id: "key_5a4b3c2d1e0f", org_id: "default", name: "Old prototype", prefix: "anonymizer_P0qWe7r", role: "user",
     created_by: "usr_3f1a9c0b7d2e", created_at: base - 28 * day, last_used_at: base - 15 * day, revoked_at: base - 14 * day },
 ];
 
@@ -177,17 +177,17 @@ const entry = (i: number, ago: number, e: Partial<AuditEntry>): AuditEntry => ({
   prev_hash: "", hash: `example${i}`, ...e,
 });
 export const exampleAudit: AuditEntry[] = [
-  entry(9, 300, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (cato_Lm3Tz9a…)",
+  entry(9, 300, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (anonymizer_Lm3Tz9a…)",
     resource_type: "vault", resource_id: "matter-2026-114", action: "restore", after: { restored: 3, unresolved: 0 } }),
   entry(8, 600, { resource_type: "session", resource_id: "usr_3f1a9c0b7d2e", action: "login" }),
   entry(7, 900, { actor_type: "anonymous", actor_id: null, actor_label: "admin@kanzlei.example",
     resource_type: "session", resource_id: "usr_3f1a9c0b7d2e", action: "login_failed" }),
-  entry(6, 2 * day, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (cato_Lm3Tz9a…)",
+  entry(6, 2 * day, { actor_type: "api_key", actor_id: "key_0f9e8d7c6b5a", actor_label: "Policy deployment (CI) (anonymizer_Lm3Tz9a…)",
     resource_type: "policy", resource_id: "firm-a", action: "update",
     before: { name: "firm-a", version: 2, hash: "sha256:51c0…", scope: { tenant: "firm-a", team: null } },
     after: { name: "firm-a", version: 3, hash: "sha256:7a0e…", scope: { tenant: "firm-a", team: null } } }),
   entry(5, 9 * day, { resource_type: "api_key", resource_id: "key_0f9e8d7c6b5a", action: "create",
-    after: { id: "key_0f9e8d7c6b5a", name: "Policy deployment (CI)", prefix: "cato_Lm3Tz9a", role: "admin", revoked_at: null } }),
+    after: { id: "key_0f9e8d7c6b5a", name: "Policy deployment (CI)", prefix: "anonymizer_Lm3Tz9a", role: "admin", revoked_at: null } }),
   entry(4, 12 * day, { resource_type: "member", resource_id: "usr_8b2e4d6f1a0c", action: "create",
     after: { id: "usr_8b2e4d6f1a0c", email: "it@kanzlei.example", name: "IT Team", role: "member", disabled: false } }),
   entry(3, 14 * day, { resource_type: "api_key", resource_id: "key_5a4b3c2d1e0f", action: "revoke",
@@ -249,14 +249,14 @@ export const examplePrompts: PromptListItem[] = [
 
 export const examplePromptVersion: PromptVersion = {
   name: "support-bot", version: 13, type: "text", labels: ["staging", "latest"], note: "Ask for the order number first",
-  created_by: "Claude Code (cato_Xr8vQ2p…)", created_at: base - 2 * 3600, hash: "sha256:7d1e…", protected: false,
+  created_by: "Claude Code (anonymizer_Xr8vQ2p…)", created_at: base - 2 * 3600, hash: "sha256:7d1e…", protected: false,
   config: { temperature: 0.2 },
   prompt: "Du bist der Support-Assistent der Beispiel GmbH.\nAntworte freundlich und kurz.\n" +
           "Frage nach der Bestellnummer, bevor du Auskunft gibst.\nSprich {{customer_name}} mit Sie an.",
 };
 
 export const examplePromptHistory: PromptHistoryItem[] = [
-  { version: 13, labels: ["staging", "latest"], note: "Ask for the order number first", created_by: "Claude Code (cato_Xr8vQ2p…)",
+  { version: 13, labels: ["staging", "latest"], note: "Ask for the order number first", created_by: "Claude Code (anonymizer_Xr8vQ2p…)",
     created_at: base - 2 * 3600, hash: "sha256:7d1e…", type: "text" },
   { version: 12, labels: ["production"], note: "Shorter answers", created_by: "admin@kanzlei.example",
     created_at: base - 3 * day, hash: "sha256:a40c…", type: "text" },

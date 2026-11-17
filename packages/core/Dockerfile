@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Cato API – self-hosted privacy engine with spaCy models included.
-# Build:  docker build -t cato-api packages/core
+# Anonymizer API – self-hosted privacy engine with spaCy models included.
+# Build:  docker build -t anonymizer-api packages/core
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -25,19 +25,19 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
  && python -m spacy download en_core_web_lg
 
 # Unprivileged runtime user; data (vault, policies, traces, accounts, audit log) lives in a volume.
-RUN useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin cato \
- && mkdir -p /data && chown cato /data
-USER cato
+RUN useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin anonymizer \
+ && mkdir -p /data && chown anonymizer /data
+USER anonymizer
 
-ENV CATO_HOST=0.0.0.0 \
-    CATO_PORT=8080 \
-    CATO_VAULT_PATH=/data/vault.json \
-    CATO_POLICY_DIR=/data/policies \
-    CATO_TRACE_DB=/data/traces.db \
-    CATO_ACCOUNTS_DB=/data/accounts.db \
-    CATO_AUDIT_DB=/data/audit.db \
-    CATO_CONVERSATIONS_DB=/data/conversations.db \
-    CATO_PROMPTS_DB=/data/prompts.db
+ENV ANONYMIZER_HOST=0.0.0.0 \
+    ANONYMIZER_PORT=8080 \
+    ANONYMIZER_VAULT_PATH=/data/vault.json \
+    ANONYMIZER_POLICY_DIR=/data/policies \
+    ANONYMIZER_TRACE_DB=/data/traces.db \
+    ANONYMIZER_ACCOUNTS_DB=/data/accounts.db \
+    ANONYMIZER_AUDIT_DB=/data/audit.db \
+    ANONYMIZER_CONVERSATIONS_DB=/data/conversations.db \
+    ANONYMIZER_PROMPTS_DB=/data/prompts.db
 
 VOLUME ["/data"]
 EXPOSE 8080
@@ -45,4 +45,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4).status == 200 else 1)"
 
-CMD ["cato-api"]
+CMD ["anonymizer-api"]

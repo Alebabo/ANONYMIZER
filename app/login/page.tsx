@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LoginForm } from "@/app/login/form";
 import { Wordmark } from "@/components/logo";
 import { Card, CardContent } from "@/components/ui/card";
-import { isDemo } from "@/lib/cato-api";
+import { isDemo } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
           </CardContent>
         </Card>
         <p className="text-muted-foreground text-center text-2xs">
-          Accounts are created by an administrator (<code>cato user create</code> or Settings → Members).
+          Accounts are created by an administrator (<code>anonymizer user create</code> or Settings → Members).
         </p>
       </div>
     </main>

@@ -2,11 +2,11 @@ import json
 
 from fastapi.testclient import TestClient
 
-from cato.api import create_app
-from cato.api.settings import Settings
-from cato.leakcheck import check_text, mask, run
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
+from anonymizer.leakcheck import check_text, mask, run
 
-KEY = "cato_test_user_key_0123456789abcdef"
+KEY = "anonymizer_test_user_key_0123456789abcdef"
 
 
 def test_generic_patterns_and_masking():
@@ -31,9 +31,9 @@ def test_run_against_api(tmp_path):
         for i in range(3)]
     src.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
     app = create_app(Settings.from_env({
-        "CATO_API_KEYS": KEY, "CATO_POLICY_DIR": str(tmp_path / "p"), "CATO_ACCOUNTS_DB": ":memory:",
-        "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:", "CATO_SOURCE": "jsonl",
-        "CATO_SOURCE_PATH": str(src), "CATO_CONVERSATIONS_DB": ":memory:"}))
+        "ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:",
+        "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:", "ANONYMIZER_SOURCE": "jsonl",
+        "ANONYMIZER_SOURCE_PATH": str(src), "ANONYMIZER_CONVERSATIONS_DB": ":memory:"}))
     client = TestClient(app)
     report = run(client, "http://testserver", KEY, limit=2, secrets=["Mustermann"])
     assert report.conversations == 2

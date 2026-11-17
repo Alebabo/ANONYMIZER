@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ActionBadge, Actor, SnapshotDiff } from "@/components/audit";
 import { Notice, SourceBanner, dateTime } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { ApiError, getAuditEntry } from "@/lib/cato-api";
+import { ApiError, getAuditEntry } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

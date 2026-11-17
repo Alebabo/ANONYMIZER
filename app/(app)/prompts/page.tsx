@@ -3,7 +3,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Notice, Pill, SourceBanner, ago } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getPrompts, getSources } from "@/lib/cato-api";
+import { getPrompts, getSources } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function Prompts() {
       <>
         <PageHeader title="Prompts" description="Versions, labels and promotion" />
         <div className="p-4 md:p-6"><Notice>
-          No prompt store is configured. Set <code>CATO_PROMPTS=local</code> or <code>langfuse</code> on the API, see docs/prompts.md.
+          No prompt store is configured. Set <code>ANONYMIZER_PROMPTS=local</code> or <code>langfuse</code> on the API, see docs/prompts.md.
         </Notice></div>
       </>
     );
@@ -42,7 +42,7 @@ export default async function Prompts() {
               </TableBody></Table></TableScroll>
           </CardContent></Card>
         <p className="text-muted-foreground text-xs">
-          Every new version is checked before it is saved: customer data and Cato placeholders are rejected. Creating a version never moves a label.
+          Every new version is checked before it is saved: customer data and Anonymizer placeholders are rejected. Creating a version never moves a label.
         </p>
       </div>
     </>

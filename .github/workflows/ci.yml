@@ -31,7 +31,7 @@ jobs:
         run: pytest -q
       - name: Corpus evaluation
         working-directory: packages/core
-        run: cato eval tests/corpus
+        run: anonymizer eval tests/corpus
 
   web:
     runs-on: ubuntu-latest

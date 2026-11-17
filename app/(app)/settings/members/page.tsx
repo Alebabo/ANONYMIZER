@@ -5,7 +5,7 @@ import { ActionForm, Field, InlineAction, Select, Submit } from "@/components/fo
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getMe, getMembers } from "@/lib/cato-api";
+import { getMe, getMembers } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

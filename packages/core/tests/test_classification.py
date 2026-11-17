@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from cato import scan
-from cato.classify import Classifier, ClassifierConfig, Override, RiskLevel, SignalRule
-from cato.models import Category, ScanResult, make_detection
+from anonymizer import scan
+from anonymizer.classify import Classifier, ClassifierConfig, Override, RiskLevel, SignalRule
+from anonymizer.models import Category, ScanResult, make_detection
 
 L, S, C = RiskLevel.LOW, RiskLevel.SENSITIVE, RiskLevel.CRITICAL
 CLS = Classifier()

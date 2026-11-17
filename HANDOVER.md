@@ -1,6 +1,6 @@
-# Übergabe: Cato als Datenschutz-Proxy für Kundenchats und Prompts
+# Übergabe: Anonymizer als Datenschutz-Proxy für Kundenchats und Prompts
 
-Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Cato auf der Arbeit zu testen, an die eigene Umgebung anzupassen und später vor Produktion zu betreiben. Hintergrund und Designentscheidungen stehen in [plan.md](plan.md), die technische Referenz in [docs/conversations.md](docs/conversations.md), [docs/prompts.md](docs/prompts.md) und [docs/mcp.md](docs/mcp.md).
+Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Anonymizer auf der Arbeit zu testen, an die eigene Umgebung anzupassen und später vor Produktion zu betreiben. Hintergrund und Designentscheidungen stehen in [plan.md](plan.md), die technische Referenz in [docs/conversations.md](docs/conversations.md), [docs/prompts.md](docs/prompts.md) und [docs/mcp.md](docs/mcp.md).
 
 ---
 
@@ -8,7 +8,7 @@ Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Cato auf der Arbeit 
 
 **Problem:** Claude darf bei der Arbeit nur an `sbx`/`develop`, nicht an `prod`, weil dort Kundendaten liegen. Für Prompt-Arbeit braucht man aber echte Chats.
 
-**Lösung:** Cato läuft **im Firmennetz neben Prod** und ist das Einzige, womit Claude spricht. Claude bekommt:
+**Lösung:** Anonymizer läuft **im Firmennetz neben Prod** und ist das Einzige, womit Claude spricht. Claude bekommt:
 
 - **Kundenchats**, aber nur geschützt: `PERSON_001`, `EMAIL_001` und `ORDER_NUMBER_001` statt echter Werte, `[REDACTED]` statt IBAN. Nachrichten mit Gesundheitsdaten kommen gar nicht (`content: null`).
 - **Statistiken**, z. B. Konversationen pro Prompt-Version. Kleine Gruppen werden unterdrückt.
@@ -16,9 +16,9 @@ Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Cato auf der Arbeit 
 
 ```
 Claude Code / Cursor (Laptop, kein Prod-Zugriff)
-        │  MCP über HTTPS + persönlicher Cato-Key      ← nur Platzhalter-Daten
+        │  MCP über HTTPS + persönlicher Anonymizer-Key      ← nur Platzhalter-Daten
         ▼
-Cato (Firmennetz, neben Prod)
+Anonymizer (Firmennetz, neben Prod)
    ├─ Quelle lesen (read-only): Langfuse | eigene Chat-DB über 2 HTTP-Endpunkte | JSONL-Export
    ├─ Erkennen → Klassifizieren → Policy → Pseudonymisieren (pro Nachricht)
    ├─ Prompt-Store (lokal oder Langfuse), Entwürfe geprüft
@@ -83,19 +83,19 @@ Erwartet: `292 passed, 1 skipped`. Der Skip kommt von einem Gateway-Test, der da
 ### 3.2 Server mit Beispieldaten starten
 
 ```bash
-export CATO_API_KEYS=cato_demo_key_change_me_0123456789
-export CATO_ADMIN_KEYS=cato_demo_admin_change_me_0123456789
-export CATO_BOOTSTRAP_ADMIN_EMAIL=ich@example.org CATO_BOOTSTRAP_ADMIN_PASSWORD=bitte-aendern-123
-export CATO_SOURCE=jsonl CATO_SOURCE_PATH=examples/support/conversations.jsonl
-export CATO_CUSTOM_PATTERNS=examples/support/patterns.yaml
-export CATO_PROMPTS=local CATO_MCP_HTTP=1
-cato-api
+export ANONYMIZER_API_KEYS=anonymizer_demo_key_change_me_0123456789
+export ANONYMIZER_ADMIN_KEYS=anonymizer_demo_admin_change_me_0123456789
+export ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=ich@example.org ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD=bitte-aendern-123
+export ANONYMIZER_SOURCE=jsonl ANONYMIZER_SOURCE_PATH=examples/support/conversations.jsonl
+export ANONYMIZER_CUSTOM_PATTERNS=examples/support/patterns.yaml
+export ANONYMIZER_PROMPTS=local ANONYMIZER_MCP_HTTP=1
+anonymizer-api
 ```
 
 In jedem weiteren Terminal für die Befehle unten (Client-Seite, ein Key je Variable):
 
 ```bash
-export CATO_API_KEY=cato_demo_key_change_me_0123456789 CATO_ADMIN_KEY=cato_demo_admin_change_me_0123456789
+export ANONYMIZER_API_KEY=anonymizer_demo_key_change_me_0123456789 ANONYMIZER_ADMIN_KEY=anonymizer_demo_admin_change_me_0123456789
 ```
 
 Läuft auf `http://127.0.0.1:8080`. Die Daten (Vault, Policies, Audit usw.) liegen in `./data/`.
@@ -103,7 +103,7 @@ Läuft auf `http://127.0.0.1:8080`. Die Daten (Vault, Policies, Audit usw.) lieg
 ### 3.3 Claude Code anbinden
 
 ```bash
-claude mcp add --transport http cato http://127.0.0.1:8080/mcp --header "Authorization: Bearer cato_demo_key_change_me_0123456789"
+claude mcp add --transport http anonymizer http://127.0.0.1:8080/mcp --header "Authorization: Bearer anonymizer_demo_key_change_me_0123456789"
 ```
 
 ```bash
@@ -121,14 +121,14 @@ Was du sehen solltest:
 
 - Namen erscheinen als `PERSON_001`, Bestellnummern als `ORDER_NUMBER_001`.
 - Eine Nachricht mit „Diabetes“ hat `content: null`.
-- Einen Entwurf mit einem echten Namen lehnt Cato ab.
+- Einen Entwurf mit einem echten Namen lehnt Anonymizer ab.
 
 ### 3.4 Dashboard (optional, aber für das Promoten nötig)
 
 Node.js ≥ 22:
 
 ```bash
-npm ci && CATO_API_URL=http://127.0.0.1:8080 npm run dev
+npm ci && ANONYMIZER_API_URL=http://127.0.0.1:8080 npm run dev
 ```
 
 Öffne `http://localhost:3000` und melde dich mit der Bootstrap-E-Mail und dem Passwort an.
@@ -140,20 +140,20 @@ npm ci && CATO_API_URL=http://127.0.0.1:8080 npm run dev
 ### 3.5 Leck-Check ausprobieren
 
 ```bash
-cato leak-check --api http://127.0.0.1:8080 --key cato_demo_key_change_me_0123456789 --limit 24
+anonymizer leak-check --api http://127.0.0.1:8080 --key anonymizer_demo_key_change_me_0123456789 --limit 24
 ```
 
-Erwartet: `"findings": 0`. Zum Vergleich den Server ohne `CATO_CUSTOM_PATTERNS` starten und erneut prüfen. Dann erscheinen 15 Funde (`long_number`), weil Bestell-, Kunden- und Ticketnummern ohne Patterns nicht erkannt werden. Genau so findest du später eure Lücken.
+Erwartet: `"findings": 0`. Zum Vergleich den Server ohne `ANONYMIZER_CUSTOM_PATTERNS` starten und erneut prüfen. Dann erscheinen 15 Funde (`long_number`), weil Bestell-, Kunden- und Ticketnummern ohne Patterns nicht erkannt werden. Genau so findest du später eure Lücken.
 
 ---
 
 ## 4. Phase B: Gegen sbx / develop
 
-Hier wird zum ersten Mal eine Firmenquelle angeschlossen, aber eine, an die Claude ohnehin darf. Cato kann dafür noch auf dem Laptop laufen.
+Hier wird zum ersten Mal eine Firmenquelle angeschlossen, aber eine, an die Claude ohnehin darf. Anonymizer kann dafür noch auf dem Laptop laufen.
 
 ### 4.1 Welche Quelle?
 
-| Wo liegen die Chats? | `CATO_SOURCE` | Aufwand |
+| Wo liegen die Chats? | `ANONYMIZER_SOURCE` | Aufwand |
 |---|---|---|
 | In **Langfuse** als Sessions/Traces | `langfuse` | Nur Keys eintragen (4.2) |
 | In einer **eigenen DB** / einem Backend-Service | `http` | Zwei read-only Endpunkte bauen (4.3), ca. ½–1 Tag |
@@ -164,47 +164,47 @@ Hier wird zum ersten Mal eine Firmenquelle angeschlossen, aber eine, an die Clau
 Die Keys findest du in Langfuse unter Project Settings → API Keys, für das **sbx-Projekt**.
 
 ```bash
-export CATO_SOURCE=langfuse
-export CATO_SOURCE_URL=https://langfuse-sbx.firma.intern
-export CATO_SOURCE_PUBLIC_KEY=pk-lf-...
-export CATO_SOURCE_SECRET_KEY=sk-lf-...
-export CATO_PROMPTS=langfuse          # nutzt dieselben Langfuse-Keys, wenn CATO_SOURCE=langfuse
-unset CATO_SOURCE_PATH
+export ANONYMIZER_SOURCE=langfuse
+export ANONYMIZER_SOURCE_URL=https://langfuse-sbx.firma.intern
+export ANONYMIZER_SOURCE_PUBLIC_KEY=pk-lf-...
+export ANONYMIZER_SOURCE_SECRET_KEY=sk-lf-...
+export ANONYMIZER_PROMPTS=langfuse          # nutzt dieselben Langfuse-Keys, wenn ANONYMIZER_SOURCE=langfuse
+unset ANONYMIZER_SOURCE_PATH
 ```
 
 Verbindung prüfen. Das gibt nur Zahlen aus, keine Inhalte:
 
 ```bash
-cato source-check --protect
+anonymizer source-check --protect
 ```
 
 Worauf du achten musst:
 
-- **Mapping:** Jede Langfuse-Session wird eine Konversation. Jeder Trace wird zu `input` → user und `output` → assistant. Wenn eure App im Trace-Input den **ganzen Verlauf** loggt, nimmt Cato die **letzte** User-Nachricht.
-- **Format prüfen:** Schau dir mit `get_conversation` 2–3 Konversationen an. Stimmen Reihenfolge und Rollen nicht, ist die Funktion `_text()` in `packages/core/src/cato/sources/__init__.py` die Stelle zum Anpassen.
-- **Statistik nach Prompt-Version:** Cato liest `prompt_name` (oder `prompt`) und `prompt_version` aus den **Trace-Metadaten**. Setzt eure App das nicht, fehlt die Zuordnung. Zusätzlich liefert die Session-Liste von Langfuse keine Prompts mit. `conversation_stats(group_by="prompt_version")` funktioniert mit Langfuse deshalb nur eingeschränkt. Die Alternative ist ein eigener HTTP-Endpunkt (4.3).
-- **Prompts in Langfuse:** Cato legt Versionen **ohne Label** an. `production` setzt ein Admin im Cato-Dashboard; Cato ruft dafür die Langfuse-API auf. Ordner-Namen mit `/` werden nicht unterstützt.
+- **Mapping:** Jede Langfuse-Session wird eine Konversation. Jeder Trace wird zu `input` → user und `output` → assistant. Wenn eure App im Trace-Input den **ganzen Verlauf** loggt, nimmt Anonymizer die **letzte** User-Nachricht.
+- **Format prüfen:** Schau dir mit `get_conversation` 2–3 Konversationen an. Stimmen Reihenfolge und Rollen nicht, ist die Funktion `_text()` in `packages/core/src/anonymizer/sources/__init__.py` die Stelle zum Anpassen.
+- **Statistik nach Prompt-Version:** Anonymizer liest `prompt_name` (oder `prompt`) und `prompt_version` aus den **Trace-Metadaten**. Setzt eure App das nicht, fehlt die Zuordnung. Zusätzlich liefert die Session-Liste von Langfuse keine Prompts mit. `conversation_stats(group_by="prompt_version")` funktioniert mit Langfuse deshalb nur eingeschränkt. Die Alternative ist ein eigener HTTP-Endpunkt (4.3).
+- **Prompts in Langfuse:** Anonymizer legt Versionen **ohne Label** an. `production` setzt ein Admin im Anonymizer-Dashboard; Anonymizer ruft dafür die Langfuse-API auf. Ordner-Namen mit `/` werden nicht unterstützt.
 
 ### 4.3 Eigene Chat-DB (HTTP-Vertrag)
 
 Ihr baut neben der Chat-DB zwei GET-Endpunkte mit einem **read-only DB-User**. Vertrag und FastAPI-Beispiel: [docs/conversations.md → HTTP contract](docs/conversations.md#http-contract).
 
 ```bash
-export CATO_SOURCE=http
-export CATO_SOURCE_URL=https://chat-export-sbx.firma.intern/api
-export CATO_SOURCE_KEY=...            # Bearer-Key, den euer Endpunkt prüft
+export ANONYMIZER_SOURCE=http
+export ANONYMIZER_SOURCE_URL=https://chat-export-sbx.firma.intern/api
+export ANONYMIZER_SOURCE_KEY=...            # Bearer-Key, den euer Endpunkt prüft
 # oder HTTP Basic (z. B. technischer Nutzer), nicht beides:
-# export CATO_SOURCE_USER=cato CATO_SOURCE_PASSWORD=...
+# export ANONYMIZER_SOURCE_USER=anonymizer ANONYMIZER_SOURCE_PASSWORD=...
 ```
 
 Tipps:
 
 - Felder `prompt` und `prompt_version` mitliefern, dann funktioniert die Statistik pro Prompt-Version voll.
 - `tags` (Kategorie, Intent, Ergebnis) mitliefern, das macht die Auswertung viel nützlicher.
-- `next_cursor` darf eure interne ID sein. Cato gibt ihn nie nach außen.
+- `next_cursor` darf eure interne ID sein. Anonymizer gibt ihn nie nach außen.
 - Neueste Konversationen zuerst.
 - Multi-Agent-Bots: pro Nachricht `agent`, `action` und `subtopic` mitliefern. Nur Enum-Werte, nie Freitext.
-- Bezeichner wie `TRANSACTION` oder `CARD_LOCK_EMB` hält die Erkennung oft für Organisationen und verwirft sie. Die festen Namen in eine Datei unter `local/` schreiben, eine pro Zeile, exakt so wie im Tag (`agent:TRANSACTION`) bzw. im Feld (`TRANSACTION`), und `CATO_CONVERSATIONS_LABELS` darauf setzen. `cato source-check --protect` zeigt unter `labels`, wie viele noch wegfallen.
+- Bezeichner wie `TRANSACTION` oder `CARD_LOCK_EMB` hält die Erkennung oft für Organisationen und verwirft sie. Die festen Namen in eine Datei unter `local/` schreiben, eine pro Zeile, exakt so wie im Tag (`agent:TRANSACTION`) bzw. im Feld (`TRANSACTION`), und `ANONYMIZER_CONVERSATIONS_LABELS` darauf setzen. `anonymizer source-check --protect` zeigt unter `labels`, wie viele noch wegfallen.
 
 ### 4.4 Eigene Muster (Bestellnummern usw.)
 
@@ -225,7 +225,7 @@ patterns:
 ```
 
 ```bash
-export CATO_CUSTOM_PATTERNS=local/patterns.yaml
+export ANONYMIZER_CUSTOM_PATTERNS=local/patterns.yaml
 ```
 
 - Die Namen `customer_number`, `order_number`, `ticket_number`, `contract_number`, `invoice_number` und `tracking_number` werden von `support-default` **pseudonymisiert**: Gleiche Nummer ergibt gleichen Platzhalter, damit die Analyse funktioniert.
@@ -240,16 +240,16 @@ export CATO_CUSTOM_PATTERNS=local/patterns.yaml
 
 | Thema | Datei | Typische Anpassung |
 |---|---|---|
-| Langfuse-Mapping | `packages/core/src/cato/sources/__init__.py` → `_text()`, `LangfuseSource.get()` | Wo im Trace-Input steht die User-Nachricht? Welche Metadaten-Keys für den Prompt? |
-| Neue Quelle | `packages/core/src/cato/sources/__init__.py` | Klasse mit `list()`, `get()`, `describe()`, in `source_from_env()` registrieren |
-| Erkennung eurer Nummern | `local/patterns.yaml` (`CATO_CUSTOM_PATTERNS`) | Regex pro Format |
-| Namen in Chats | `packages/core/src/cato/detect/recognizers.py` → `SelfIntroductionRecognizer` | Weitere Einleitungen („Hier schreibt …“) |
-| Falsch erkannte Wörter | `packages/core/src/cato/detect/engine.py` → `NER_STOPWORDS` | Wörter, die NER fälschlich als Namen markiert (z. B. euer Produktname) |
+| Langfuse-Mapping | `packages/core/src/anonymizer/sources/__init__.py` → `_text()`, `LangfuseSource.get()` | Wo im Trace-Input steht die User-Nachricht? Welche Metadaten-Keys für den Prompt? |
+| Neue Quelle | `packages/core/src/anonymizer/sources/__init__.py` | Klasse mit `list()`, `get()`, `describe()`, in `source_from_env()` registrieren |
+| Erkennung eurer Nummern | `local/patterns.yaml` (`ANONYMIZER_CUSTOM_PATTERNS`) | Regex pro Format |
+| Namen in Chats | `packages/core/src/anonymizer/detect/recognizers.py` → `SelfIntroductionRecognizer` | Weitere Einleitungen („Hier schreibt …“) |
+| Falsch erkannte Wörter | `packages/core/src/anonymizer/detect/engine.py` → `NER_STOPWORDS` | Wörter, die NER fälschlich als Namen markiert (z. B. euer Produktname) |
 | Was wird wie behandelt | eigene Policy (5.2) | z. B. Gesundheitsdaten schwärzen statt Nachricht zurückhalten |
 | Limits | Umgebungsvariablen (Abschnitt 9) | Tageslimit, k, Seitengrößen |
-| Prüfung von Prompt-Entwürfen | `packages/core/src/cato/prompts.py` → `BENIGN_TYPES`, `_findings()` | Welche Typen in Prompts erlaubt sind |
-| Anweisungen an Claude | `packages/core/src/cato/mcp/server.py` → `INSTRUCTIONS`, Tool-Beschreibungen | Hausregeln, Tonalität |
-| Dashboard | `app/(app)/conversations/`, `app/(app)/prompts/`, `lib/cato-api.ts` | Spalten, Ansichten |
+| Prüfung von Prompt-Entwürfen | `packages/core/src/anonymizer/prompts.py` → `BENIGN_TYPES`, `_findings()` | Welche Typen in Prompts erlaubt sind |
+| Anweisungen an Claude | `packages/core/src/anonymizer/mcp/server.py` → `INSTRUCTIONS`, Tool-Beschreibungen | Hausregeln, Tonalität |
+| Dashboard | `app/(app)/conversations/`, `app/(app)/prompts/`, `lib/anonymizer-api.ts` | Spalten, Ansichten |
 
 Nach jeder Code-Änderung laufen lassen:
 
@@ -259,9 +259,9 @@ cd packages/core && python -m pytest -q
 
 ### 5.2 Eigene Policy
 
-Nicht die eingebaute Datei ändern, sondern eine eigene Version hochladen. Die Befehle erwarten `CATO_API_KEY` (dein Key) und `CATO_ADMIN_KEY` (Admin-Key) als Umgebungsvariablen (siehe 3.2).
+Nicht die eingebaute Datei ändern, sondern eine eigene Version hochladen. Die Befehle erwarten `ANONYMIZER_API_KEY` (dein Key) und `ANONYMIZER_ADMIN_KEY` (Admin-Key) als Umgebungsvariablen (siehe 3.2).
 
-1. Kopiere `packages/core/src/cato/policy/builtin/support-default.yaml` nach `local/support-firma.yaml` und setze `name: support-firma`.
+1. Kopiere `packages/core/src/anonymizer/policy/builtin/support-default.yaml` nach `local/support-firma.yaml` und setze `name: support-firma`.
 2. Vorher gegen die aktive Policy testen (Dry-Run, nichts wird gespeichert):
 
 ```bash
@@ -270,7 +270,7 @@ import json, os, urllib.request
 yaml = open("local/support-firma.yaml").read()
 body = {"text": "Ich habe Diabetes, Bestellung DE-12345678", "candidate_yaml": yaml, "against": "support-default"}
 req = urllib.request.Request("http://127.0.0.1:8080/v1/policies/dry-run", json.dumps(body).encode(),
-                             {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["CATO_API_KEY"]})
+                             {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["ANONYMIZER_API_KEY"]})
 print(json.dumps(json.load(urllib.request.urlopen(req)), indent=2))
 PY
 ```
@@ -278,11 +278,11 @@ PY
 3. Hochladen (Admin-Key) und aktivieren:
 
 ```bash
-python -c "import json; print(json.dumps({'yaml': open('local/support-firma.yaml').read()}))" | curl -s -X POST localhost:8080/v1/policies -H "X-API-Key: $CATO_ADMIN_KEY" -H 'Content-Type: application/json' -d @-
+python -c "import json; print(json.dumps({'yaml': open('local/support-firma.yaml').read()}))" | curl -s -X POST localhost:8080/v1/policies -H "X-API-Key: $ANONYMIZER_ADMIN_KEY" -H 'Content-Type: application/json' -d @-
 ```
 
 ```bash
-export CATO_CONVERSATIONS_POLICY=support-firma     # Server neu starten; unbekannter Name = Startfehler
+export ANONYMIZER_CONVERSATIONS_POLICY=support-firma     # Server neu starten; unbekannter Name = Startfehler
 ```
 
 Häufige Änderung: Gesundheitsdaten nur **schwärzen** statt die ganze Nachricht zurückzuhalten. In der Regel `special_categories_external` die `action: local_only` durch `action: redact` ersetzen. Das erst tun, wenn die Evaluation zeigt, dass die Begriffe zuverlässig erkannt werden; die Erkennung arbeitet mit Wortlisten und übersieht Synonyme.
@@ -292,10 +292,10 @@ Häufige Änderung: Gesundheitsdaten nur **schwärzen** statt die ganze Nachrich
 Mit dem Admin-Key, ohne Dashboard:
 
 ```bash
-curl -s -X POST localhost:8080/v1/api-keys -H "X-API-Key: $CATO_ADMIN_KEY" -H 'Content-Type: application/json' -d '{"name":"alex-claude-code","role":"user"}'
+curl -s -X POST localhost:8080/v1/api-keys -H "X-API-Key: $ANONYMIZER_ADMIN_KEY" -H 'Content-Type: application/json' -d '{"name":"alex-claude-code","role":"user"}'
 ```
 
-Der Key wird **einmal** angezeigt und nur als Hash gespeichert. Alternativ geht es im Dashboard unter API Keys. Dashboard-Nutzer legst du mit `cato user create` an oder im Dashboard unter Settings → Members.
+Der Key wird **einmal** angezeigt und nur als Hash gespeichert. Alternativ geht es im Dashboard unter API Keys. Dashboard-Nutzer legst du mit `anonymizer user create` an oder im Dashboard unter Settings → Members.
 
 ---
 
@@ -311,24 +311,24 @@ cp .env.example .env
 
 In `.env` setzen:
 
-- Bootstrap-Admin, `CATO_ADMIN_KEYS`, `CATO_VAULT_KEY`.
-- Quelle (`CATO_SOURCE_*`), `CATO_PROMPTS`, `CATO_MCP_HTTP=1`, `CATO_CUSTOM_PATTERNS=/config/patterns.yaml`.
+- Bootstrap-Admin, `ANONYMIZER_ADMIN_KEYS`, `ANONYMIZER_VAULT_KEY`.
+- Quelle (`ANONYMIZER_SOURCE_*`), `ANONYMIZER_PROMPTS`, `ANONYMIZER_MCP_HTTP=1`, `ANONYMIZER_CUSTOM_PATTERNS=/config/patterns.yaml`.
 
 Erzeugen kannst du die Werte mit:
 
 ```bash
-python -c "import secrets; print('cato_' + secrets.token_urlsafe(32))"
+python -c "import secrets; print('anonymizer_' + secrets.token_urlsafe(32))"
 ```
 
 ```bash
-python -c "from cato.vault import VaultKey; print(VaultKey.generate().to_b64())"
+python -c "from anonymizer.vault import VaultKey; print(VaultKey.generate().to_b64())"
 ```
 
 In `docker-compose.yml` das Verzeichnis mit Patterns und Policy einhängen:
 
 ```yaml
     volumes:
-      - cato-data:/data
+      - anonymizer-data:/data
       - ./local:/config:ro
 ```
 
@@ -337,31 +337,31 @@ docker compose up -d --build
 ```
 
 ```bash
-docker compose exec api cato source-check --protect
+docker compose exec api anonymizer source-check --protect
 ```
 
 Beim Build hinter einem Firmen-Proxy braucht der Build das CA-Zertifikat: `docker build --secret id=ca_bundle,src=firmen-ca.crt ...` (siehe `docs/API.md`). Das Image ist mehrere GB groß (Sprachmodelle).
 
 ### 6.2 Netzwerk
 
-- Cato lauscht nur auf `127.0.0.1:8080`. Davor gehört ein **Reverse Proxy mit TLS** (nginx, Traefik, euer Ingress), z. B. `https://cato.firma.intern`.
-- **Ausgehend** braucht Cato nur die Quelle (Langfuse bzw. euren Endpunkt), keinen Internetzugang.
+- Anonymizer lauscht nur auf `127.0.0.1:8080`. Davor gehört ein **Reverse Proxy mit TLS** (nginx, Traefik, euer Ingress), z. B. `https://anonymizer.firma.intern`.
+- **Ausgehend** braucht Anonymizer nur die Quelle (Langfuse bzw. euren Endpunkt), keinen Internetzugang.
 - **Eingehend** nur aus dem Netz, in dem die Laptops sind (VPN). Nicht öffentlich.
-- `CATO_MCP_ALLOWED_HOSTS=cato.firma.intern` aktiviert den Schutz gegen DNS-Rebinding.
+- `ANONYMIZER_MCP_ALLOWED_HOSTS=anonymizer.firma.intern` aktiviert den Schutz gegen DNS-Rebinding.
 - Lesezugriff auf die Quelle: read-only User, wenn möglich auf einer **Replica**.
 
 ### 6.3 Claude Code auf die Prod-Instanz
 
 ```bash
-claude mcp add --transport http cato https://cato.firma.intern/mcp --header "Authorization: Bearer <persönlicher Key>"
+claude mcp add --transport http anonymizer https://anonymizer.firma.intern/mcp --header "Authorization: Bearer <persönlicher Key>"
 ```
 
 Claude Desktop und Konnektoren auf claude.ai brauchen OAuth. Das ist noch nicht eingebaut (Abschnitt 12). Claude Code und Cursor funktionieren mit dem Header.
 
 ### 6.4 Backups
 
-- **`CATO_VAULT_KEY` außerhalb des Servers sichern.** Ohne ihn ist der Vault (die Zuordnung Platzhalter → echter Wert) nicht mehr lesbar.
-- Das Volume `cato-data` sichern: Vault, Policies, Audit-Log, Prompts (lokal), ID-Zuordnung.
+- **`ANONYMIZER_VAULT_KEY` außerhalb des Servers sichern.** Ohne ihn ist der Vault (die Zuordnung Platzhalter → echter Wert) nicht mehr lesbar.
+- Das Volume `anonymizer-data` sichern: Vault, Policies, Audit-Log, Prompts (lokal), ID-Zuordnung.
 
 ---
 
@@ -371,12 +371,12 @@ Das ist der wichtigste Schritt vor Prod. Er darf **nur von einer berechtigten Pe
 
 ### 7.1 Schnelltest: Leck-Check
 
-1. Cato im geschützten Bereich gegen die Prod-Quelle starten (Docker, Abschnitt 6.1). Noch **kein** Laptop wird angebunden.
+1. Anonymizer im geschützten Bereich gegen die Prod-Quelle starten (Docker, Abschnitt 6.1). Noch **kein** Laptop wird angebunden.
 2. Optional eine Liste bekannter echter Werte aus der Stichprobe exportieren: Kundennamen, E-Mails, Kunden- und Bestellnummern aus dem CRM. Eine Zeile pro Wert, nach `local/stichprobe.secrets.txt` (gitignoriert).
 3. Leck-Check:
 
 ```bash
-cato leak-check --api http://127.0.0.1:8080 --key $CATO_API_KEY --limit 200 --secrets local/stichprobe.secrets.txt --details
+anonymizer leak-check --api http://127.0.0.1:8080 --key $ANONYMIZER_API_KEY --limit 200 --secrets local/stichprobe.secrets.txt --details
 ```
 
 Ausgabe:
@@ -392,7 +392,7 @@ Ausgabe:
 | `known_value` | Ein bekannter echter Wert ist durchgerutscht, meist ein Name ohne Kontext | Einleitung im `SelfIntroductionRecognizer` ergänzen oder Policy verschärfen |
 | `url_with_params` | Links mit Parametern (Tracking, Tokens) | Ggf. Pattern für eure Domains |
 
-Die Prüfung liest über die normale API und zählt gegen das Tageslimit des Keys. Für 200 Konversationen einen eigenen Key mit erhöhtem Limit verwenden (`CATO_CONVERSATIONS_DAILY_LIMIT`).
+Die Prüfung liest über die normale API und zählt gegen das Tageslimit des Keys. Für 200 Konversationen einen eigenen Key mit erhöhtem Limit verwenden (`ANONYMIZER_CONVERSATIONS_DAILY_LIMIT`).
 
 Einschränkung: Der Leck-Check findet nur, was als Muster oder bekannter Wert vorliegt. Namen ohne Liste findet er nicht. Dafür ist 7.2 da.
 
@@ -414,7 +414,7 @@ expected:
 3. Auswerten:
 
 ```bash
-CATO_CUSTOM_PATTERNS=local/patterns.yaml cato eval local/korpus
+ANONYMIZER_CUSTOM_PATTERNS=local/patterns.yaml anonymizer eval local/korpus
 ```
 
 4. Zahlen festhalten: `recall` (Anteil gefundener Werte) und `missed` (was durchgerutscht ist). Patterns und Regeln nachziehen, wiederholen.
@@ -430,7 +430,7 @@ CATO_CUSTOM_PATTERNS=local/patterns.yaml cato eval local/korpus
 
 ## 8. Arbeiten mit Claude: Beispiele
 
-Mit Cato als MCP-Server in Claude Code:
+Mit Anonymizer als MCP-Server in Claude Code:
 
 - „Zeig mir die Statistik der letzten 7 Tage nach Tag. Welche Themen dominieren?“
 - „Lies 10 Konversationen mit Tag `retoure` und sag mir, wo der Bot schlecht antwortet. Zitiere die Stellen.“
@@ -451,28 +451,28 @@ Regeln, die Claude über die Server-Anweisungen kennt, die du aber auch kennen s
 
 | Variable | Default | Empfehlung |
 |---|---|---|
-| `CATO_SOURCE` | – | `langfuse`, `http` oder `jsonl` |
-| `CATO_SOURCE_PATH` | – | jsonl: Pfad zur Datei |
-| `CATO_SOURCE_URL` | – | http: Basis-URL des Vertrags; langfuse: Host |
-| `CATO_SOURCE_KEY` | – | http: Bearer-Key |
-| `CATO_SOURCE_PUBLIC_KEY` / `_SECRET_KEY` | – | langfuse |
-| `CATO_SOURCE_TIMEOUT` | 30 | Sekunden |
-| `CATO_CONVERSATIONS_POLICY` | `support-default` | eigene Policy nach 5.2 |
-| `CATO_CONVERSATIONS_DAILY_LIMIT` | 200 | pro Key und UTC-Tag; streng anfangen |
-| `CATO_CONVERSATIONS_MIN_GROUP` | 10 | k für Statistiken |
-| `CATO_CONVERSATIONS_STATS_SCAN` | 5000 | max. gelesene Listeneinträge pro Statistik |
-| `CATO_CONVERSATIONS_MAX_MESSAGES` | 500 | pro Konversation |
-| `CATO_CONVERSATIONS_DB` | `data/conversations.db` | Zuordnung der opaken IDs und Tageszähler |
-| `CATO_CUSTOM_PATTERNS` | – | `local/patterns.yaml` |
-| `CATO_PROMPTS` | – | `local` oder `langfuse` |
-| `CATO_PROMPTS_DB` | `data/prompts.db` | local |
-| `CATO_PROMPTS_URL` / `_PUBLIC_KEY` / `_SECRET_KEY` | – | Langfuse, falls nicht dieselbe Instanz wie die Quelle |
-| `CATO_MCP_HTTP` | 0 | `1` = MCP unter `/mcp` |
-| `CATO_MCP_ALLOWED_HOSTS` | – | eure Cato-Domain |
-| `CATO_VAULT_KEY` | – | **in Prod setzen**: stabile Platzhalter, Admin kann zurückübersetzen |
-| `CATO_API_KEYS` / `CATO_ADMIN_KEYS` | – | Admin-Key nur für Policy und Labels; Personen-Keys über die API (5.3) |
+| `ANONYMIZER_SOURCE` | – | `langfuse`, `http` oder `jsonl` |
+| `ANONYMIZER_SOURCE_PATH` | – | jsonl: Pfad zur Datei |
+| `ANONYMIZER_SOURCE_URL` | – | http: Basis-URL des Vertrags; langfuse: Host |
+| `ANONYMIZER_SOURCE_KEY` | – | http: Bearer-Key |
+| `ANONYMIZER_SOURCE_PUBLIC_KEY` / `_SECRET_KEY` | – | langfuse |
+| `ANONYMIZER_SOURCE_TIMEOUT` | 30 | Sekunden |
+| `ANONYMIZER_CONVERSATIONS_POLICY` | `support-default` | eigene Policy nach 5.2 |
+| `ANONYMIZER_CONVERSATIONS_DAILY_LIMIT` | 200 | pro Key und UTC-Tag; streng anfangen |
+| `ANONYMIZER_CONVERSATIONS_MIN_GROUP` | 10 | k für Statistiken |
+| `ANONYMIZER_CONVERSATIONS_STATS_SCAN` | 5000 | max. gelesene Listeneinträge pro Statistik |
+| `ANONYMIZER_CONVERSATIONS_MAX_MESSAGES` | 500 | pro Konversation |
+| `ANONYMIZER_CONVERSATIONS_DB` | `data/conversations.db` | Zuordnung der opaken IDs und Tageszähler |
+| `ANONYMIZER_CUSTOM_PATTERNS` | – | `local/patterns.yaml` |
+| `ANONYMIZER_PROMPTS` | – | `local` oder `langfuse` |
+| `ANONYMIZER_PROMPTS_DB` | `data/prompts.db` | local |
+| `ANONYMIZER_PROMPTS_URL` / `_PUBLIC_KEY` / `_SECRET_KEY` | – | Langfuse, falls nicht dieselbe Instanz wie die Quelle |
+| `ANONYMIZER_MCP_HTTP` | 0 | `1` = MCP unter `/mcp` |
+| `ANONYMIZER_MCP_ALLOWED_HOSTS` | – | eure Anonymizer-Domain |
+| `ANONYMIZER_VAULT_KEY` | – | **in Prod setzen**: stabile Platzhalter, Admin kann zurückübersetzen |
+| `ANONYMIZER_API_KEYS` / `ANONYMIZER_ADMIN_KEYS` | – | Admin-Key nur für Policy und Labels; Personen-Keys über die API (5.3) |
 
-Vollständige Liste: `.env.example` und `packages/core/src/cato/api/settings.py`.
+Vollständige Liste: `.env.example` und `packages/core/src/anonymizer/api/settings.py`.
 
 ---
 
@@ -481,24 +481,24 @@ Vollständige Liste: `.env.example` und `packages/core/src/cato/api/settings.py`
 | Symptom | Ursache | Lösung |
 |---|---|---|
 | `401` auf `/mcp` | Key fehlt oder ist falsch | `claude mcp add ... --header "Authorization: Bearer <key>"` prüfen; `X-API-Key` geht auch |
-| Claude sieht keine Conversation-Tools | `CATO_SOURCE` nicht gesetzt oder `CATO_MCP_HTTP` fehlt | `curl -H "Authorization: Bearer <key>" localhost:8080/v1/sources` |
-| `404 conversation access is not configured` | `CATO_SOURCE` fehlt | setzen, neu starten |
+| Claude sieht keine Conversation-Tools | `ANONYMIZER_SOURCE` nicht gesetzt oder `ANONYMIZER_MCP_HTTP` fehlt | `curl -H "Authorization: Bearer <key>" localhost:8080/v1/sources` |
+| `404 conversation access is not configured` | `ANONYMIZER_SOURCE` fehlt | setzen, neu starten |
 | `404 conversation not found; list conversations first` | ID unbekannt (anderer Key/Org oder DB gelöscht) | erst `list_conversations` |
 | `429 daily limit … reached` | Tageslimit erreicht | Reset 00:00 UTC; ggf. Limit erhöhen |
 | `400 tag filter not allowed` | Tag-Filter enthält Personendaten | Absicht (kein Orakel); nur Kategorien filtern |
 | `502 Langfuse returned HTTP 401` | Falsche Langfuse-Keys / falsches Projekt | Keys aus dem richtigen Projekt |
-| Start bricht ab mit Policy-Fehler | `CATO_CONVERSATIONS_POLICY` existiert nicht | Policy hochladen (5.2) oder Name korrigieren |
-| Start bricht ab mit Pattern-Fehler | Ungültiges YAML oder Regex in `CATO_CUSTOM_PATTERNS` | Meldung nennt das Pattern |
+| Start bricht ab mit Policy-Fehler | `ANONYMIZER_CONVERSATIONS_POLICY` existiert nicht | Policy hochladen (5.2) oder Name korrigieren |
+| Start bricht ab mit Pattern-Fehler | Ungültiges YAML oder Regex in `ANONYMIZER_CUSTOM_PATTERNS` | Meldung nennt das Pattern |
 | Prompt-Entwurf abgelehnt, obwohl harmlos | Voller Name oder Kontaktdaten im Text | Template-Variablen nutzen (`{{customer_name}}`) |
 | Prompt gespeichert, aber mit `warnings` | Einzelwort von NER als Name erkannt („Lisa“, „Nenne“) | Vor dem Promoten ansehen, meist harmlos |
 | `prompt_version`-Statistik leer | Quelle liefert keinen Prompt (Langfuse-Session-Liste) | App setzt Trace-Metadaten; besser HTTP-Vertrag |
 | `NER disabled` in Warnungen | spaCy-Modelle fehlen | `python -m spacy download de_core_news_lg en_core_web_lg` |
-| Dashboard zeigt „Example data“ | `CATO_API_URL` nicht gesetzt | `CATO_API_URL=http://127.0.0.1:8080 npm run dev` |
+| Dashboard zeigt „Example data“ | `ANONYMIZER_API_URL` nicht gesetzt | `ANONYMIZER_API_URL=http://127.0.0.1:8080 npm run dev` |
 
 Werkzeuge, die keine Inhalte ausgeben:
 
-- `cato source-check [--protect]`: Verbindung und Format der Quelle.
-- `cato leak-check`: Funde im geschützten Output (maskiert).
+- `anonymizer source-check [--protect]`: Verbindung und Format der Quelle.
+- `anonymizer leak-check`: Funde im geschützten Output (maskiert).
 - `GET /v1/traces`: Entscheidungen pro Lesezugriff (nur Typen und Zahlen).
 - Dashboard → Audit Logs.
 
@@ -507,9 +507,9 @@ Werkzeuge, die keine Inhalte ausgeben:
 ## 11. Firmenspezifisches und Git
 
 - **`local/`** ist gitignoriert: eigene Patterns, Policies, Korpus, Secrets-Listen, Notizen. Echte Kundendaten (Stichproben, Secrets-Dateien) gehören **nie** in ein Repo, auch nicht in ein privates.
-- Generische Verbesserungen (bessere Erkennung, Bugfixes) können ins Cato-Repo. Firmenspezifische Adapter (z. B. euer HTTP-Endpunkt) gehören ins Firmen-Repo.
+- Generische Verbesserungen (bessere Erkennung, Bugfixes) können ins Anonymizer-Repo. Firmenspezifische Adapter (z. B. euer HTTP-Endpunkt) gehören ins Firmen-Repo.
 - Vorher Abschnitt 2, Punkt 4 (IP) klären.
-- Entwicklungsablauf: Branch, `python -m pytest -q` in `packages/core`, für Dashboard-Änderungen `npx tsc --noEmit && npx next build`. Die CI (`.github/workflows/ci.yml`) macht dasselbe plus `cato eval tests/corpus`.
+- Entwicklungsablauf: Branch, `python -m pytest -q` in `packages/core`, für Dashboard-Änderungen `npx tsc --noEmit && npx next build`. Die CI (`.github/workflows/ci.yml`) macht dasselbe plus `anonymizer eval tests/corpus`.
 
 ---
 
@@ -538,7 +538,7 @@ Werkzeuge, die keine Inhalte ausgeben:
 
 **Welche Kontrollen gibt es?**
 
-- Read-only-Zugriff auf die Quelle; Cato schreibt nie in die Chat-DB.
+- Read-only-Zugriff auf die Quelle; Anonymizer schreibt nie in die Chat-DB.
 - Persönliche Keys mit Tageslimit; jeder Lesezugriff steht im manipulationssicheren Audit-Log.
 - Die Rückübersetzung von Platzhaltern geht nur mit Admin-Key im Haus und wird ebenfalls protokolliert.
 - Claude kann keine Prompts in Produktion bringen; das macht ein Mensch.
@@ -557,47 +557,47 @@ Werkzeuge, die keine Inhalte ausgeben:
 - Ob Gesundheitsdaten zurückgehalten oder nur geschwärzt werden.
 - Ob der Vertrag mit Anthropic die Übermittlung pseudonymisierter Daten abdeckt.
 
-Cato ist eine technische Schutzmaßnahme, keine Rechtsgrundlage und keine Zertifizierung.
+Anonymizer ist eine technische Schutzmaßnahme, keine Rechtsgrundlage und keine Zertifizierung.
 
 ---
 
-## 9. MCP-Proxy testen (andere MCP-Server hinter Cato)
+## 9. MCP-Proxy testen (andere MCP-Server hinter Anonymizer)
 
-Referenz: [docs/proxy.md](docs/proxy.md). Der Proxy setzt Cato vor fremde MCP-Server (Datenbank, Tickets usw.). Claude sieht deren Tools mit Präfix (`demo__get_customers`), jede Antwort wird vorher gefiltert, jeder Aufruf erscheint im Dashboard unter **MCP Proxy** und **Traces**.
+Referenz: [docs/proxy.md](docs/proxy.md). Der Proxy setzt Anonymizer vor fremde MCP-Server (Datenbank, Tickets usw.). Claude sieht deren Tools mit Präfix (`demo__get_customers`), jede Antwort wird vorher gefiltert, jeder Aufruf erscheint im Dashboard unter **MCP Proxy** und **Traces**.
 
 ### 9.1 Mit der Demo-Datenbank (synthetische Daten, ca. 10 Minuten)
 
 ```bash
-cd Cato
+cd Anonymizer
 pip install -e packages/core
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
 
 # Prüfen: Upstream verbunden, welche Tools sichtbar sind (delete_customer muss fehlen)
-cato-proxy --config examples/proxy/cato-proxy.yaml --check
+anonymizer-proxy --config examples/proxy/anonymizer-proxy.yaml --check
 ```
 
 **Variante A, über die API (empfohlen, Dashboard live):**
 
 ```bash
 cd packages/core
-CATO_API_KEYS=cato_demo_key_change_me_0123456789 \
-CATO_BOOTSTRAP_ADMIN_EMAIL=admin@example.com CATO_BOOTSTRAP_ADMIN_PASSWORD=bitte-aendern-123 \
-CATO_PROXY_CONFIG=../../examples/proxy/cato-proxy.yaml cato-api
+ANONYMIZER_API_KEYS=anonymizer_demo_key_change_me_0123456789 \
+ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=admin@example.com ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD=bitte-aendern-123 \
+ANONYMIZER_PROXY_CONFIG=../../examples/proxy/anonymizer-proxy.yaml anonymizer-api
 
-claude mcp add --transport http cato-proxy http://127.0.0.1:8080/proxy/mcp \
-  --header "Authorization: Bearer cato_demo_key_change_me_0123456789"
+claude mcp add --transport http anonymizer-proxy http://127.0.0.1:8080/proxy/mcp \
+  --header "Authorization: Bearer anonymizer_demo_key_change_me_0123456789"
 
 # Dashboard in einem zweiten Terminal (Repo-Wurzel)
-npm install && CATO_API_URL=http://127.0.0.1:8080 npm run dev   # http://localhost:3000, Login mit dem Admin oben
+npm install && ANONYMIZER_API_URL=http://127.0.0.1:8080 npm run dev   # http://localhost:3000, Login mit dem Admin oben
 ```
 
 **Variante B, stdio (ohne API-Server):**
 
 ```bash
-claude mcp add cato-proxy -- cato-proxy --config "$PWD/examples/proxy/cato-proxy.yaml"
+claude mcp add anonymizer-proxy -- anonymizer-proxy --config "$PWD/examples/proxy/anonymizer-proxy.yaml"
 ```
 
-Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config eingestellt). Das Dashboard zeigt sie, wenn die API mit derselben Datei läuft (Standard, wenn `cato-api` in `packages/core` gestartet wird).
+Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config eingestellt). Das Dashboard zeigt sie, wenn die API mit derselben Datei läuft (Standard, wenn `anonymizer-api` in `packages/core` gestartet wird).
 
 **In Claude Code ausprobieren:**
 
@@ -622,8 +622,8 @@ Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config
        field_hints: { name: person }   # nur wenn "name" dort eine Person ist
    ```
 
-3. Erst `cato-proxy --config … --check`, dann anbinden.
-4. **Modus `observe` nur mit Test- oder synthetischen Daten**: Claude sieht dann die Originaldaten, Cato protokolliert nur, was es geschützt hätte. Sinnvoll, um vor dem Umschalten auf `enforce` zu sehen, welche Felder betroffen sind.
+3. Erst `anonymizer-proxy --config … --check`, dann anbinden.
+4. **Modus `observe` nur mit Test- oder synthetischen Daten**: Claude sieht dann die Originaldaten, Anonymizer protokolliert nur, was es geschützt hätte. Sinnvoll, um vor dem Umschalten auf `enforce` zu sehen, welche Felder betroffen sind.
 5. Im Dashboard unter `/proxy` die Spalten mit personenbezogenen Daten prüfen. Fehlt ein Feld (z. B. `kunde_bezeichnung`), in `field_hints` ergänzen.
 
 ### 9.3 Bekannte Grenzen
@@ -631,4 +631,4 @@ Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config
 - Freies SQL kann über Aggregation oder `LIKE` Informationen herauslocken. Lesender Benutzer, Replica, Tool-Allow-List.
 - Platzhalter in Abfragen (`WHERE name = 'PERSON_001'`) funktionieren nicht. Die Datenbank kennt nur echte Werte.
 - Unterschiedliche Schreibweisen (`+49 170 …` und `0170 …`) bekommen unterschiedliche Platzhalter.
-- Hat Claude zusätzlich einen direkten MCP-Zugang zum selben System, umgeht es Cato.
+- Hat Claude zusätzlich einen direkten MCP-Zugang zum selben System, umgeht es Anonymizer.

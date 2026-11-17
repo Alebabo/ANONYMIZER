@@ -2,11 +2,11 @@
 
 ## One line
 
-Cato is the open-source privacy layer for AI: "Langfuse for privacy and data protection". It makes production data usable by LLMs and agents without raw personal data leaving the company network. It is self-hosted, auditable and deterministic.
+Anonymizer is the open-source privacy layer for AI: "Langfuse for privacy and data protection". It makes production data usable by LLMs and agents without raw personal data leaving the company network. It is self-hosted, auditable and deterministic.
 
 ## Core difference to Langfuse
 
-Langfuse observes requests on the side. Cato sits **in the request path**. If Cato fails or is slow, the application stops. This raises the bar for latency, stability and trust. A dry-run mode (observe and report, do not block) lowers the barrier to adoption. It is the entry point.
+Langfuse observes requests on the side. Anonymizer sits **in the request path**. If Anonymizer fails or is slow, the application stops. This raises the bar for latency, stability and trust. A dry-run mode (observe and report, do not block) lowers the barrier to adoption. It is the entry point.
 
 ## Place in the stack
 
@@ -14,13 +14,13 @@ Langfuse observes requests on the side. Cato sits **in the request path**. If Ca
 Data sources (databases, chats, documents, tickets, mails)
         │
         ▼
-Cato: detect → classify → policy → pseudonymize → audit → restore
+Anonymizer: detect → classify → policy → pseudonymize → audit → restore
         │      only placeholder data crosses this line
         ▼
 Any LLM or agent (Claude, GPT, Mistral, local models)
 ```
 
-Cato is model-agnostic. It does not host or brand models.
+Anonymizer is model-agnostic. It does not host or brand models.
 
 ## What we take from Langfuse
 
@@ -38,7 +38,7 @@ Cato is model-agnostic. It does not host or brand models.
 | Regulatory pressure | GDPR, internal policy, DORA/BAIT for banks | § 203 StGB, § 43e BRAO | GDPR, AGG, **EU AI Act high-risk (Annex III)** |
 | Role | **Wedge** | Vertical (policy pack) | Vertical (policy pack) |
 
-- **Production MCPs (first):** teams want Claude Code or Cursor on prod data (chats, tickets, databases). Cato as the only MCP endpoint next to prod is clear, quick to test and spreads bottom-up.
+- **Production MCPs (first):** teams want Claude Code or Cursor on prod data (chats, tickets, databases). Anonymizer as the only MCP endpoint next to prod is clear, quick to test and spreads bottom-up.
 - **Legal and recruiting (later):** prebuilt entity sets, rules and policies per industry as paid policy packs.
 - **Recruiting caveat:** AI in candidate selection is high-risk under the AI Act. The need is documentation and bias control more than anonymization. This widens scope; don't start there.
 
@@ -71,9 +71,9 @@ Based on knowledge at the time of writing. Verify before decisions.
 - **Enterprise DLP:** Microsoft Purview, Google Sensitive Data Protection, AWS Comprehend / Bedrock Guardrails, Netskope, Zscaler, Palo Alto.
 - **DACH/EU platforms:** Aleph Alpha, Langdock, nele.ai. Legal tools (e.g. Noxtua, Bryter, Libra) have anonymization as a feature, not a product.
 
-**Gap for Cato:** OSS + self-hosted + MCP-native + German/EU entities + audit dashboard + dry run.
+**Gap for Anonymizer:** OSS + self-hosted + MCP-native + German/EU entities + audit dashboard + dry run.
 
-**Main threat:** LiteLLM plus Presidio is free and "good enough". Cato must be measurably better on recall for German/EU data, MCP support and audit UX.
+**Main threat:** LiteLLM plus Presidio is free and "good enough". Anonymizer must be measurably better on recall for German/EU data, MCP support and audit UX.
 
 ## Risks
 
@@ -82,12 +82,12 @@ Based on knowledge at the time of writing. Verify before decisions.
 - **Regulated sales cycles:** 12–24 months in banks (outsourcing review, pen tests). A reference customer is required.
 - **Shrinking need:** if LLM vendors offer EU hosting and secrecy commitments by default, pure anonymization loses value. Audit, policy and tenant separation keep the value.
 - **Pseudonymization is not anonymization:** context can re-identify people. Under GDPR the output stays personal data. Communicate this honestly.
-- **Model origin:** do not rebrand third-party models (e.g. Chinese open-weight models) as Cato models. Licenses require attribution and DORA requires a known supply chain. Use EU/US base models as defaults; offer others transparently.
+- **Model origin:** do not rebrand third-party models (e.g. Chinese open-weight models) as Anonymizer models. Licenses require attribution and DORA requires a known supply chain. Use EU/US base models as defaults; offer others transparently.
 
 ## Next steps
 
 1. MCP proxy with dry run and dashboard as the public MVP (largely in place, see [conversations](conversations.md), [MCP](mcp.md)).
 2. Detection for German/EU entities: rules plus GLiNER next to spaCy.
-3. Public benchmark: Cato vs. Presidio vs. LLM-based redaction on German data (e.g. the German LER dataset).
+3. Public benchmark: Anonymizer vs. Presidio vs. LLM-based redaction on German data (e.g. the German LER dataset).
 4. Design partner in a regulated company, with approval from security and data protection.
 5. Then policy packs for legal and HR.

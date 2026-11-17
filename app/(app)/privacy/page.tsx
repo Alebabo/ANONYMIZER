@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/app-shell";
 import { Distribution, SourceBanner, fmt, pct } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { getMetrics } from "@/lib/cato-api";
+import { getMetrics } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

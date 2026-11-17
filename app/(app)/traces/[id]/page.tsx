@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 import { Pill, SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { getTrace } from "@/lib/cato-api";
+import { getTrace } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                 </li>))}
             </ol>
             <p className="text-muted-foreground border-t pt-3 text-xs">
-              Cato does not store request content, detected values or placeholders. Original and anonymized
+              Anonymizer does not store request content, detected values or placeholders. Original and anonymized
               text are only visible to the calling application (privacy by design).
             </p>
           </CardContent></Card>

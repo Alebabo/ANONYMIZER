@@ -3,7 +3,7 @@ import { Notice, SourceBanner, dateTime } from "@/components/dashboard";
 import { ActionForm, Field, Submit } from "@/components/forms";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { getMe } from "@/lib/cato-api";
+import { getMe } from "@/lib/anonymizer-api";
 
 export const dynamic = "force-dynamic";
 

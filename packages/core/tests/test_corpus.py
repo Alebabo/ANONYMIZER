@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from cato.anonymize import DEFAULT_METHODS, Anonymizer, Method
-from cato.detect import Detector
-from cato.evaluation import evaluate_doc, load_corpus, summarize
+from anonymizer.anonymize import DEFAULT_METHODS, Anonymizer, Method
+from anonymizer.detect import Detector
+from anonymizer.evaluation import evaluate_doc, load_corpus, summarize
 
 CORPUS = load_corpus(Path(__file__).parent / "corpus")
 DETECTOR = Detector()

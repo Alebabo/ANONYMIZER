@@ -6,12 +6,12 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from cato.api import create_app
-from cato.api.settings import Settings
-from cato.mcp import CatoTools, MCPConfig, ToolError, build_server, parse_time, tools_from_env
+from anonymizer.api import create_app
+from anonymizer.api.settings import Settings
+from anonymizer.mcp import AnonymizerTools, MCPConfig, ToolError, build_server, parse_time, tools_from_env
 
-API_KEY = "cato_test_user_key_0123456789abcdef"
-ADMIN_KEY = "cato_test_admin_key_0123456789abcdef"
+API_KEY = "anonymizer_test_user_key_0123456789abcdef"
+ADMIN_KEY = "anonymizer_test_admin_key_0123456789abcdef"
 USER = {"Authorization": f"Bearer {API_KEY}"}
 ADMIN = {"X-API-Key": ADMIN_KEY}
 SECRETS = ["Mustermann", "max.mustermann@example.org", "Diabetes", "sess-", "4711-2231"]
@@ -39,13 +39,13 @@ def env(tmp_path):
     patterns.write_text("patterns:\n  - name: order_number\n    pattern: '\\b\\d{4}-\\d{4}\\b'\n"
                         "    confidence: 0.9\n", encoding="utf-8")
     return {
-        "CATO_API_KEYS": API_KEY, "CATO_ADMIN_KEYS": ADMIN_KEY,
-        "CATO_POLICY_DIR": str(tmp_path / "policies"), "CATO_ACCOUNTS_DB": ":memory:",
-        "CATO_AUDIT_DB": ":memory:", "CATO_TRACE_DB": ":memory:",
-        "CATO_SOURCE": "jsonl", "CATO_SOURCE_PATH": str(src), "CATO_CUSTOM_PATTERNS": str(patterns),
-        "CATO_CONVERSATIONS_DB": str(tmp_path / "conv.db"), "CATO_CONVERSATIONS_DAILY_LIMIT": "3",
-        "CATO_CONVERSATIONS_MIN_GROUP": "5", "CATO_PROMPTS": "local", "CATO_PROMPTS_DB": str(tmp_path / "p.db"),
-        "CATO_MCP_HTTP": "1",
+        "ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_ADMIN_KEYS": ADMIN_KEY,
+        "ANONYMIZER_POLICY_DIR": str(tmp_path / "policies"), "ANONYMIZER_ACCOUNTS_DB": ":memory:",
+        "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:",
+        "ANONYMIZER_SOURCE": "jsonl", "ANONYMIZER_SOURCE_PATH": str(src), "ANONYMIZER_CUSTOM_PATTERNS": str(patterns),
+        "ANONYMIZER_CONVERSATIONS_DB": str(tmp_path / "conv.db"), "ANONYMIZER_CONVERSATIONS_DAILY_LIMIT": "3",
+        "ANONYMIZER_CONVERSATIONS_MIN_GROUP": "5", "ANONYMIZER_PROMPTS": "local", "ANONYMIZER_PROMPTS_DB": str(tmp_path / "p.db"),
+        "ANONYMIZER_MCP_HTTP": "1",
     }
 
 
@@ -128,9 +128,9 @@ def test_prompt_flow(client):
 
 
 def test_features_off_without_config(tmp_path):
-    settings = Settings.from_env({"CATO_API_KEYS": API_KEY, "CATO_POLICY_DIR": str(tmp_path / "p"),
-                                  "CATO_ACCOUNTS_DB": ":memory:", "CATO_AUDIT_DB": ":memory:",
-                                  "CATO_TRACE_DB": ":memory:"})
+    settings = Settings.from_env({"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"),
+                                  "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:",
+                                  "ANONYMIZER_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))
     assert c.get("/v1/conversations", headers=USER).status_code == 404
     assert c.get("/v1/prompts", headers=USER).status_code == 404
@@ -162,7 +162,7 @@ def test_mcp_http_requires_key(client):
     assert rpc(client, "initialize", init, headers={}).status_code == 401
     assert rpc(client, "initialize", init, headers={"Authorization": "Bearer wrong"}).status_code == 401
     r = rpc(client, "initialize", init)
-    assert r.status_code == 200 and "Cato" in r.json()["result"]["instructions"]
+    assert r.status_code == 200 and "Anonymizer" in r.json()["result"]["instructions"]
 
 
 def test_mcp_http_tools_and_scoping(client):
@@ -201,7 +201,7 @@ def test_mcp_tool_annotations(client):
 # --- MCP stdio tools ---------------------------------------------------------------------
 
 def test_stdio_tools_from_env(env, tmp_path):
-    tools = tools_from_env({**env, "CATO_CONVERSATIONS_DB": str(tmp_path / "stdio.db")})
+    tools = tools_from_env({**env, "ANONYMIZER_CONVERSATIONS_DB": str(tmp_path / "stdio.db")})
     page = tools.list_conversations(limit=1)
     conv = tools.get_conversation(page["data"][0]["id"])
     assert clean(conv) and "ORDER_NUMBER_001" in conv["messages"][0]["content"]
@@ -216,10 +216,10 @@ def test_stdio_tools_from_env(env, tmp_path):
 
 
 def test_disabled_tools_explain_themselves():
-    t = CatoTools(MCPConfig())
-    with pytest.raises(ToolError, match="CATO_SOURCE"):
+    t = AnonymizerTools(MCPConfig())
+    with pytest.raises(ToolError, match="ANONYMIZER_SOURCE"):
         t.list_conversations()
-    with pytest.raises(ToolError, match="CATO_PROMPTS"):
+    with pytest.raises(ToolError, match="ANONYMIZER_PROMPTS"):
         t.list_prompts()
     names = {x.name for x in asyncio.run(build_server(t).list_tools())}
     assert "list_conversations" not in names and "list_prompts" not in names
@@ -240,11 +240,11 @@ def test_parse_time_rejects_garbage():
 
 def test_unknown_conversation_policy_fails_at_start(env):
     with pytest.raises(Exception, match="no-such-policy"):
-        create_app(Settings.from_env({**env, "CATO_CONVERSATIONS_POLICY": "no-such-policy"}))
+        create_app(Settings.from_env({**env, "ANONYMIZER_CONVERSATIONS_POLICY": "no-such-policy"}))
 
 
 def test_unexpected_tool_errors_do_not_reach_the_model(env, tmp_path):
-    tools = tools_from_env({**env, "CATO_CONVERSATIONS_DB": str(tmp_path / "x.db")})
+    tools = tools_from_env({**env, "ANONYMIZER_CONVERSATIONS_DB": str(tmp_path / "x.db")})
 
     def boom(*a, **k):
         raise ValueError("raw source row: Max Mustermann")

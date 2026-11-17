@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from cato.sources import HttpSource, JsonlSource, LangfuseSource, SourceError, source_from_env
+from anonymizer.sources import HttpSource, JsonlSource, LangfuseSource, SourceError, source_from_env
 
 CONV = {
     "id": "sess-1", "created_at": 1762905600, "language": "de", "tags": ["billing"], "prompt": "bot",
@@ -93,23 +93,23 @@ def test_http_basic_auth_and_message_labels():
         seen.append(request)
         return httpx.Response(200, json=conv)
 
-    s = HttpSource("https://chat.internal/api", username="cato", password="pw", transport=httpx.MockTransport(handler))
+    s = HttpSource("https://chat.internal/api", username="anonymizer", password="pw", transport=httpx.MockTransport(handler))
     m = s.get("sess-1").messages[0]
     assert (m.agent, m.action, m.subtopic) == ("TRANSACTION", "TRANSACTION_RECALL_EMB", "recall")
-    assert seen[0].headers["authorization"] == httpx.BasicAuth("cato", "pw")._auth_header
+    assert seen[0].headers["authorization"] == httpx.BasicAuth("anonymizer", "pw")._auth_header
     assert "pw" not in str(s.describe())
 
 
 def test_http_auth_settings_are_unambiguous():
-    with pytest.raises(SourceError, match="both CATO_SOURCE_USER and CATO_SOURCE_PASSWORD"):
-        HttpSource("https://x", username="cato")
+    with pytest.raises(SourceError, match="both ANONYMIZER_SOURCE_USER and ANONYMIZER_SOURCE_PASSWORD"):
+        HttpSource("https://x", username="anonymizer")
     with pytest.raises(SourceError, match="not both"):
-        HttpSource("https://x", "key", username="cato", password="pw")
+        HttpSource("https://x", "key", username="anonymizer", password="pw")
     with pytest.raises(SourceError) as exc:
-        source_from_env({"CATO_SOURCE": "http", "CATO_SOURCE_URL": "https://x", "CATO_SOURCE_PASSWORD": "s3cr3t"})
+        source_from_env({"ANONYMIZER_SOURCE": "http", "ANONYMIZER_SOURCE_URL": "https://x", "ANONYMIZER_SOURCE_PASSWORD": "s3cr3t"})
     assert "s3cr3t" not in str(exc.value)
-    env = {"CATO_SOURCE": "http", "CATO_SOURCE_URL": "https://x", "CATO_SOURCE_USER": "cato",
-           "CATO_SOURCE_PASSWORD": "pw"}
+    env = {"ANONYMIZER_SOURCE": "http", "ANONYMIZER_SOURCE_URL": "https://x", "ANONYMIZER_SOURCE_USER": "anonymizer",
+           "ANONYMIZER_SOURCE_PASSWORD": "pw"}
     assert source_from_env(env).kind == "http"
 
 
@@ -151,10 +151,10 @@ def test_langfuse_sessions_become_conversations():
 
 def test_factory(jsonl):
     assert source_from_env({}) is None
-    assert source_from_env({"CATO_SOURCE": "jsonl", "CATO_SOURCE_PATH": str(jsonl)}).kind == "jsonl"
+    assert source_from_env({"ANONYMIZER_SOURCE": "jsonl", "ANONYMIZER_SOURCE_PATH": str(jsonl)}).kind == "jsonl"
     with pytest.raises(SourceError, match="unknown"):
-        source_from_env({"CATO_SOURCE": "mysql"})
-    with pytest.raises(SourceError, match="CATO_SOURCE_URL"):
-        source_from_env({"CATO_SOURCE": "http"})
+        source_from_env({"ANONYMIZER_SOURCE": "mysql"})
+    with pytest.raises(SourceError, match="ANONYMIZER_SOURCE_URL"):
+        source_from_env({"ANONYMIZER_SOURCE": "http"})
     with pytest.raises(SourceError, match="langfuse"):
-        source_from_env({"CATO_SOURCE": "langfuse", "CATO_SOURCE_URL": "https://x"})
+        source_from_env({"ANONYMIZER_SOURCE": "langfuse", "ANONYMIZER_SOURCE_URL": "https://x"})

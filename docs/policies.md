@@ -1,6 +1,6 @@
 # Policy Engine
 
-`packages/core/src/cato/policy/` decides per entity and per document what happens before data leaves. Evaluation is **deterministic**: no LLM and no randomness decide whether critical information is passed on.
+`packages/core/src/anonymizer/policy/` decides per entity and per document what happens before data leaves. Evaluation is **deterministic**: no LLM and no randomness decide whether critical information is passed on.
 
 ## Format
 
@@ -33,7 +33,7 @@ critical_floor_action: pseudonymize
 review_uncertain: true
 ```
 
-Unknown fields, actions or destinations are rejected (`cato policy-validate file.yaml`).
+Unknown fields, actions or destinations are rejected (`anonymizer policy-validate file.yaml`).
 
 ### Rule conditions
 
@@ -83,7 +83,7 @@ All conditions must hold. Lists inside a condition mean "one of".
 ## Pipeline
 
 ```python
-from cato.pipeline import Pipeline
+from anonymizer.pipeline import Pipeline
 
 result = Pipeline().protect(text, destination="external", namespace="matter-17")
 if result.allowed:
@@ -95,8 +95,8 @@ else:
 When the outcome is not "allow", `text` is `None`. No anonymized text is produced at all in that case, so nothing can be forwarded by accident.
 
 ```bash
-cato protect brief.txt --destination external          # exit code 2 if not allowed
-cato protect brief.txt --policy firm.yaml --dry-run
+anonymizer protect brief.txt --destination external          # exit code 2 if not allowed
+anonymizer protect brief.txt --policy firm.yaml --dry-run
 ```
 
 ## Versioning, audit, dry run
@@ -113,7 +113,7 @@ cato protect brief.txt --policy firm.yaml --dry-run
 
 ## Built-in policy `legal-default`
 
-`cato.policy.builtin_policy()` is a conservative starting point:
+`anonymizer.policy.builtin_policy()` is a conservative starting point:
 - Pseudonymize parties and contact data.
 - Redact identifiers.
 - Generalize the date of birth.

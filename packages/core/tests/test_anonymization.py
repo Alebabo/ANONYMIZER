@@ -4,13 +4,13 @@ import stat
 
 import pytest
 
-from cato import scan
-from cato.anonymize import (
+from anonymizer import scan
+from anonymizer.anonymize import (
     Anonymizer, AnonymizerConfig, LeakError, Method, build_diff, restore,
 )
-from cato.anonymize.transforms import generalize, mask
-from cato.models import Category, make_detection
-from cato.vault import FileVault, InMemoryVault, VaultError, VaultKey
+from anonymizer.anonymize.transforms import generalize, mask
+from anonymizer.models import Category, make_detection
+from anonymizer.vault import FileVault, InMemoryVault, VaultError, VaultKey
 
 LETTER = (
     "Unser Mandant Herr Max Mustermann, geb. 15.03.1985, wohnt in der Lindenstraße 12, 10115 Berlin.\n"
@@ -235,10 +235,10 @@ def test_tampered_ciphertext_is_rejected(tmp_path):
 
 def test_vault_key_from_env(monkeypatch):
     key = VaultKey.generate()
-    monkeypatch.setenv("CATO_VAULT_KEY", key.to_b64())
+    monkeypatch.setenv("ANONYMIZER_VAULT_KEY", key.to_b64())
     assert VaultKey.from_env().master == key.master
     assert "***" in repr(key) and key.to_b64() not in repr(key)
-    monkeypatch.delenv("CATO_VAULT_KEY")
+    monkeypatch.delenv("ANONYMIZER_VAULT_KEY")
     with pytest.raises(VaultError):
         VaultKey.from_env()
 

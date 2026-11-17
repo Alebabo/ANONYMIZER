@@ -11,7 +11,7 @@ All names, numbers and addresses are invented.
 Start the API with these files (see [docs/conversations.md](../../docs/conversations.md)):
 
 ```bash
-CATO_SOURCE=jsonl CATO_SOURCE_PATH=examples/support/conversations.jsonl \
-CATO_CUSTOM_PATTERNS=examples/support/patterns.yaml CATO_PROMPTS=local \
-CATO_MCP_HTTP=1 CATO_API_KEYS=cato_demo_key_change_me_0123456789 cato-api
+ANONYMIZER_SOURCE=jsonl ANONYMIZER_SOURCE_PATH=examples/support/conversations.jsonl \
+ANONYMIZER_CUSTOM_PATTERNS=examples/support/patterns.yaml ANONYMIZER_PROMPTS=local \
+ANONYMIZER_MCP_HTTP=1 ANONYMIZER_API_KEYS=anonymizer_demo_key_change_me_0123456789 anonymizer-api
 ```

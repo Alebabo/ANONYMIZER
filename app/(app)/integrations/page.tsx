@@ -10,10 +10,10 @@ function integrations(url: string): Integration[] {
   return [
     {
       id: "openai-python", title: "OpenAI SDK (Python)", lang: "python",
-      what: "Existing OpenAI code: change base_url and use a Cato key. Every message is protected before it reaches the provider.",
+      what: "Existing OpenAI code: change base_url and use a Anonymizer key. Every message is protected before it reaches the provider.",
       code: `from openai import OpenAI
 
-client = OpenAI(base_url="${url}/v1", api_key="cato_...")
+client = OpenAI(base_url="${url}/v1", api_key="anonymizer_...")
 client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Fasse das Schreiben von Herrn Mustermann zusammen ..."}],
@@ -22,21 +22,21 @@ client.chat.completions.create(
     },
     {
       id: "openai-node", title: "OpenAI SDK (TypeScript)", lang: "ts",
-      what: "Same gateway from Node.js. Refused requests return HTTP 403 with error.type cato_policy_violation.",
+      what: "Same gateway from Node.js. Refused requests return HTTP 403 with error.type anonymizer_policy_violation.",
       code: `import OpenAI from "openai";
 
-const client = new OpenAI({ baseURL: "${url}/v1", apiKey: process.env.CATO_API_KEY });
+const client = new OpenAI({ baseURL: "${url}/v1", apiKey: process.env.ANONYMIZER_API_KEY });
 await client.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "..." }] });`,
     },
     {
-      id: "sdk", title: "Cato Python SDK", lang: "python",
+      id: "sdk", title: "Anonymizer Python SDK", lang: "python",
       what: "Direct access to protect, anonymize, scan and document protection.",
-      code: `from cato_sdk import Cato
+      code: `from anonymizer_sdk import Anonymizer
 
-cato = Cato(api_key="cato_...", base_url="${url}")
-result = cato.protect("Max Mustermann ist unser Mandant ...")
+anonymizer = Anonymizer(api_key="anonymizer_...", base_url="${url}")
+result = anonymizer.protect("Max Mustermann ist unser Mandant ...")
 print(result.text if result.allowed else result.outcome)
-cato.protect_document("klage.docx").content   # anonymized DOCX`,
+anonymizer.protect_document("klage.docx").content   # anonymized DOCX`,
       doc: "sdk/python/README.md",
     },
     {
@@ -44,9 +44,9 @@ cato.protect_document("klage.docx").content   # anonymized DOCX`,
       what: "Local MCP server for agents: protected document access, no restore tool. Runs next to the client, not against this API.",
       code: `{
   "mcpServers": {
-    "cato": {
-      "command": "cato-mcp",
-      "env": { "CATO_MCP_ROOT": "/path/to/matter-folder", "CATO_MCP_DESTINATION": "external" }
+    "anonymizer": {
+      "command": "anonymizer-mcp",
+      "env": { "ANONYMIZER_MCP_ROOT": "/path/to/matter-folder", "ANONYMIZER_MCP_DESTINATION": "external" }
     }
   }
 }`,
@@ -54,16 +54,16 @@ cato.protect_document("klage.docx").content   # anonymized DOCX`,
     },
     {
       id: "mcp-http", title: "Remote MCP: customer chats & prompts (Claude Code, Cursor)", lang: "bash",
-      what: "Agents read protected conversations and draft prompts through this API (CATO_MCP_HTTP=1). One key per person: quota and audit log follow the key.",
-      code: `claude mcp add --transport http cato ${url}/mcp \\
-  --header "Authorization: Bearer cato_..."`,
+      what: "Agents read protected conversations and draft prompts through this API (ANONYMIZER_MCP_HTTP=1). One key per person: quota and audit log follow the key.",
+      code: `claude mcp add --transport http anonymizer ${url}/mcp \\
+  --header "Authorization: Bearer anonymizer_..."`,
       doc: "docs/conversations.md",
     },
     {
       id: "rest", title: "REST (curl)", lang: "bash",
       what: "Any language: POST text, get the policy outcome and the protected text.",
       code: `curl -s ${url}/v1/protect \\
-  -H "Authorization: Bearer $CATO_API_KEY" -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer $ANONYMIZER_API_KEY" -H "Content-Type: application/json" \\
   -d '{"text":"Unser Mandant Herr Max Mustermann bittet um Rückruf.","destination":"external"}'`,
       doc: "docs/API.md",
     },
@@ -71,14 +71,14 @@ cato.protect_document("klage.docx").content   # anonymized DOCX`,
 }
 
 export default function Integrations() {
-  const url = (process.env.CATO_PUBLIC_API_URL ?? process.env.CATO_API_URL ?? "https://cato.example.com").replace(/\/$/, "");
+  const url = (process.env.ANONYMIZER_PUBLIC_API_URL ?? process.env.ANONYMIZER_API_URL ?? "https://anonymizer.example.com").replace(/\/$/, "");
   return (
     <>
       <PageHeader title="Integrations" description="Connect applications and agents" />
       <div className="space-y-4 p-4 md:p-6">
         <p className="text-muted-foreground text-xs">
           Create a key under <Link className="text-link hover:text-link-hover" href="/api-keys">API Keys</Link> and replace{" "}
-          <code>cato_...</code>. Keys belong to your organization; traces of their requests appear in this workspace.
+          <code>anonymizer_...</code>. Keys belong to your organization; traces of their requests appear in this workspace.
         </p>
         <div className="grid gap-4 xl:grid-cols-2">
           {integrations(url).map(i => (

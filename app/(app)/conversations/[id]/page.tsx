@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 import { Notice, Pill, SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { ApiError, getConversation } from "@/lib/cato-api";
+import { ApiError, getConversation } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";

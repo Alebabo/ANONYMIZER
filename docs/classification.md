@@ -1,6 +1,6 @@
 # Classification Engine
 
-`packages/core/src/cato/classify/` assigns a risk level to each detection and to the whole document, with a reason for every step. It's deterministic: the same input and configuration always give the same output. No LLM is involved.
+`packages/core/src/anonymizer/classify/` assigns a risk level to each detection and to the whole document, with a reason for every step. It's deterministic: the same input and configuration always give the same output. No LLM is involved.
 
 ## Risk levels
 
@@ -54,7 +54,7 @@ overrides:
 ```
 
 ```bash
-cato classify brief.txt --config classifier.yaml
+anonymizer classify brief.txt --config classifier.yaml
 ```
 
 ## Output

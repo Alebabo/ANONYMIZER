@@ -2,11 +2,11 @@ import json
 
 import pytest
 
-from cato import scan
-from cato.detect import Detector, DetectorConfig, detect_language
-from cato.detect import validators as v
-from cato.detect.engine import resolve_overlaps
-from cato.models import Category, EntityType as E, make_detection
+from anonymizer import scan
+from anonymizer.detect import Detector, DetectorConfig, detect_language
+from anonymizer.detect import validators as v
+from anonymizer.detect.engine import resolve_overlaps
+from anonymizer.models import Category, EntityType as E, make_detection
 
 
 def types(result):

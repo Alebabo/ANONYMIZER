@@ -4,7 +4,7 @@ import { Notice, Pill, SourceBanner, dateTime } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PromoteForm } from "@/app/(app)/prompts/[name]/promote-form";
-import { getMe, getPrompt, getPromptDiff, getPromptHistory, type PromptVersion } from "@/lib/cato-api";
+import { getMe, getPrompt, getPromptDiff, getPromptHistory, type PromptVersion } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
