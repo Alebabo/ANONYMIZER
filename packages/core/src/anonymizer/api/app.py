@@ -50,7 +50,7 @@ from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Princip
 from anonymizer.api.schemas import (
     AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, LoginRequest, MemberCreate,
     MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
-    ProtectRequest, ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
+    PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
 )
 from anonymizer.audit import AuditLog
 from anonymizer.api.settings import Settings
@@ -59,6 +59,7 @@ from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
 from anonymizer.pipeline import Pipeline
+from anonymizer.playground import PlaygroundError, PlaygroundService, PlaygroundStore
 from anonymizer.policy import (
     DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
@@ -113,6 +114,12 @@ class State:
                                    classifier=self.classifier, vault=vault),
             ConversationStore(settings.conversations_db), ConversationConfig.from_env(env),
             vault=self.vault, traces=self.traces, audit=self.audit,
+        )
+        self.playground = PlaygroundService(
+            PlaygroundStore(settings.playground_db),
+            lambda vault: Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
+                                   classifier=self.classifier, vault=vault),
+            self.conversation_policy, traces=self.traces, audit=self.audit,
         )
         backend = backend_from_env(env, transport=source_transport)
         self.prompts = None if backend is None else PromptService(
@@ -736,6 +743,31 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         """Move a label (e.g. production) to a version. Admin only; audited with before/after."""
         return prompts().set_label(p, name, req.version, req.label)
 
+    # -- playground ------------------------------------------------------------------------------
+    @app.exception_handler(PlaygroundError)
+    async def playground_error(_: Request, exc: PlaygroundError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.get("/v1/playground/datasets", tags=["playground"])
+    def list_datasets(p: User) -> list[dict]:
+        return state.playground.list(p)
+
+    @app.post("/v1/playground/datasets", status_code=201, tags=["playground"])
+    def upload_dataset(req: PlaygroundUpload, p: SessionUser) -> dict:
+        """Upload a CSV (text with header row). Dashboard sessions only; test data only."""
+        return state.playground.upload(p, req.name, req.csv)
+
+    @app.delete("/v1/playground/datasets/{dataset_id}", status_code=204, tags=["playground"])
+    def delete_dataset(dataset_id: str, p: SessionUser) -> None:
+        state.playground.delete(p, dataset_id)
+
+    @app.post("/v1/playground/datasets/{dataset_id}/query", tags=["playground"])
+    def query_dataset(dataset_id: str, req: PlaygroundQuery, p: User) -> dict:
+        """Protected rows as an AI client receives them. Dashboard sessions also get the originals for
+        comparison; API keys never do."""
+        return state.playground.query(p, dataset_id, req.query, req.columns, req.limit, req.offset,
+                                      include_original=p.kind == "session", client="dashboard" if p.kind == "session" else "api")
+
     # -- MCP over HTTP -------------------------------------------------------------------------
     if settings.mcp_http:
         from starlette.routing import Route
@@ -746,7 +778,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         if settings.vault_key:
             mcp_env |= {"ANONYMIZER_VAULT_KEY": settings.vault_key, "ANONYMIZER_VAULT_PATH": str(settings.vault_path)}
         tools = AnonymizerTools(MCPConfig.from_env(mcp_env), detector=state.detector,
-                          conversations=state.conversations, prompts=state.prompts)
+                          conversations=state.conversations, prompts=state.prompts, playground=state.playground)
         hosts = [h.strip() for h in settings.env.get("ANONYMIZER_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
         server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
         mcp_holder["server"] = server

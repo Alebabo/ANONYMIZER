@@ -44,6 +44,7 @@ class Settings:
     ANONYMIZER_MAX_CHARS       max characters per text (default 200000)
     ANONYMIZER_MAX_UPLOAD_BYTES max document upload size (default 25 MiB)
     ANONYMIZER_ENABLE_NER      "0" to disable spaCy NER (not recommended)
+    ANONYMIZER_PLAYGROUND_DB  SQLite file for uploaded playground CSV datasets (default data/playground.db)
     ANONYMIZER_TRACE_DB        SQLite file for metadata-only traces (default data/traces.db)
     ANONYMIZER_TRACE_RETENTION_DAYS  default 30
     ANONYMIZER_TRACE_CONTENT   "1" also stores protected text and original values per trace
@@ -75,6 +76,7 @@ class Settings:
     session_hours: float = 12
     custom_patterns: str | None = None
     conversations_db: str = "data/conversations.db"
+    playground_db: str = "data/playground.db"
     mcp_http: bool = False
     bootstrap_admin: tuple[str, str] | None = field(default=None, repr=False)
     env: dict[str, str] = field(default_factory=dict, repr=False)
@@ -107,6 +109,7 @@ class Settings:
             session_hours=float(env.get("ANONYMIZER_SESSION_HOURS", "12")),
             custom_patterns=env.get("ANONYMIZER_CUSTOM_PATTERNS") or None,
             conversations_db=env.get("ANONYMIZER_CONVERSATIONS_DB", "data/conversations.db"),
+            playground_db=env.get("ANONYMIZER_PLAYGROUND_DB", "data/playground.db"),
             mcp_http=env.get("ANONYMIZER_MCP_HTTP", "0") == "1",
             bootstrap_admin=_bootstrap(env),
             env={k: v for k, v in env.items() if k.startswith(_PASS_THROUGH)},

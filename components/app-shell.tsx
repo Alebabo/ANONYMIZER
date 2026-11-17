@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  Activity, BarChart3, ChevronRight, FileClock, FileText, Home, Info, KeyRound, LogOut, Menu, MessagesSquare, Network,
+  Activity, BarChart3, ChevronRight, FileClock, FileText, FlaskConical, Home, Info, KeyRound, LogOut, Menu, MessagesSquare, Network,
   PanelLeft, Plug, ScrollText, Settings, ShieldCheck, Waypoints, X,
 } from "lucide-react";
 import { logout } from "@/app/actions";
@@ -30,7 +30,13 @@ const groups: { title?: string; items: NavItem[] }[] = [
       { href: "/policies", label: "Policies", icon: ScrollText },
     ],
   },
-  { title: "Prompt Management", items: [{ href: "/prompts", label: "Prompts", icon: FileText }] },
+  {
+    title: "Prompt Management",
+    items: [
+      { href: "/prompts", label: "Prompts", icon: FileText },
+      { href: "/playground", label: "Playground", icon: FlaskConical },
+    ],
+  },
 ];
 const bottom: NavItem[] = [
   { href: "/integrations", label: "Integrations", icon: Plug },

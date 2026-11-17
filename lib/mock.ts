@@ -1,6 +1,6 @@
 // Illustrative example data in the shape of the Anonymizer API. No real content.
 import type {
-  ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Info, Me, Metrics, PolicySummary,
+  ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, Dataset, GatewayStatus, Info, PlaygroundResult, Me, Metrics, PolicySummary,
   PromptHistoryItem, PromptListItem, PromptVersion, ProxyStatus, SourcesInfo, Trace, User,
 } from "@/lib/anonymizer-api";
 
@@ -302,3 +302,43 @@ export const exampleProxy: ProxyStatus = {
   ],
   tools: ["demo__list_tables", "demo__get_customers", "demo__get_tickets", "demo__export_customer"],
 };
+
+export const exampleDatasets: Dataset[] = [
+  { id: "ds_demo000001", name: "kunden-beispiel.csv", columns: ["kunden_id", "vorname", "nachname", "email", "iban", "anliegen"],
+    rows: 3, created_at: Date.now() / 1000 - 600, created_by: "admin@example.org" },
+];
+
+const demoRows = [
+  { kunden_id: "K-1001", vorname: "Max", nachname: "Mustermann", email: "max@example.org", iban: "DE89370400440532013000",
+    anliegen: "Herr Mustermann möchte sein Limit erhöhen." },
+  { kunden_id: "K-1002", vorname: "Erika", nachname: "Musterfrau", email: "erika@example.org", iban: "DE02120300000000202051",
+    anliegen: "Karte gesperrt, bitte Rückruf an 0151 23456789." },
+  { kunden_id: "K-1003", vorname: "Jan", nachname: "Beispiel", email: "jan@example.org", iban: "DE02500105170137075030",
+    anliegen: "Frage zur Überweisung vom 12.11." },
+];
+const demoSent = [
+  { kunden_id: "K-1001", vorname: "PERSON_001", nachname: "PERSON_002", email: "EMAIL_001", iban: "[IBAN]",
+    anliegen: "Herr PERSON_002 möchte sein Limit erhöhen." },
+  { kunden_id: "K-1002", vorname: "PERSON_003", nachname: "PERSON_004", email: "EMAIL_002", iban: "[IBAN]",
+    anliegen: "Karte gesperrt, bitte Rückruf an PHONE_001." },
+  { kunden_id: "K-1003", vorname: "PERSON_005", nachname: "PERSON_006", email: "EMAIL_003", iban: "[IBAN]",
+    anliegen: "Frage zur Überweisung vom 12.11." },
+];
+
+export function examplePlayground(query?: string): PlaygroundResult {
+  const q = (query ?? "").toLowerCase();
+  const idx = demoRows.map((r, i) => (Object.values(r).some(v => v.toLowerCase().includes(q)) ? i : -1)).filter(i => i >= 0);
+  const rows = idx.map(i => demoSent[i]!);
+  return {
+    dataset: { id: "ds_demo000001", name: "kunden-beispiel.csv", rows: 3 }, columns: exampleDatasets[0]!.columns,
+    matched: idx.length, offset: 0, limit: 20, rows, trace_id: exampleTraces[0]!.id,
+    original: idx.map(i => demoRows[i]!), sent: JSON.stringify(rows, null, 2), withheld: 0,
+    entities: { person: idx.length * 2 + (idx.includes(0) ? 1 : 0), email: idx.length, iban: idx.length, phone: idx.includes(1) ? 1 : 0 },
+    replacements: idx.flatMap(i => [
+      { type: "person", original: demoRows[i]!.vorname, replacement: demoSent[i]!.vorname, field: "$[].vorname", method: "pseudonymize" },
+      { type: "person", original: demoRows[i]!.nachname, replacement: demoSent[i]!.nachname, field: "$[].nachname", method: "pseudonymize" },
+      { type: "email", original: demoRows[i]!.email, replacement: demoSent[i]!.email, field: "$[].email", method: "pseudonymize" },
+      { type: "iban", original: demoRows[i]!.iban, replacement: "[IBAN]", field: "$[].iban", method: "redact" },
+    ]),
+  };
+}

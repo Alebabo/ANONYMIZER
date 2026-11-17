@@ -46,6 +46,7 @@ class Replacement(BaseModel):
 class ContentItem(BaseModel):
     """One protected text: where it came from, what was sent on and what was replaced."""
     label: str | None = None       # e.g. message role or JSON path
+    input: str | None = None       # text as it reached Anonymizer (original)
     output: str | None = None      # text as it left Anonymizer; None if withheld
     withheld: bool = False
     replacements: list[Replacement] = Field(default_factory=list)
@@ -95,7 +96,7 @@ def content_item(result: Any, original: str, label: str | None = None) -> Conten
     else:
         reps = [Replacement(type=e.entity_type, original=original[e.start:e.end], replacement=None)
                 for e in result.classification.entities]
-    return ContentItem(label=label, output=result.text if result.allowed else None,
+    return ContentItem(label=label, input=original, output=result.text if result.allowed else None,
                        withheld=not result.allowed, replacements=reps)
 
 

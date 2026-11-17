@@ -46,6 +46,7 @@ from typing import Any
 from anonymizer.accounts import Principal
 from anonymizer.classify import Classifier
 from anonymizer.conversations import LOCAL_PRINCIPAL, ConversationError, ConversationService
+from anonymizer.playground import PlaygroundError, PlaygroundService
 from anonymizer.detect import Detector
 from anonymizer.pipeline import Pipeline
 from anonymizer.prompts import PromptError, PromptService
@@ -107,7 +108,9 @@ class AnonymizerTools:
     """Tool implementations, independent of the MCP transport (testable)."""
 
     def __init__(self, config: MCPConfig | None = None, detector: Detector | None = None,
-                 conversations: ConversationService | None = None, prompts: PromptService | None = None) -> None:
+                 conversations: ConversationService | None = None, prompts: PromptService | None = None,
+                 playground: PlaygroundService | None = None) -> None:
+        self.playground = playground
         self.config = config or MCPConfig()
         self.conversations = conversations
         self.prompts = prompts
@@ -242,7 +245,7 @@ class AnonymizerTools:
     def _wrap(fn, *args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except (ConversationError, PromptError) as exc:
+        except (ConversationError, PromptError, PlaygroundError) as exc:
             raise ToolError(str(exc)) from None
         except ToolError:
             raise
@@ -252,6 +255,20 @@ class AnonymizerTools:
 
             logging.getLogger("anonymizer.mcp").exception("tool failed")
             raise ToolError("internal error; details are in the Anonymizer server log") from None
+
+    # -- playground ---------------------------------------------------------------
+    def _pg(self):
+        if self.playground is None:
+            raise ToolError("playground is not available")
+        return self.playground
+
+    def list_datasets(self, principal: Principal | None = None) -> dict[str, Any]:
+        return {"datasets": self._wrap(self._pg().list, principal or LOCAL_PRINCIPAL)}
+
+    def query_dataset(self, dataset_id: str, query: str | None = None, columns: list[str] | None = None,
+                      limit: int = 20, offset: int = 0, principal: Principal | None = None) -> dict[str, Any]:
+        return self._wrap(self._pg().query, principal or LOCAL_PRINCIPAL, dataset_id, query, columns, limit, offset,
+                          include_original=False, client="mcp")
 
     def list_conversations(self, since: str | None = None, until: str | None = None, tag: str | None = None,
                            limit: int = 50, cursor: str | None = None,
@@ -467,6 +484,20 @@ def build_server(tools: AnonymizerTools | None = None,
                                      "is the source's own range.", annotations=ro)
             def get_kpis(ctx: Context, since: str | None = None, until: str | None = None) -> dict:
                 return t.get_kpis(since, until, principal=who(ctx))
+
+    if t.playground is not None:
+        @server.tool(description="List playground datasets (CSV files uploaded in the Anonymizer dashboard): "
+                                 "id, name, columns, row count.", annotations=ro)
+        def list_datasets(ctx: Context) -> dict:
+            return t.list_datasets(principal=who(ctx))
+
+        @server.tool(description="Query a playground dataset. Optional query = case-insensitive text filter over "
+                                 "the given columns (all by default); limit up to 100, offset for paging. Rows "
+                                 "are anonymized (PERSON_001, EMAIL_001, ...); withheld values are [WITHHELD].",
+                     annotations=ro)
+        def query_dataset(ctx: Context, dataset_id: str, query: str | None = None, columns: list[str] | None = None,
+                          limit: int = 20, offset: int = 0) -> dict:
+            return t.query_dataset(dataset_id, query, columns, limit, offset, principal=who(ctx))
 
     if t.prompts is not None:
         @server.tool(description="List prompts with latest version and labels.", annotations=ro)

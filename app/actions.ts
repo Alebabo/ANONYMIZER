@@ -122,3 +122,35 @@ export async function setPromptLabel(_: ActionState, form: FormData): Promise<Ac
     return { message: `${out.label} → v${out.version}` + (out.previous_version ? ` (was v${out.previous_version})` : "") };
   }, `/prompts/${encodeURIComponent(name)}`);
 }
+
+// -- playground ------------------------------------------------------------------------------
+export async function uploadDataset(_: ActionState, form: FormData): Promise<ActionState> {
+  if (isDemo()) return DEMO;
+  const file = form.get("file");
+  if (!(file instanceof File) || !file.size) return { error: "Choose a CSV file." };
+  if (file.size > 5_000_000) return { error: "File larger than 5 MB." };
+  let id: string;
+  try {
+    const ds = await api<{ id: string }>("/v1/playground/datasets", {
+      method: "POST", body: JSON.stringify({ name: file.name.slice(0, 120), csv: await file.text() }),
+    });
+    id = ds.id;
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath("/playground");
+  redirect(`/playground?ds=${encodeURIComponent(id)}`);
+}
+
+export async function deleteDataset(_: ActionState, form: FormData): Promise<ActionState> {
+  if (isDemo()) return DEMO;
+  try {
+    await api(`/v1/playground/datasets/${encodeURIComponent(str(form, "id"))}`, { method: "DELETE" });
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    throw e;
+  }
+  revalidatePath("/playground");
+  redirect("/playground");
+}

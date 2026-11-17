@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const filters = [{ label: "All", route: undefined }, { label: "MCP proxy", route: "/mcp/proxy" },
   { label: "Conversations", route: "/v1/conversations" }, { label: "Gateway", route: "/v1/chat/completions" },
-  { label: "Protect", route: "/v1/protect" }];
+  { label: "Protect", route: "/v1/protect" }, { label: "Playground", route: "/v1/playground" }];
 
 export default async function Traces({ searchParams }: { searchParams: Promise<{ route?: string }> }) {
   const { route } = await searchParams;

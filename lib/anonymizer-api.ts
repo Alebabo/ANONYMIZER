@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   exampleApiKeys, exampleAudit, exampleConversation, exampleConversations, exampleConversationStats, exampleGateway,
-  exampleInfo, exampleMe, exampleMembers, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
+  exampleInfo, exampleDatasets, exampleMe, exampleMembers, examplePlayground, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
   exampleProxy, exampleSources, exampleTraces,
 } from "@/lib/mock";
 
@@ -35,7 +35,7 @@ export type Trace = {
 };
 
 export type TraceContent = {
-  label: string | null; output: string | null; withheld: boolean;
+  label: string | null; input?: string | null; output: string | null; withheld: boolean;
   replacements: { type: string; original: string; replacement: string | null; method: string | null }[];
 };
 
@@ -137,6 +137,15 @@ export type PromptHistoryItem = {
   version: number; labels: string[]; note: string | null; created_by: string | null; created_at: number | null; hash: string; type: string;
 };
 export type PromptDiff = { name: string; from: number; to: number; diff: string; config_changed: boolean; protected: boolean };
+
+export type Dataset = { id: string; name: string; columns: string[]; rows: number; created_at: number; created_by: string | null };
+export type PlaygroundResult = {
+  dataset: { id: string; name: string; rows: number }; columns: string[]; matched: number; offset: number; limit: number;
+  rows: Record<string, unknown>[] | string; trace_id: string;
+  /** Dashboard sessions only. */
+  original?: Record<string, string>[]; sent?: string; entities?: Record<string, number>; withheld?: number;
+  replacements?: { type: string; original: string; replacement: string | null; field: string | null; method: string | null }[];
+};
 
 export const isDemo = () => !process.env.ANONYMIZER_API_URL;
 const base = () => process.env.ANONYMIZER_API_URL!.replace(/\/$/, "");
@@ -266,3 +275,16 @@ export const getAuditEntry = (id: string) =>
   read<AuditEntry | null>(`/v1/audit-logs/${encodeURIComponent(id)}`, () => exampleAudit.find(e => e.id === id) ?? null);
 export const verifyAudit = () =>
   read<AuditVerify>("/v1/audit-logs/verify", () => ({ ok: true, entries: exampleAudit.length, broken_at: null }));
+
+export const getDatasets = () => read<Dataset[]>("/v1/playground/datasets", () => exampleDatasets);
+export const queryDataset = async (id: string, q: { query?: string; limit?: number; offset?: number }) => {
+  if (isDemo()) return { data: id === exampleDatasets[0]!.id ? examplePlayground(q.query) : null, source: { live: false, reason: "API not connected (ANONYMIZER_API_URL)" } as Source };
+  try {
+    return { data: await api<PlaygroundResult>(`/v1/playground/datasets/${encodeURIComponent(id)}/query`, {
+      method: "POST", body: JSON.stringify({ query: q.query || null, limit: q.limit ?? 20, offset: q.offset ?? 0 }),
+    }), source: { live: true } as Source };
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return { data: null, source: { live: true } as Source };
+    throw e;
+  }
+};

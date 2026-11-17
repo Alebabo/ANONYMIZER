@@ -102,7 +102,7 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
           )}
 
           {t.content?.length ? (
-            <Section title="Output (what left Anonymizer)">
+            <Section title="Input → Output">
               <p className="text-dark-yellow mb-3 text-xs">
                 Content trace: shows original values in clear text. Test data only (ANONYMIZER_TRACE_CONTENT=1).
               </p>
@@ -113,8 +113,20 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                       <span className="font-mono break-all">{c.label ?? `#${i + 1}`}</span>
                       {c.withheld && <Pill value="withheld" />}
                     </div>
-                    <pre className="bg-surface-code max-h-72 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-words">
-                      {c.output ?? "– not sent (withheld by policy) –"}</pre>
+                    <div className={cn("grid gap-2", c.input != null && "md:grid-cols-2")}>
+                      {c.input != null && (
+                        <div>
+                          <div className="text-muted-foreground mb-1 text-2xs">Input (Anonymizer sees)</div>
+                          <pre className="bg-light-red max-h-72 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-words">{c.input}</pre>
+                        </div>
+                      )}
+                      <div>
+                        {c.input != null && <div className="text-muted-foreground mb-1 text-2xs">Output (Claude gets)</div>}
+                        <pre className={cn("max-h-72 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-words",
+                          c.input != null ? "bg-light-green" : "bg-surface-code")}>
+                          {c.output ?? "– not sent (withheld by policy) –"}</pre>
+                      </div>
+                    </div>
                     {c.replacements.length > 0 && (
                       <TableScroll minWidth={420}><Table><TableHeader><TableRow>
                         <TableHead>Type</TableHead><TableHead>Original</TableHead><TableHead>Sent as</TableHead><TableHead>Method</TableHead>

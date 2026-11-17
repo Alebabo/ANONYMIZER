@@ -147,3 +147,15 @@ class PromptCreate(_Strict):
 class PromptLabelSet(_Strict):
     version: int = Field(ge=1)
     label: str = Field(min_length=1, max_length=32)
+
+
+class PlaygroundUpload(_Strict):
+    name: str = Field(min_length=1, max_length=120)
+    csv: str = Field(min_length=1, max_length=5_000_000)
+
+
+class PlaygroundQuery(_Strict):
+    query: str | None = Field(default=None, max_length=200)
+    columns: list[str] | None = Field(default=None, max_length=100)
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
