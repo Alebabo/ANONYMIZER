@@ -55,7 +55,7 @@ Ziel: sehen, dass alles läuft, bevor irgendeine Firmenquelle angeschlossen wird
 Voraussetzungen: Python ≥ 3.11, Git, ca. 2 GB Platz für die Sprachmodelle. Unter Windows: WSL oder Docker (Abschnitt 6).
 
 ```bash
-git clone https://github.com/Alebabo/Cato.git && cd Cato
+git clone https://github.com/Alebabo/ANONYMIZER.git && cd ANONYMIZER
 ```
 
 ```bash
