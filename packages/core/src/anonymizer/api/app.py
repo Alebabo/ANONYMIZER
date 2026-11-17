@@ -190,6 +190,9 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         import anyio
         from contextlib import AsyncExitStack
 
+        # Load the NER model in the background so the first request does not wait several seconds.
+        threading.Thread(target=lambda: state.detector.scan("Max Mustermann wohnt in Berlin."),
+                         name="ner-warmup", daemon=True).start()
         async with AsyncExitStack() as stack:
             for key in ("server", "proxy_server"):
                 if key in mcp_holder:
@@ -778,7 +781,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         if settings.vault_key:
             mcp_env |= {"ANONYMIZER_VAULT_KEY": settings.vault_key, "ANONYMIZER_VAULT_PATH": str(settings.vault_path)}
         tools = AnonymizerTools(MCPConfig.from_env(mcp_env), detector=state.detector,
-                          conversations=state.conversations, prompts=state.prompts, playground=state.playground)
+                          conversations=state.conversations, prompts=state.prompts, playground=state.playground,
+                          traces=state.traces)
         hosts = [h.strip() for h in settings.env.get("ANONYMIZER_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
         server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
         mcp_holder["server"] = server

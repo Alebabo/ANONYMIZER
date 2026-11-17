@@ -36,7 +36,9 @@ data, quota and audit entries to the key's organization.
 
 from __future__ import annotations
 
+import functools
 import os
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -109,8 +111,10 @@ class AnonymizerTools:
 
     def __init__(self, config: MCPConfig | None = None, detector: Detector | None = None,
                  conversations: ConversationService | None = None, prompts: PromptService | None = None,
-                 playground: PlaygroundService | None = None) -> None:
+                 playground: PlaygroundService | None = None, traces=None) -> None:
         self.playground = playground
+        # TraceStore for tool calls that do not write their own trace (see TRACED_BY_SERVICE).
+        self.traces = traces
         self.config = config or MCPConfig()
         self.conversations = conversations
         self.prompts = prompts
@@ -421,6 +425,33 @@ def build_server(tools: AnonymizerTools | None = None,
             raise ToolError("invalid or missing Anonymizer API key")
         return p
 
+    # Every tool call shows up under Traces (route /mcp/tools): tool name, latency, status, never
+    # arguments or results. Tools whose service writes a detailed trace itself are skipped.
+    register = server.tool
+
+    def traced_tool(*args, **kwargs):
+        decorate = register(*args, **kwargs)
+
+        def wrap(fn):
+            if t.traces is None or fn.__name__ in TRACED_BY_SERVICE:
+                return decorate(fn)
+
+            @functools.wraps(fn)
+            def call(*a, **kw):
+                start = time.perf_counter()
+                status, error = 200, None
+                try:
+                    return fn(*a, **kw)
+                except Exception as exc:
+                    status, error = 400, type(exc).__name__
+                    raise
+                finally:
+                    _record_tool_call(t.traces, fn.__name__, kw.get("ctx"), who, start, status, error)
+            return decorate(call)
+        return wrap
+
+    server.tool = traced_tool
+
     @server.tool(description="Detect sensitive information. Returns types, offsets and risk; never raw values.",
                  annotations=ro)
     def scan_document(text: str, language: str | None = None) -> dict:
@@ -568,13 +599,36 @@ def tools_from_env(env: dict[str, str] | None = None) -> AnonymizerTools:
         read_pipeline = Pipeline(conv_policy, detector=detector, classifier=classifier)
         prompts = PromptService(backend, detector, classifier,
                                 lambda text: read_pipeline.protect(text, "external").text, audit)
-    return AnonymizerTools(config, detector=detector, conversations=conversations, prompts=prompts)
+    traces = (TraceStore(env["ANONYMIZER_TRACE_DB"], store_content=env.get("ANONYMIZER_TRACE_CONTENT", "0") == "1")
+              if env.get("ANONYMIZER_TRACE_DB") else None)
+    return AnonymizerTools(config, detector=detector, conversations=conversations, prompts=prompts, traces=traces)
 
 
 def _policy(ref: str) -> Policy:
     if ref.endswith((".yaml", ".yml")):
         return Policy.from_file(Path(ref))
     return builtin_policy(ref)
+
+
+# These tools write a detailed trace through their service (conversations, playground).
+TRACED_BY_SERVICE = frozenset({"get_conversation", "query_dataset"})
+
+
+def _record_tool_call(traces, tool: str, ctx, who, start: float, status: int, error: str | None) -> None:
+    """One trace per MCP tool call: name, latency, status. Never arguments or results."""
+    from anonymizer.tracing import DEFAULT_ORG, Trace
+
+    try:
+        principal = who(ctx) if ctx is not None else None
+    except Exception:
+        principal = None
+    trace = Trace(route="/mcp/tools", tool=tool, status=status, error=error,
+                  outcome="error" if error else "allow", allowed=error is None,
+                  latency_ms=round((time.perf_counter() - start) * 1000, 1))
+    try:
+        traces.add(trace, principal.org_id if principal is not None else DEFAULT_ORG)
+    except Exception:  # tracing must never break a tool call
+        pass
 
 
 def bearer(headers: dict[str, str]) -> str | None:

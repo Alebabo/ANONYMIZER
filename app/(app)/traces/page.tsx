@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 const filters = [{ label: "All", route: undefined }, { label: "MCP proxy", route: "/mcp/proxy" },
+  { label: "MCP tools", route: "/mcp/tools" },
   { label: "Conversations", route: "/v1/conversations" }, { label: "Gateway", route: "/v1/chat/completions" },
   { label: "Protect", route: "/v1/protect" }, { label: "Playground", route: "/v1/playground" }];
 
@@ -46,7 +47,7 @@ export default async function Traces({ searchParams }: { searchParams: Promise<{
               <TableCell className="tabular-nums">{stamp(t.created_at)}</TableCell>
               <TableCell className="truncate">
                 <Link className="text-link hover:text-link-hover font-mono" href={`/traces/${t.id}`}>
-                  {t.upstream ? `${t.upstream}__${t.tool}` : t.route}
+                  {t.upstream ? `${t.upstream}__${t.tool}` : t.tool ? `mcp · ${t.tool}` : t.route}
                 </Link>
                 {t.resource && <span className="text-muted-foreground font-mono"> · {t.resource}</span>}
                 {t.mode === "observe" && <> <Pill value="observe" /></>}
