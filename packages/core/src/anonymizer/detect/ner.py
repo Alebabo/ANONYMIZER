@@ -28,6 +28,16 @@ _LABELS = {
 
 _LEADING_HONORIFIC = re.compile(r"^(?:(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+)+")
 _CODE_LIKE = re.compile(r"^[A-Z]{1,4}\d*$|\d")
+# Reference numbers such as "K-1001", "AB12345", "INC-42/7": letters, optional separator, digits.
+ID_LIKE = re.compile(r"[A-Za-z]{1,4}[-_./ ]?\d[\d\-_./]*")
+_HONORIFICS = {"Herr", "Herrn", "Frau", "Hr.", "Fr.", "Hr", "Fr", "Mr.", "Mrs.", "Ms.", "Mr", "Mrs", "Ms", "Dr.",
+               "Prof.", "Dr", "Prof"}
+# Statistical NER readily labels capitalised common nouns ("Dispolimit", "Karte") as names or organisations.
+# A person/organisation span from NER alone is kept only if the model's own tagger sees a proper noun in it
+# or a title stands right before it. Real names in hinted columns or with rule cues do not depend on this.
+_PROPER = {"PROPN", "X"}
+_NAME_PARTICLES = {"von", "van", "vom", "zu", "zum", "zur", "de", "da", "di", "du", "del", "della", "der", "den",
+                   "ten", "ter", "le", "la", "al", "el", "bin", "ibn", "y", "und", "and", "of", "&"}
 
 
 def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -> tuple[int, str] | None:
@@ -55,11 +65,27 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
         return None
     if entity_type == E.PERSON and any(ch.isdigit() for ch in text):
         return None
-    if entity_type != E.LOCATION and _CODE_LIKE.fullmatch(text):
+    # "sein Dispolimit", "nach Urlaub": a plain lower-case word is not part of a name (particles are).
+    lower = [t for t in tokens if t.isalpha() and t.islower() and t not in _NAME_PARTICLES]
+    if lower and (entity_type == E.PERSON or (entity_type == E.ORGANIZATION and tokens[0] in lower)):
+        return None
+    if entity_type != E.LOCATION and (_CODE_LIKE.fullmatch(text) or ID_LIKE.fullmatch(text)):
         return None
     if entity_type == E.LOCATION and re.fullmatch(r"[A-Z]{2}\d+|[A-Z][a-z]?", text):
         return None
     return start, text
+
+
+def _name_like(doc: Any, start: int, end: int) -> bool:
+    """A proper noun inside the span, or a title right before it. Without a tagger: keep the span."""
+    span = doc.char_span(start, end, alignment_mode="expand")
+    if span is None or not len(span):
+        return True
+    if not any(t.pos_ for t in span):
+        return True
+    if any(t.pos_ in _PROPER for t in span):
+        return True
+    return span.start > 0 and doc[span.start - 1].text in _HONORIFICS
 
 
 class NERUnavailable(RuntimeError):
@@ -104,5 +130,7 @@ class SpacyRecognizer:
                 if cleaned is None:
                     continue
                 start, value = cleaned
+                if entity_type in (E.PERSON, E.ORGANIZATION) and not _name_like(doc, start, start + len(value)):
+                    continue
                 yield make_detection(entity_type, category, start, start + len(value), value,
                                      confidence, self.name)

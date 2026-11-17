@@ -22,6 +22,7 @@ from typing import Any
 import mcp_types as types
 
 from anonymizer.detect import detect_language
+from anonymizer.detect.ner import ID_LIKE
 from anonymizer.models import DEFAULT_CATEGORIES, Category, ScanResult, make_detection
 from anonymizer.pipeline import Pipeline, ProtectResult
 from anonymizer.proxy.config import norm_key
@@ -247,21 +248,32 @@ class ResultFilter:
     def _leaf_uncached(self, text: str, path: str, hint: str | None, report: FilterReport, lang: str,
                        block: bool) -> str:
         report.values += 1
-        identifier = not hint and (bool(_IDENTIFIER.match(text)) or text.isdigit()) and text not in self.known.values
+        identifier = not hint and (bool(_IDENTIFIER.match(text)) or text.isdigit() or bool(ID_LIKE.fullmatch(text))
+                                   ) and text not in self.known.values
         scan = (self.rules if identifier else self.pipeline.detector).scan(text, lang)
-        if hint and not _covers(scan, len(text)):
+        if hint and not _covers(scan, len(text), hint):
+            # The column name wins over another type (e.g. NER reads a surname as an organisation), so the
+            # value gets the same placeholder here and in free text. Checksum-validated values keep their type.
             det = make_detection(hint, DEFAULT_CATEGORIES.get(hint, Category.PERSONAL_DATA), 0, len(text), text,
                                  0.99, "field_hint", attributes={"field_hint": "1"})
             scan = ScanResult(language=scan.language, detections=[det], signals=scan.signals, warnings=scan.warnings)
             report.hinted += 1
         elif not hint:
-            extra = [make_detection(t, DEFAULT_CATEGORIES.get(t, Category.PERSONAL_DATA), a, b, text[a:b], 0.95,
-                                    "known_value")
-                     for a, b, t in self.known.find(text)
-                     if not any(d.start < b and a < d.end for d in scan.detections)]
+            # A value learned from a hinted column keeps that column's type in free text. It replaces detections
+            # that lie inside it and are not checksum-validated (e.g. NER calling the surname an organisation);
+            # a wider detection around it (a full name) is kept.
+            dets, extra = list(scan.detections), []
+            for a, b, t in self.known.find(text):
+                overlap = [d for d in dets if d.start < b and a < d.end]
+                if any(d.start < a or d.end > b or d.validated is True for d in overlap):
+                    continue
+                if any(d.entity_type == t and d.start == a and d.end == b for d in overlap):
+                    continue
+                dets = [d for d in dets if d not in overlap]
+                extra.append(make_detection(t, DEFAULT_CATEGORIES.get(t, Category.PERSONAL_DATA), a, b, text[a:b],
+                                            0.95, "known_value"))
             if extra:
-                scan = ScanResult(language=scan.language, detections=sorted(scan.detections + extra,
-                                                                             key=lambda d: d.start),
+                scan = ScanResult(language=scan.language, detections=sorted(dets + extra, key=lambda d: d.start),
                                   signals=scan.signals, warnings=scan.warnings)
                 report.learned += len(extra)
         if not scan.detections and not scan.signals:
@@ -284,9 +296,10 @@ class ResultFilter:
 
 
 
-def _covers(scan: ScanResult, length: int) -> bool:
-    """A detection already spans (almost) the whole value."""
-    return any(d.end - d.start >= length * 0.8 for d in scan.detections)
+def _covers(scan: ScanResult, length: int, hint: str) -> bool:
+    """A detection of the hinted type, or a checksum-validated one, already spans (almost) the whole value."""
+    return any(d.end - d.start >= length * 0.8 and (d.entity_type == hint or d.validated is True)
+               for d in scan.detections)
 
 
 def _text(text: str) -> types.TextContent:

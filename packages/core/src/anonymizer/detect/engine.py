@@ -42,15 +42,24 @@ NER_STOPWORDS = {
 # inside such values are not document cues.
 VALUE_TYPES = {E.EMAIL, E.ADDRESS, E.ORGANIZATION, E.PERSON, E.LOCATION}
 
+# Only words that are frequent in one language and rare in the other: "in", "an", "was", "will" are both
+# German and English and would tip short German texts towards English.
 _STOP_DE = {"der", "die", "das", "und", "ist", "nicht", "mit", "von", "den", "dem", "ein", "eine", "wir", "sie",
-            "zu", "auf", "für", "im", "des", "wird", "wurde", "sehr", "geehrte", "unser", "bei", "aus", "auch"}
-_STOP_EN = {"the", "and", "is", "of", "to", "in", "that", "with", "for", "our", "we", "this", "on", "are",
-            "was", "be", "by", "an", "has", "have", "dear", "from", "which", "not", "at", "as"}
+            "zu", "auf", "für", "im", "des", "wird", "wurde", "sehr", "geehrte", "unser", "bei", "aus", "auch",
+            "ich", "mich", "mir", "mein", "meine", "sein", "seine", "ihr", "ihre", "nach", "zur", "zum", "vom",
+            "oder", "aber", "noch", "nur", "schon", "kein", "keine", "bitte", "möchte", "habe", "hat", "sind",
+            "über", "wie", "wenn", "dass", "kann", "es", "er"}
+_STOP_EN = {"the", "and", "is", "of", "to", "that", "with", "for", "our", "we", "this", "on", "are",
+            "be", "by", "has", "have", "dear", "from", "which", "not", "at", "as", "you", "your", "my", "it",
+            "please", "would", "can", "there", "what", "been", "were"}
+
+
+_UMLAUT = re.compile(r"[äöüß]")
 
 
 def detect_language(text: str) -> str:
     words = re.findall(r"[a-zäöüß]+", text.lower())
-    de = sum(w in _STOP_DE for w in words)
+    de = sum(w in _STOP_DE or bool(_UMLAUT.search(w)) for w in words)
     en = sum(w in _STOP_EN for w in words)
     if de == en:
         return "unknown"
