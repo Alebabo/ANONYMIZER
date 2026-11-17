@@ -123,6 +123,17 @@ def conversation(cid: str, authorization: str = Header("")):
             "messages": [{"role": m.role, "content": m.text, "created_at": m.ts.timestamp()} for m in s.messages]}
 ```
 
+### Own adapter (`python`)
+
+For a system that has neither the HTTP contract nor Langfuse, write a small adapter class and keep it out of this repository (e.g. in `local/`, which git ignores):
+
+```
+ANONYMIZER_SOURCE=python
+ANONYMIZER_SOURCE_CLASS=local/my_source.py:MySource
+```
+
+The class is called as `MySource(env=..., timeout=..., transport=...)` and implements `list`, `get` and `describe` like the built-in sources. An optional `kpis(since, until) -> dict` exposes aggregate figures the system already computes (sessions per day, solving rate, ratings) as `GET /v1/conversations/kpis` and the MCP tool `get_kpis`. Anonymizer passes only numbers, booleans, dates and short labels without detectable values; every other string becomes `[REDACTED]`.
+
 ### Langfuse
 
 - `GET /api/public/sessions` (list) and `GET /api/public/sessions/{id}` (detail) with basic auth.

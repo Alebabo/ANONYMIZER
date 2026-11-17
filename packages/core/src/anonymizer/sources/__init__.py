@@ -344,7 +344,33 @@ def source_from_env(env: dict[str, str] | None = None,
     if kind == "langfuse":
         return LangfuseSource(env.get("ANONYMIZER_SOURCE_URL", ""), env.get("ANONYMIZER_SOURCE_PUBLIC_KEY", ""),
                               env.get("ANONYMIZER_SOURCE_SECRET_KEY", ""), timeout, transport)
-    raise SourceError(f"unknown ANONYMIZER_SOURCE {kind!r}; use jsonl, http or langfuse")
+    if kind == "python":
+        return _plugin_source(env.get("ANONYMIZER_SOURCE_CLASS", ""), env, timeout, transport)
+    raise SourceError(f"unknown ANONYMIZER_SOURCE {kind!r}; use jsonl, http, langfuse or python")
+
+
+def _plugin_source(spec: str, env: dict[str, str], timeout: float,
+                   transport: httpx.BaseTransport | None) -> ConversationSource:
+    """Load a source class from a local file: ``ANONYMIZER_SOURCE_CLASS=path/to/file.py:ClassName``.
+
+    For company-specific adapters that do not belong in this repository (keep them in ``local/``).
+    The class is called as ``Class(env=env, timeout=timeout, transport=transport)`` and implements
+    :class:`ConversationSource`; an optional ``kpis(since, until) -> dict`` feeds ``get_kpis``.
+    """
+    import importlib.util
+
+    path, _, name = spec.rpartition(":")
+    if not path or not name or not Path(path).is_file():
+        raise SourceError("ANONYMIZER_SOURCE_CLASS must be <existing file.py>:<ClassName>")
+    mod_spec = importlib.util.spec_from_file_location(f"anonymizer_source_{Path(path).stem}", path)
+    if mod_spec is None or mod_spec.loader is None:
+        raise SourceError("ANONYMIZER_SOURCE_CLASS file cannot be loaded")
+    module = importlib.util.module_from_spec(mod_spec)
+    mod_spec.loader.exec_module(module)
+    cls = getattr(module, name, None)
+    if cls is None:
+        raise SourceError(f"ANONYMIZER_SOURCE_CLASS: no class {name!r} in the file")
+    return cls(env=env, timeout=timeout, transport=transport)
 
 
 __all__ = ["Conversation", "ConversationHead", "ConversationSource", "HttpSource", "JsonlSource",

@@ -692,6 +692,11 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
                            group_by: str = "day") -> dict:
         return conversations().stats(p, since, until, group_by)
 
+    @app.get("/v1/conversations/kpis", tags=["conversations"])
+    def conversation_kpis(p: User, since: float | None = None, until: float | None = None) -> dict:
+        """Aggregate KPIs computed by the source (only if it provides them)."""
+        return conversations().kpis(p, since, until)
+
     @app.get("/v1/conversations/quota", tags=["conversations"])
     def conversation_quota(p: User) -> dict:
         return conversations().quota(p)

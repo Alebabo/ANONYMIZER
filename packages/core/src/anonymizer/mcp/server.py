@@ -267,6 +267,10 @@ class AnonymizerTools:
         return self._wrap(self._conv().stats, principal or LOCAL_PRINCIPAL, parse_time(since), parse_time(until),
                           group_by)
 
+    def get_kpis(self, since: str | None = None, until: str | None = None,
+                 principal: Principal | None = None) -> dict[str, Any]:
+        return self._wrap(self._conv().kpis, principal or LOCAL_PRINCIPAL, parse_time(since), parse_time(until))
+
     # -- prompts -------------------------------------------------------------------
     def list_prompts(self, principal: Principal | None = None) -> dict[str, Any]:
         p = principal or LOCAL_PRINCIPAL
@@ -456,6 +460,13 @@ def build_server(tools: AnonymizerTools | None = None,
         def conversation_stats(ctx: Context, since: str | None = None, until: str | None = None,
                                group_by: str = "day") -> dict:
             return t.conversation_stats(since, until, group_by, principal=who(ctx))
+
+        if callable(getattr(t.conversations.source, "kpis", None)):
+            @server.tool(description="KPIs the conversation source computes itself (e.g. sessions per day, "
+                                     "solving rate, ratings). Aggregates only. Dates as YYYY-MM-DD; default "
+                                     "is the source's own range.", annotations=ro)
+            def get_kpis(ctx: Context, since: str | None = None, until: str | None = None) -> dict:
+                return t.get_kpis(since, until, principal=who(ctx))
 
     if t.prompts is not None:
         @server.tool(description="List prompts with latest version and labels.", annotations=ro)
