@@ -20,6 +20,7 @@ Cato proxy ── detect → classify → policy → pseudonymize ── trace +
 | Text results | JSON (object/array) is protected value by value; keys stay readable. Other text is protected as a whole |
 | Field names | Values under fields such as `email`, `vorname`, `nachname`, `telefon`, `iban`, `adresse`, `geburtsdatum` are treated as that entity even if detection finds nothing (`field_hints` adds more) |
 | Known values | Values from those fields are also searched for in free text of later results from the same upstream (a surname from the customer table inside a ticket) |
+| Numbers | JSON numbers under hinted fields are protected. Other integers with 12 or more digits are checked by the rules (card numbers); shorter numbers pass |
 | Identifiers | Single lower-case identifiers (`telefon`, `status`, `open`) only go through rules, not NER, to avoid over-redaction of column names |
 | Policy | Values the policy does not allow for the destination become `[WITHHELD]` (JSON) or a notice (text) |
 | Non-text content | Images, audio, binary resources and resource links are withheld |
@@ -104,4 +105,5 @@ Traces never contain values, placeholders or results. To check what the model ac
 - **Recall is not 100 %.** Unusual names in free text can slip through NER. Field hints and known values reduce this for structured data. Measure on a real sample before using `enforce` on production data (see [plan.md](../plan.md) section 4).
 - **Different spellings** of the same value (`+49 170 …` vs. `0170 …`) get different placeholders.
 - **The client can bypass Cato** if it has a direct MCP connection to the same system. Only network rules prevent that.
+- **Phone numbers stored as JSON numbers** under a field name that is not a hint are not recognised. Add the field to `field_hints`.
 - Resources and prompts of upstreams are not proxied yet, only tools.

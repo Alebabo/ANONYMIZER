@@ -224,3 +224,100 @@ def test_proxy_unknown_upstream_tool():
     proxy = CatoProxy(ProxyConfig.model_validate({"upstreams": {"db": {"url": "http://127.0.0.1:9/mcp"}}}))
     r = anyio.run(proxy.call_tool, "nope__x", {})
     assert r.is_error and "unknown" in r.content[0].text
+
+
+# --- review findings ------------------------------------------------------------------------
+
+def test_structured_only_data_is_reported(pipeline):
+    raw = types.CallToolResult(content=[types.TextContent(type="text", text="Found 2 rows")],
+                               structured_content={"rows": ROWS})
+    out, report = make_filter(pipeline).apply(raw)
+    assert not leaks(json.dumps(out.structured_content, ensure_ascii=False))
+    trace = report.trace()
+    assert trace.entity_counts.get("email") == 2 and trace.fields["$.rows[].email"] == {"email": 2}
+
+
+def test_long_numbers_without_hint_are_checked(pipeline):
+    out, report = make_filter(pipeline).apply(text_result({"card": 4111111111111111, "id": 1234567, "ts": 1731600000}))
+    data = json.loads(out.content[0].text)
+    assert "4111111111111111" not in out.content[0].text and data["id"] == 1234567 and data["ts"] == 1731600000
+    assert report.trace().entity_counts == {"credit_card": 1}
+
+
+def test_oversized_structured_content_is_withheld(pipeline):
+    raw = types.CallToolResult(content=[types.TextContent(type="text", text="ok")],
+                               structured_content={"rows": ROWS})
+    out, _ = make_filter(pipeline, max_chars=50).apply(raw)
+    assert out.structured_content is None and "withheld" in out.content[0].text
+
+
+def test_config_values_with_yaml_characters_and_comments(tmp_path):
+    p = tmp_path / "p.yaml"
+    p.write_text("upstreams:\n  db:\n    command: [x]\n    env: {URI: '${URI}'}\n"
+                 "    # headers: {Authorization: 'Bearer ${NOT_SET}'}\n")
+    cfg = ProxyConfig.load(p, {"URI": "postgres://u:p #a: 'b'@h/db"})
+    assert cfg.upstreams["db"].env["URI"] == "postgres://u:p #a: 'b'@h/db"
+    p.write_text("upstreams:\n  my__db:\n    url: http://x\n")
+    with pytest.raises(ValueError):
+        ProxyConfig.load(p, {})
+
+
+def test_relative_policy_file_resolves_against_config(tmp_path, monkeypatch):
+    from cato.policy.store import builtin_policy as bp
+    import yaml
+
+    (tmp_path / "strict.yaml").write_text(yaml.safe_dump(bp("support-default").model_dump(mode="json")))
+    p = tmp_path / "p.yaml"
+    p.write_text("policy: ./strict.yaml\nupstreams:\n  db:\n    url: http://127.0.0.1:9/mcp\n")
+    monkeypatch.chdir("/")
+    assert CatoProxy(ProxyConfig.load(p, {})).pipelines["db"].policy.name == "support-default"
+
+
+def test_known_values_thread_safety():
+    import threading
+
+    from cato.proxy.filter import KnownValues
+
+    known, errors = KnownValues(), []
+
+    def work(n):
+        try:
+            for i in range(300):
+                known.add(f"Name{n}x{i}", "person")
+                known.find(f"Hallo Name{n}x{i}")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=work, args=(n,)) for n in range(4)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert not errors and len(known.values) == 1200
+
+
+def test_upstream_reconnects_after_exit(tmp_path):
+    server = tmp_path / "once.py"
+    server.write_text("import os\nfrom mcp.server.mcpserver import MCPServer\ns = MCPServer(name='x')\n"
+                      "@s.tool()\ndef ping() -> str:\n    return 'pong'\n"
+                      "@s.tool()\ndef die() -> str:\n    os._exit(1)\n"
+                      "s.run('stdio')\n")
+    proxy = CatoProxy(ProxyConfig.model_validate({"upstreams": {"x": {"command": [sys.executable, str(server)],
+                                                                      "timeout": 20}}}))
+
+    async def go():
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(proxy.run)
+            await proxy.wait_ready()
+            first = await proxy.call_tool("x__ping", {})
+            dead = await proxy.call_tool("x__die", {})
+            with anyio.fail_after(30):
+                while True:
+                    again = await proxy.call_tool("x__ping", {})
+                    if not again.is_error:
+                        break
+                    await anyio.sleep(0.5)
+            proxy.stop()
+            tg.cancel_scope.cancel()
+        return first, dead, again
+
+    first, dead, again = anyio.run(go)
+    assert "pong" in first.content[0].text and dead.is_error and "pong" in again.content[0].text

@@ -19,7 +19,6 @@ import contextvars
 import logging
 import sys
 import time
-from collections import Counter
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -27,6 +26,7 @@ from typing import Any
 
 import anyio
 import mcp_types as types
+from mcp.shared.exceptions import MCPError
 
 from cato.accounts import Principal
 from cato.classify import Classifier
@@ -142,8 +142,19 @@ class Upstream:
         try:
             return await client.call_tool(tool, arguments, read_timeout_seconds=self.config.timeout)
         except _CONNECTION_ERRORS:
-            self.reconnect()
+            self._drop(client)
             raise
+        except MCPError as exc:
+            # A dead upstream (process exited, stream closed) surfaces as CONNECTION_CLOSED, not as an OSError.
+            if exc.code == types.CONNECTION_CLOSED:
+                self._drop(client)
+            raise
+
+    def _drop(self, client: Any) -> None:
+        """Reconnect, unless a newer connection already replaced the one that failed."""
+        if self.client is client:
+            self.client = None
+            self.reconnect()
 
 
 class CatoProxy:
@@ -163,20 +174,21 @@ class CatoProxy:
         # Same value -> same placeholder per upstream for the lifetime of the process (or of the vault file).
         self.vault: Vault = vault or InMemoryVault(VaultKey.generate())
         self.upstreams = {name: Upstream(name, cfg) for name, cfg in config.upstreams.items()}
-        self.pipelines = {name: Pipeline(_policy(cfg.policy or config.policy), detector=self.detector,
+        self.pipelines = {name: Pipeline(_policy(cfg.policy or config.policy, config.base_dir), detector=self.detector,
                                          classifier=self.classifier, vault=self.vault)
                           for name, cfg in config.upstreams.items()}
 
     # -- lifecycle -------------------------------------------------------------------------
     async def run(self) -> None:
-        # Load the NER models before the first call (otherwise the first result takes seconds).
-        try:
-            await anyio.to_thread.run_sync(self.detector.scan, "Max Mustermann wohnt in Berlin.", "de")
-        except Exception:  # noqa: BLE001 - degraded detection is reported per call
-            log.warning("detector warm-up failed", exc_info=True)
         async with anyio.create_task_group() as tg:
+            # Connect first: the model warm-up below can take longer than wait_ready() waits.
             for up in self.upstreams.values():
                 tg.start_soon(up.run)
+            # Load the NER models before the first call (otherwise the first result takes seconds).
+            try:
+                await anyio.to_thread.run_sync(self.detector.scan, "Max Mustermann wohnt in Berlin.", "de")
+            except Exception:  # noqa: BLE001 - degraded detection is reported per call
+                log.warning("detector warm-up failed", exc_info=True)
 
     async def wait_ready(self, timeout: float = 30.0) -> None:
         with anyio.move_on_after(timeout):
@@ -243,7 +255,9 @@ class CatoProxy:
         steps.append(TraceStep(name="Upstream response", detail=f"{len(raw.content)} content block(s) in "
                                                                 f"{round((t_up - t0) * 1000)} ms"
                                                                 + (" · error result" if raw.is_error else "")))
-        filt = ResultFilter(self.pipelines[up_name], self.config.destination, f"proxy:{up_name}",
+        # Vault namespaces are isolated per organization (same scheme as the API).
+        namespace = f"proxy:{up_name}" if org == DEFAULT_ORG else f"{org}\x1fproxy:{up_name}"
+        filt = ResultFilter(self.pipelines[up_name], self.config.destination, namespace,
                             observe=cfg.mode == "observe", hints=cfg.hints(), language=cfg.language,
                             max_chars=self.config.max_chars, known=self.known[up_name], rules=self.rules)
         try:
@@ -296,7 +310,7 @@ class CatoProxy:
             if self.audit is not None:
                 self.audit.record(org, "call", "mcp_tool", resource, principal, after={
                     "trace_id": trace.id, "mode": trace.mode, "outcome": trace.outcome, "status": trace.status,
-                    "entities": dict(Counter(trace.entity_counts))})
+                    "entities": dict(trace.entity_counts)})
         except Exception:  # noqa: BLE001 - observability must not break the call
             log.exception("could not record trace/audit")
 
@@ -305,9 +319,11 @@ def _error(message: str) -> types.CallToolResult:
     return types.CallToolResult(content=[types.TextContent(type="text", text=f"[Cato] {message}")], is_error=True)
 
 
-def _policy(ref: str) -> Policy:
+def _policy(ref: str, base: str | None = None) -> Policy:
     if ref.endswith((".yaml", ".yml")):
-        return Policy.from_file(Path(ref))
+        path = Path(ref)
+        # Relative policy files are resolved against the config file, like the other paths in it.
+        return Policy.from_file(path if path.is_absolute() or not base else Path(base) / path)
     return builtin_policy(ref)
 
 

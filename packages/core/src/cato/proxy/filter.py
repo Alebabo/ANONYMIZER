@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import Any
@@ -42,21 +43,27 @@ class KnownValues:
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
         self._pattern: re.Pattern | None = None
+        self._lock = threading.Lock()  # results are filtered in worker threads, several calls at a time
 
     def add(self, value: str, entity_type: str) -> None:
         for part in ([value] if entity_type != "person" else value.split()):
             part = part.strip(" ,;")
-            if len(part) >= _LEARN_MIN and part not in self.values and len(self.values) < _LEARN_MAX:
-                self.values[part] = entity_type
-                self._pattern = None
+            if len(part) < _LEARN_MIN or part in self.values:
+                continue
+            with self._lock:
+                if part not in self.values and len(self.values) < _LEARN_MAX:
+                    self.values[part] = entity_type
+                    self._pattern = None
 
     def find(self, text: str) -> list[tuple[int, int, str]]:
-        if not self.values:
-            return []
-        if self._pattern is None:
-            alts = sorted(self.values, key=len, reverse=True)
-            self._pattern = re.compile(r"(?<!\w)(" + "|".join(map(re.escape, alts)) + r")(?!\w)")
-        return [(m.start(), m.end(), self.values[m.group(1)]) for m in self._pattern.finditer(text)]
+        with self._lock:
+            if not self.values:
+                return []
+            if self._pattern is None:
+                alts = sorted(self.values, key=len, reverse=True)
+                self._pattern = re.compile(r"(?<!\w)(" + "|".join(map(re.escape, alts)) + r")(?!\w)")
+            pattern, values = self._pattern, self.values
+        return [(m.start(), m.end(), values[m.group(1)]) for m in pattern.finditer(text)]
 
 
 @dataclass
@@ -99,11 +106,23 @@ class ResultFilter:
         self.rules = rules
         self._key_cache: dict[str, bool] = {}
         self._leaf_cache: dict[tuple, str] = {}
+        self._seen: set[tuple] = set()
+        self._lang = language or "de"
 
     # -- entry point -------------------------------------------------------------------------
     def apply(self, result: types.CallToolResult) -> tuple[types.CallToolResult, FilterReport]:
         report = FilterReport()
-        size = sum(len(getattr(c, "text", "") or "") for c in result.content)
+        self._leaf_cache, self._seen = {}, set()
+        # One language per result, so the text and the structured copy of the same data are treated alike.
+        sample = " ".join(c.text for c in result.content if isinstance(c, types.TextContent))[:5000]
+        if not sample.strip() and result.structured_content is not None:
+            sample = json.dumps(result.structured_content, ensure_ascii=False)[:5000]
+        self._lang = self.language or detect_language(sample)
+        # Everything that is analysed counts: text blocks, embedded text resources and structured content.
+        size = sum(len(getattr(c, "text", None) or getattr(getattr(c, "resource", None), "text", None) or "")
+                   for c in result.content)
+        if result.structured_content is not None:
+            size += len(json.dumps(result.structured_content, ensure_ascii=False))
         if size > self.max_chars:
             report.warnings.append(f"result larger than {self.max_chars} characters")
             if not self.observe:
@@ -122,13 +141,8 @@ class ResultFilter:
         content = [self._block(c, report) for c in result.content]
         structured = result.structured_content
         if structured is not None:
-            # Usually the same data as the text blocks: counted only when there are no text blocks.
-            counted = report if not result.content else FilterReport()
-            structured = self._walk(structured, "$", None, counted,
-                                    self._lang_for(json.dumps(structured, ensure_ascii=False)))
-            if counted is not report:
-                report.withheld += counted.withheld
-                report.warnings += counted.warnings
+            # Often a copy of the text blocks: values already counted there are not counted again.
+            structured = self._walk(structured, "$", None, report, self._lang)
         if self.observe:
             return result, report
         return types.CallToolResult(content=content, structured_content=structured, is_error=result.is_error), report
@@ -139,7 +153,7 @@ class ResultFilter:
             return types.TextContent(type="text", text=self._text_payload(block.text, "$", report))
         if isinstance(block, types.EmbeddedResource) and isinstance(block.resource, types.TextResourceContents):
             res = block.resource
-            uri = self._leaf(str(res.uri), "$resource.uri", None, report, self._lang_for(res.text))
+            uri = self._leaf(str(res.uri), "$resource.uri", None, report, self._lang)
             text = self._text_payload(res.text, "$resource", report)
             if uri == WITHHELD:
                 return _text(f"[Cato: embedded resource withheld]\n{text}")
@@ -161,9 +175,9 @@ class ResultFilter:
             except ValueError:
                 data = None
             if isinstance(data, (dict, list)):
-                out = self._walk(data, path, None, report, self._lang_for(text))
+                out = self._walk(data, path, None, report, self._lang)
                 return json.dumps(out, ensure_ascii=False, indent=2)
-        out = self._leaf(text, path, None, report, self._lang_for(text), block=True)
+        out = self._leaf(text, path, None, report, self._lang, block=True)
         return out
 
     # -- JSON --------------------------------------------------------------------------------
@@ -186,6 +200,10 @@ class ResultFilter:
         if value is None or isinstance(value, bool):
             return value
         if isinstance(value, (int, float)) and key and norm_key(key) in self.hints:
+            out = self._leaf(str(value), path, key, report, lang)
+            return value if out == str(value) else out
+        if isinstance(value, int) and abs(value) >= 10 ** 11:
+            # Long numbers can be card or account numbers: same rules as for a string of digits.
             out = self._leaf(str(value), path, key, report, lang)
             return value if out == str(value) else out
         return value
@@ -219,14 +237,17 @@ class ResultFilter:
         cache_key = (text, hint, lang, block)
         if cache_key in self._leaf_cache:
             return self._leaf_cache[cache_key]
-        out = self._leaf_uncached(text, path, hint, report, lang, block)
+        # Same value again in another shape (text block vs. structured copy): protect it, count it once.
+        seen = (text, hint, lang)
+        out = self._leaf_uncached(text, path, hint, FilterReport() if seen in self._seen else report, lang, block)
+        self._seen.add(seen)
         self._leaf_cache[cache_key] = out
         return out
 
     def _leaf_uncached(self, text: str, path: str, hint: str | None, report: FilterReport, lang: str,
                        block: bool) -> str:
         report.values += 1
-        identifier = not hint and bool(_IDENTIFIER.match(text)) and text not in self.known.values
+        identifier = not hint and (bool(_IDENTIFIER.match(text)) or text.isdigit()) and text not in self.known.values
         scan = (self.rules if identifier else self.pipeline.detector).scan(text, lang)
         if hint and not _covers(scan, len(text)):
             det = make_detection(hint, DEFAULT_CATEGORIES.get(hint, Category.PERSONAL_DATA), 0, len(text), text,
@@ -261,8 +282,6 @@ class ResultFilter:
             return text
         return result.text
 
-    def _lang_for(self, text: str) -> str:
-        return self.language or detect_language(text[:5000])
 
 
 def _covers(scan: ScanResult, length: int) -> bool:

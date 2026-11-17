@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,23}$")
 SEP = "__"
+_ENV_VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 # Field names whose values are personal data regardless of what detection finds in the value.
 # Normalized: lower case, without "_", "-", "." and spaces. Plain "name" is not included on purpose
@@ -94,6 +95,7 @@ class ProxyConfig(BaseModel):
     audit_db: str | None = None
     org: str = "default"
     upstreams: dict[str, UpstreamConfig]
+    base_dir: str | None = Field(default=None, exclude=True)  # directory of the config file; set by load()
 
     @field_validator("upstreams")
     @classmethod
@@ -101,8 +103,10 @@ class ProxyConfig(BaseModel):
         if not v:
             raise ValueError("at least one upstream is required")
         for name in v:
-            if not NAME.match(name):
-                raise ValueError(f"upstream name {name!r}: lower case letters, digits and '_', max. 24 characters")
+            # SEP separates upstream and tool in the exposed name, so it must not occur in the upstream name.
+            if not NAME.match(name) or SEP in name:
+                raise ValueError(f"upstream name {name!r}: lower case letters, digits and single '_', "
+                                 "max. 24 characters")
         return v
 
     @classmethod
@@ -117,12 +121,23 @@ class ProxyConfig(BaseModel):
                 return ""
             return env[m.group(1)]
 
-        text = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", sub, raw)
+        def expand(value):
+            # Substituted after parsing: a value cannot change the YAML structure ("#", ":", quotes) and
+            # variables in comments are ignored.
+            if isinstance(value, str):
+                return _ENV_VAR.sub(sub, value)
+            if isinstance(value, list):
+                return [expand(v) for v in value]
+            if isinstance(value, dict):
+                return {k: expand(v) for k, v in value.items()}
+            return value
+
+        data = expand(yaml.safe_load(raw) or {})
         if missing:
             raise ValueError(f"environment variables not set: {', '.join(sorted(set(missing)))}")
-        data = yaml.safe_load(text) or {}
         cfg = cls.model_validate(data)
         base = Path(path).resolve().parent
+        cfg.base_dir = str(base)
         for attr in ("custom_patterns", "trace_db", "audit_db"):
             value = getattr(cfg, attr)
             if value and not Path(value).is_absolute():
