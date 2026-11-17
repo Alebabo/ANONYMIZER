@@ -344,6 +344,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             "vault": state.vault is not None,
             "admin_endpoints": admin_keys_exist(),
             "default_policy": settings.default_policy,
+            "trace_content": settings.trace_content,
+            "trace_retention_days": settings.trace_retention_days,
         }
 
     # -- core ------------------------------------------------------------------

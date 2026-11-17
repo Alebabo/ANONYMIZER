@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   exampleApiKeys, exampleAudit, exampleConversation, exampleConversations, exampleConversationStats, exampleGateway,
-  exampleMe, exampleMembers, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
+  exampleInfo, exampleMe, exampleMembers, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
   exampleProxy, exampleSources, exampleTraces,
 } from "@/lib/mock";
 
@@ -45,14 +45,29 @@ export type ProxyUpstream = {
 };
 export type ProxyStatus = { path: string; destination: string; upstreams: ProxyUpstream[]; tools: string[] };
 
+export type SeriesPoint = {
+  t: number; requests: number; clean?: number; anonymized?: number; not_allowed?: number; errors?: number; entities?: number;
+};
+export type Operation = {
+  name: string; calls: number; entities: number; not_allowed: number; errors: number; observe: number; p95_ms: number | null;
+};
 export type Metrics = {
-  window_hours: number; requests: number; requests_with_detections: number; detection_rate: number;
-  detections: number; anonymized_entities: number; anonymization_rate: number; not_allowed: number;
-  block_rate: number; by_outcome: Record<string, number>; by_risk: Record<string, number>;
+  window_hours: number; bucket_seconds?: number; requests: number; requests_with_detections: number; detection_rate: number;
+  detections: number; entities_per_request?: number; anonymized_entities: number; anonymization_rate: number;
+  not_allowed: number; block_rate: number; needs_review?: number; with_warnings?: number; observe_mode?: number;
+  resources_read?: number; by_outcome: Record<string, number>; by_risk: Record<string, number>;
   by_route: Record<string, number>; by_provider: Record<string, number>; by_policy: Record<string, number>;
+  by_operation?: Operation[]; top_fields?: Record<string, number>; warnings?: Record<string, number>;
   entity_distribution: Record<string, number>; actions: Record<string, number>;
-  latency_ms: { avg: number | null; p95: number | null }; errors: number;
-  timeseries: { t: number; requests: number }[];
+  latency_ms: { avg: number | null; p50?: number | null; p95: number | null; p99?: number | null }; errors: number;
+  previous?: { requests: number; detections: number; not_allowed: number; errors: number };
+  last_trace_at?: number | null;
+  timeseries: SeriesPoint[];
+};
+
+export type Info = {
+  version: string; ner: "available" | "unavailable" | "disabled"; vault: boolean; admin_endpoints: boolean;
+  default_policy: string; trace_content?: boolean; trace_retention_days?: number;
 };
 
 export type PolicySummary = { name: string; version: number; hash: string; scope: Record<string, unknown> };
@@ -176,6 +191,7 @@ async function read<T>(path: string, example: () => T): Promise<{ data: T; sourc
 }
 
 export const getMe = () => read<Me>("/v1/auth/me", () => exampleMe);
+export const getInfo = () => read<Info>("/v1/info", () => exampleInfo);
 export const getMetrics = (hours = 24) => read<Metrics>(`/v1/metrics?hours=${hours}`, () => exampleMetrics);
 export const getTraces = (limit = 50, route?: string) =>
   read<Trace[]>(`/v1/traces?limit=${limit}${route ? `&route=${encodeURIComponent(route)}` : ""}`,

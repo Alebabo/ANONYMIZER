@@ -1,34 +1,62 @@
 // Illustrative example data in the shape of the Anonymizer API. No real content.
 import type {
-  ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Me, Metrics, PolicySummary,
+  ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, GatewayStatus, Info, Me, Metrics, PolicySummary,
   PromptHistoryItem, PromptListItem, PromptVersion, ProxyStatus, SourcesInfo, Trace, User,
 } from "@/lib/anonymizer-api";
 
 const now = Math.floor(Date.now() / 1000 / 3600) * 3600;
 
+const series = Array.from({ length: 24 }, (_, i) => {
+  const requests = Math.round(700 + 450 * Math.sin((i / 24) * Math.PI) + (i % 5) * 37);
+  const anonymized = Math.round(requests * 0.13);
+  const not_allowed = (i * 7) % 9;
+  const errors = i === 17 ? 6 : i % 11 === 0 ? 1 : 0;
+  return { t: now - (23 - i) * 3600, requests, anonymized, not_allowed, errors,
+           clean: requests - anonymized - not_allowed - errors, entities: anonymized * 3 };
+});
+
 export const exampleMetrics: Metrics = {
   window_hours: 24,
+  bucket_seconds: 3600,
   requests: 24891,
   requests_with_detections: 3421,
   detection_rate: 0.137,
   detections: 9120,
+  entities_per_request: 2.7,
   anonymized_entities: 7505,
   anonymization_rate: 0.823,
   not_allowed: 104,
   block_rate: 0.0042,
+  needs_review: 61,
+  with_warnings: 14,
+  observe_mode: 212,
+  resources_read: 187,
   by_outcome: { allow: 24787, review: 61, local_only: 38, block: 5 },
   by_risk: { low: 18012, sensitive: 4410, critical: 2469 },
-  by_route: { "/v1/chat/completions": 19870, "/v1/protect": 4120, "/v1/documents/protect": 901 },
+  by_route: { "/v1/chat/completions": 19870, "/v1/protect": 4120, "/mcp/proxy": 901 },
   by_provider: { openai: 17210, azure: 2420, local: 240 },
   by_policy: { "legal-default@v1": 21890, "firm-a@v3": 3001 },
+  by_operation: [
+    { name: "/v1/chat/completions", calls: 19870, entities: 6120, not_allowed: 71, errors: 12, observe: 0, p95_ms: 431 },
+    { name: "/v1/protect", calls: 4120, entities: 1980, not_allowed: 22, errors: 0, observe: 0, p95_ms: 96 },
+    { name: "/v1/conversations", calls: 187, entities: 640, not_allowed: 3, errors: 0, observe: 0, p95_ms: 820 },
+    { name: "demo__get_customers", calls: 512, entities: 310, not_allowed: 6, errors: 0, observe: 0, p95_ms: 52 },
+    { name: "demo__get_tickets", calls: 212, entities: 70, not_allowed: 2, errors: 0, observe: 212, p95_ms: 31 },
+  ],
+  top_fields: { "$.text": 2210, "$.messages[].content": 1830, "$.email": 512, "$.iban": 401, "$.notiz": 96 },
+  warnings: { "document contains comments (not anonymized)": 9, "NER model unavailable; regex only": 5 },
   entity_distribution: { person: 3910, organization: 1820, case_number: 980, email: 760, iban: 412, health_data: 96, date_of_birth: 88 },
   actions: { pseudonymize: 6610, redact: 812, generalize: 83, allow: 1511, local_only: 38, review: 61, block: 5 },
-  latency_ms: { avg: 182.4, p95: 412.0 },
+  latency_ms: { avg: 182.4, p50: 141, p95: 412.0, p99: 980 },
   errors: 12,
-  timeseries: Array.from({ length: 24 }, (_, i) => ({
-    t: now - (23 - i) * 3600,
-    requests: Math.round(700 + 450 * Math.sin((i / 24) * Math.PI) + (i % 5) * 37),
-  })),
+  previous: { requests: 22410, detections: 8705, not_allowed: 131, errors: 3 },
+  last_trace_at: Math.floor(Date.now() / 1000) - 60,
+  timeseries: series,
+};
+
+export const exampleInfo: Info = {
+  version: "0.1.0", ner: "available", vault: true, admin_endpoints: true, default_policy: "legal-default",
+  trace_content: false, trace_retention_days: 30,
 };
 
 const base = Date.now() / 1000;

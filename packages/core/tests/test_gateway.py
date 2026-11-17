@@ -186,3 +186,22 @@ def test_openai_sdk_compatibility(tmp_path):
         {"role": "user", "content": "Herr Max Mustermann hat angerufen."}])
     assert resp.choices[0].message.content.startswith("Antwort an Max Mustermann")
     assert "Mustermann" not in json.dumps(provider.requests[0]["body"])
+
+
+def test_metrics_dashboard_fields():
+    from anonymizer.tracing import Trace, TraceStore
+
+    store = TraceStore()
+    store.add(Trace(route="/mcp/proxy", upstream="crm", tool="get", outcome="allow", entity_counts={"person": 2},
+                    fields={"$.name": {"person": 2}}, latency_ms=10, resource="c1"))
+    store.add(Trace(route="/v1/protect", outcome="block", latency_ms=30, needs_review=True))
+    store.add(Trace(route="/v1/protect", outcome="allow", status=502, warnings=["x"]))
+    m = store.metrics(24)
+    assert m["needs_review"] == 1 and m["with_warnings"] == 1 and m["resources_read"] == 1
+    assert m["top_fields"] == {"$.name": 2}
+    ops = {o["name"]: o for o in m["by_operation"]}
+    assert ops["crm__get"]["entities"] == 2 and ops["/v1/protect"]["errors"] == 1
+    last = m["timeseries"][-1]
+    assert (last["anonymized"], last["not_allowed"], last["errors"], last["clean"]) == (1, 1, 1, 0)
+    assert m["previous"]["requests"] == 0 and m["last_trace_at"] is not None
+    assert m["latency_ms"]["p50"] == 10 and m["latency_ms"]["p95"] == 30

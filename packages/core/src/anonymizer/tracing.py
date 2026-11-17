@@ -156,6 +156,15 @@ def merge_traces(route: str, parts: list[Trace], **extra: Any) -> Trace:
 DEFAULT_ORG = "default"
 
 
+def _pct(sorted_values: list[float], q: float) -> float | None:
+    """Nearest-rank percentile; with fewer than 20 values the maximum (too few for a stable tail)."""
+    if not sorted_values:
+        return None
+    if len(sorted_values) < 20 and q > 0.5:
+        return round(sorted_values[-1], 1)
+    return round(sorted_values[max(0, int(len(sorted_values) * q + 0.5) - 1)], 1)
+
+
 class TraceStore:
     """Traces are stored per organization (``org_id``); every read is scoped to one.
 
@@ -236,7 +245,8 @@ class TraceStore:
         return [Trace.model_validate_json(r[0]) for r in rows]
 
     def metrics(self, hours: int = 24, org_id: str = DEFAULT_ORG) -> dict[str, Any]:
-        since = time.time() - hours * 3600
+        now = time.time()
+        since = now - hours * 3600
         traces = self._all_since(since, org_id)
         total = len(traces)
         with_det = sum(1 for t in traces if t.entity_counts)
@@ -245,42 +255,104 @@ class TraceStore:
         latencies = sorted(t.latency_ms for t in traces if t.latency_ms is not None)
         entity_dist: Counter = Counter()
         actions: Counter = Counter()
+        fields: Counter = Counter()
         for t in traces:
             entity_dist.update(t.entity_counts)
             actions.update({k.split(":", 1)[1]: v for k, v in t.actions.items()})
+            for path, counts in t.fields.items():
+                fields[path] += sum(counts.values())
         anonymized = sum(v for k, v in actions.items() if k not in ("allow", "block", "local_only", "review"))
-        buckets: Counter = Counter()
+
+        # Time series: hourly up to two days, daily beyond. Each bucket splits requests by what happened.
+        step = 3600 if hours <= 48 else 86400
+        buckets: dict[int, Counter] = {}
         for t in traces:
-            buckets[int(t.created_at // 3600 * 3600)] += 1
-        start = int(since // 3600 * 3600)
-        series = [{"t": h, "requests": buckets.get(h, 0)} for h in range(start, int(time.time()) + 1, 3600)]
+            b = buckets.setdefault(int(t.created_at // step * step), Counter())
+            b["requests"] += 1
+            if t.status >= 500:
+                b["errors"] += 1
+            elif t.outcome and t.outcome != "allow":
+                b["not_allowed"] += 1
+            elif t.entity_counts:
+                b["anonymized"] += 1
+            else:
+                b["clean"] += 1
+            b["entities"] += sum(t.entity_counts.values())
+        start = int(since // step * step)
+        keys = ("requests", "clean", "anonymized", "not_allowed", "errors", "entities")
+        series = [{"t": h, **{k: buckets.get(h, Counter()).get(k, 0) for k in keys}}
+                  for h in range(start, int(now) + 1, step)]
+
+        # Per operation: MCP proxy tool, else route.
+        ops: dict[str, dict[str, Any]] = {}
+        for t in traces:
+            key = f"{t.upstream}__{t.tool}" if t.upstream and t.tool else t.route
+            o = ops.setdefault(key, {"calls": 0, "entities": 0, "not_allowed": 0, "errors": 0, "observe": 0, "_lat": []})
+            o["calls"] += 1
+            o["entities"] += sum(t.entity_counts.values())
+            o["not_allowed"] += 1 if t.outcome and t.outcome != "allow" else 0
+            o["errors"] += 1 if t.status >= 500 else 0
+            o["observe"] += 1 if t.mode == "observe" else 0
+            if t.latency_ms is not None:
+                o["_lat"].append(t.latency_ms)
+        by_operation = []
+        for key, o in sorted(ops.items(), key=lambda kv: -kv[1]["calls"]):
+            lat = sorted(o.pop("_lat"))
+            by_operation.append({"name": key, **o, "p95_ms": _pct(lat, 0.95)})
+
+        prev = self._all_since(since - hours * 3600, org_id, until=since)
+        last = traces[-1].created_at if traces else self._last(org_id)
         return {
             "window_hours": hours,
+            "bucket_seconds": step,
             "requests": total,
             "requests_with_detections": with_det,
             "detection_rate": round(with_det / total, 4) if total else 0.0,
             "detections": detections,
+            "entities_per_request": round(detections / with_det, 1) if with_det else 0.0,
             "anonymized_entities": anonymized,
             "anonymization_rate": round(anonymized / detections, 4) if detections else 0.0,
             "not_allowed": len(not_allowed),
             "block_rate": round(len(not_allowed) / total, 4) if total else 0.0,
+            "needs_review": sum(1 for t in traces if t.needs_review),
+            "with_warnings": sum(1 for t in traces if t.warnings),
+            "observe_mode": sum(1 for t in traces if t.mode == "observe"),
+            "resources_read": len({t.resource for t in traces if t.resource}),
             "by_outcome": dict(Counter(t.outcome or "n/a" for t in traces)),
             "by_risk": dict(Counter(t.risk or "n/a" for t in traces)),
             "by_route": dict(Counter(t.route for t in traces)),
             "by_provider": dict(Counter(t.provider for t in traces if t.provider)),
             "by_policy": dict(Counter(t.policy for t in traces if t.policy)),
+            "by_operation": by_operation,
+            "top_fields": dict(fields.most_common(10)),
+            "warnings": dict(Counter(w for t in traces for w in t.warnings).most_common(5)),
             "entity_distribution": dict(entity_dist.most_common()),
             "actions": dict(actions),
             "latency_ms": {
                 "avg": round(sum(latencies) / len(latencies), 1) if latencies else None,
-                "p95": latencies[int(len(latencies) * 0.95) - 1] if len(latencies) >= 20 else (latencies[-1] if latencies else None),
+                "p50": _pct(latencies, 0.5),
+                "p95": _pct(latencies, 0.95),
+                "p99": _pct(latencies, 0.99),
             },
             "errors": sum(1 for t in traces if t.status >= 500),
+            "previous": {
+                "requests": len(prev),
+                "detections": sum(sum(t.entity_counts.values()) for t in prev),
+                "not_allowed": sum(1 for t in prev if t.outcome and t.outcome != "allow"),
+                "errors": sum(1 for t in prev if t.status >= 500),
+            },
+            "last_trace_at": last,
             "timeseries": series,
         }
 
-    def _all_since(self, since: float, org_id: str) -> list[Trace]:
+    def _last(self, org_id: str) -> float | None:
         with self._lock:
-            rows = self._db.execute("SELECT data FROM traces WHERE org_id = ? AND created_at >= ? ORDER BY created_at",
-                                    (org_id, since)).fetchall()
+            row = self._db.execute("SELECT MAX(created_at) FROM traces WHERE org_id = ?", (org_id,)).fetchone()
+        return row[0] if row and row[0] is not None else None
+
+    def _all_since(self, since: float, org_id: str, until: float | None = None) -> list[Trace]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT data FROM traces WHERE org_id = ? AND created_at >= ? AND created_at < ? ORDER BY created_at",
+                (org_id, since, until if until is not None else 1e18)).fetchall()
         return [Trace.model_validate_json(r[0]) for r in rows]
