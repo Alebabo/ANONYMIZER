@@ -31,6 +31,9 @@ OpenAnonymizer proxy ── detect → classify → policy → pseudonymize ─�
 
 - `enforce` (default): the model only sees the filtered result.
 - `observe`: the model sees the **original** result. OpenAnonymizer only records what it would have protected. Use it **only with synthetic or test data**, or with approval for the system in question. The dashboard shows a warning while an upstream runs in observe mode.
+- `log`: the model sees the **original** result and nothing is analysed. OpenAnonymizer only records which tool was called, how large the arguments and the result were, and (with content traces) what they contained. Use it to see how much data an agent reads from your MCP servers.
+
+Every trace records `args_chars` and `result_chars` (characters of text handed to the model). The dashboard page **MCP Proxy** sums them per upstream and tool and estimates tokens as characters / 4. With `ANONYMIZER_TRACE_CONTENT=1` each trace also keeps the arguments and the first 20,000 characters of the result.
 
 ## Configuration
 
@@ -66,6 +69,12 @@ upstreams:
 | `allow_write` | Also expose tools annotated as not read-only or destructive (unannotated tools are exposed) |
 | `field_hints` | Extra field name → entity type (`person`, `email`, `phone`, `iban`, `address`, ...) |
 | `timeout` | Seconds per call (default 60) |
+| `oauth` | HTTP only: log in with OAuth (dynamic client registration, PKCE). The first start opens the browser; tokens are refreshed from then on |
+| `oauth_port` | Local callback port for the login (default 33418 + position of the upstream in the file) |
+
+Top level `oauth_dir` sets where tokens are stored (default `~/.openanonymizer/oauth`, one JSON file per upstream). Keep that directory private: it holds refresh tokens.
+
+After the first login of an upstream, reconnect the MCP client (`/mcp` in Claude Code): it fetched the tool list while the upstream was still waiting for the login. A login that is not finished within 5 minutes is retried with a new browser tab.
 
 Upstream names: lower case letters, digits, `_`, max. 24 characters.
 

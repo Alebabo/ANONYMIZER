@@ -24,6 +24,10 @@ export function Stat({ label, value, sub }: { label: string; value: string; sub?
 }
 
 export const fmt = (n: number) => n.toLocaleString("en-US");
+/** Characters as a short number ("12.3k"); tokens are estimated as characters / 4. */
+export const chars = (n: number) =>
+  n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n);
+export const tokens = (n: number) => chars(Math.round(n / 4));
 export const pct = (r: number) => `${(r * 100).toFixed(1)}%`;
 export const time = (ts: number) =>
   new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" });

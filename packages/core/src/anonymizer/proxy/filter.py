@@ -126,6 +126,8 @@ class ResultFilter:
             size += len(json.dumps(result.structured_content, ensure_ascii=False))
         if size > self.max_chars:
             report.warnings.append(f"result larger than {self.max_chars} characters")
+            if self.observe:  # passes through anyway; analysing it would only cost time
+                return result, report
             if not self.observe:
                 report.withheld += 1
                 return types.CallToolResult(content=[_text(f"[OpenAnonymizer: result withheld, larger than "

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import contextvars
+import json
 import logging
 import sys
 import time
@@ -34,8 +35,8 @@ from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
 from anonymizer.pipeline import Pipeline
 from anonymizer.policy import Policy, builtin_policy
 from anonymizer.proxy.config import SEP, ProxyConfig, UpstreamConfig
-from anonymizer.proxy.filter import KnownValues, ResultFilter
-from anonymizer.tracing import DEFAULT_ORG, Trace, TraceStep
+from anonymizer.proxy.filter import FilterReport, KnownValues, ResultFilter
+from anonymizer.tracing import DEFAULT_ORG, ContentItem, Trace, TraceStep
 from anonymizer.vault import InMemoryVault, Vault, VaultKey
 
 log = logging.getLogger("anonymizer.proxy")
@@ -64,9 +65,10 @@ class Upstream:
     """One upstream MCP server. :meth:`run` keeps the connection alive (and reconnects) in its own task, so
     the client's context is entered and left in the same task."""
 
-    def __init__(self, name: str, config: UpstreamConfig) -> None:
+    def __init__(self, name: str, config: UpstreamConfig, auth: Any = None) -> None:
         self.name = name
         self.config = config
+        self.auth = auth  # httpx auth (OAuth) for HTTP upstreams
         self.client: Any = None
         self.tools: list[types.Tool] = []
         self.error: str | None = None
@@ -89,7 +91,7 @@ class Upstream:
 
             from mcp.client.streamable_http import streamable_http_client
 
-            http = await stack.enter_async_context(httpx2.AsyncClient(headers=cfg.headers,
+            http = await stack.enter_async_context(httpx2.AsyncClient(headers=cfg.headers, auth=self.auth,
                                                                       timeout=httpx2.Timeout(cfg.timeout)))
             target = streamable_http_client(cfg.url, http_client=http)
         return await stack.enter_async_context(Client(target, read_timeout_seconds=cfg.timeout, cache=None))
@@ -173,7 +175,8 @@ class AnonymizerProxy:
         self.org_id = org_id or config.org or DEFAULT_ORG
         # Same value -> same placeholder per upstream for the lifetime of the process (or of the vault file).
         self.vault: Vault = vault or InMemoryVault(VaultKey.generate())
-        self.upstreams = {name: Upstream(name, cfg) for name, cfg in config.upstreams.items()}
+        self.upstreams = {name: Upstream(name, cfg, _auth(name, cfg, i, config))
+                          for i, (name, cfg) in enumerate(config.upstreams.items())}
         self.pipelines = {name: Pipeline(_policy(cfg.policy or config.policy, config.base_dir), detector=self.detector,
                                          classifier=self.classifier, vault=self.vault)
                           for name, cfg in config.upstreams.items()}
@@ -223,7 +226,7 @@ class AnonymizerProxy:
     def list_tools(self) -> list[types.Tool]:
         tools = []
         for name, up in self.upstreams.items():
-            note = ("OBSERVE MODE: results are NOT filtered by OpenAnonymizer." if up.config.mode == "observe" else
+            note = ("OBSERVE MODE: results are NOT filtered by OpenAnonymizer." if up.config.mode in ("observe", "log") else
                     "Results are filtered by OpenAnonymizer: personal data is replaced with placeholders (PERSON_001, ...); "
                     "[WITHHELD] marks values the policy does not allow.")
             for t in self._visible(up):
@@ -242,17 +245,21 @@ class AnonymizerProxy:
         cfg = up.config
         org = principal.org_id if principal else self.org_id
         t0 = time.perf_counter()
-        steps = [TraceStep(name="Tool call", detail=f"{up_name} · {tool}")]
+        args_json = json.dumps(arguments or {}, ensure_ascii=False, default=str)
+        steps = [TraceStep(name="Tool call", detail=f"{up_name} · {tool} · arguments {len(args_json):,} chars")]
         try:
             raw = await up.call(tool, arguments or {})
         except UpstreamUnavailable:
             return self._fail(up_name, tool, cfg.mode, org, principal, t0, steps, 503,
-                              f"upstream {up_name} is not connected")
+                              f"upstream {up_name} is not connected", len(args_json))
         except Exception:  # noqa: BLE001 - upstream errors can carry data; the model gets none of it
             log.exception("upstream call %s failed", name)
-            return self._fail(up_name, tool, cfg.mode, org, principal, t0, steps, 502, "upstream call failed")
+            return self._fail(up_name, tool, cfg.mode, org, principal, t0, steps, 502, "upstream call failed",
+                              len(args_json))
         t_up = time.perf_counter()
-        steps.append(TraceStep(name="Upstream response", detail=f"{len(raw.content)} content block(s) in "
+        raw_text = _text(raw)
+        steps.append(TraceStep(name="Upstream response", detail=f"{len(raw.content)} content block(s), "
+                                                                f"{len(raw_text):,} chars in "
                                                                 f"{round((t_up - t0) * 1000)} ms"
                                                                 + (" · error result" if raw.is_error else "")))
         # Vault namespaces are isolated per organization (same scheme as the API).
@@ -261,16 +268,26 @@ class AnonymizerProxy:
                             observe=cfg.mode == "observe", hints=cfg.hints(), language=cfg.language,
                             max_chars=self.config.max_chars, known=self.known[up_name], rules=self.rules)
         try:
-            result, report = await anyio.to_thread.run_sync(filt.apply, raw)
+            if cfg.mode == "log":
+                result, report = raw, FilterReport()
+            else:
+                result, report = await anyio.to_thread.run_sync(filt.apply, raw)
         except Exception:  # noqa: BLE001 - fail closed: never return the unfiltered result
             log.exception("filtering %s failed", name)
             return self._fail(up_name, tool, cfg.mode, org, principal, t0, steps, 500,
-                              "filtering failed; result withheld")
+                              "filtering failed; result withheld", len(args_json))
         pipeline = self.pipelines[up_name]
         trace = report.trace(upstream=up_name, tool=tool, mode=cfg.mode, provider="mcp", model=up_name)
         trace.policy = trace.policy or pipeline.policy.name
         trace.destination = trace.destination or self.config.destination
         trace.latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+        out_text = _text(result)
+        trace.args_chars, trace.result_chars = len(args_json), len(out_text)
+        # Kept only with content traces (ANONYMIZER_TRACE_CONTENT=1): what was asked and what the model got.
+        shown = f" (first {CONTENT_PREVIEW:,} shown)" if len(out_text) > CONTENT_PREVIEW else ""
+        trace.content = [ContentItem(label="arguments", input=args_json, output=args_json),
+                         ContentItem(label=f"result · {len(out_text):,} chars{shown}",
+                                     input=raw_text[:CONTENT_PREVIEW], output=out_text[:CONTENT_PREVIEW])]
         found = sum(trace.entity_counts.values())
         steps += [
             TraceStep(name="Privacy detection",
@@ -283,7 +300,11 @@ class AnonymizerProxy:
                                                           else ""),
                       status="blocked" if report.withheld else "ok"),
         ]
-        if cfg.mode == "observe":
+        if cfg.mode == "log":
+            steps = [s for s in steps if s.name not in ("Privacy detection", "Policy evaluation")]
+            steps.append(TraceStep(name="Log mode", detail="original result returned · not analysed",
+                                   status="warning"))
+        elif cfg.mode == "observe":
             steps.append(TraceStep(name="Observe mode", detail=f"original result returned · {report.changed} value(s) "
                                                                "would have been changed", status="warning"))
         else:
@@ -295,10 +316,11 @@ class AnonymizerProxy:
 
     # -- helpers ---------------------------------------------------------------------------
     def _fail(self, upstream: str, tool: str, mode: str, org: str, principal: Principal | None, t0: float,
-              steps: list[TraceStep], status: int, message: str) -> types.CallToolResult:
+              steps: list[TraceStep], status: int, message: str, args_chars: int | None = None
+              ) -> types.CallToolResult:
         steps.append(TraceStep(name="Error", detail=message, status="error"))
         trace = Trace(route="/mcp/proxy", upstream=upstream, tool=tool, mode=mode, provider="mcp", model=upstream,
-                      status=status, error=message, outcome="block", allowed=False, steps=steps,
+                      status=status, args_chars=args_chars, result_chars=0, error=message, outcome="block", allowed=False, steps=steps,
                       latency_ms=round((time.perf_counter() - t0) * 1000, 1))
         self._record(trace, org, principal, f"{upstream}{SEP}{tool}")
         return _error(message)
@@ -313,6 +335,30 @@ class AnonymizerProxy:
                     "entities": dict(trace.entity_counts)})
         except Exception:  # noqa: BLE001 - observability must not break the call
             log.exception("could not record trace/audit")
+
+
+CONTENT_PREVIEW = 20_000  # characters of a result kept in a content trace
+
+
+def _text(result: types.CallToolResult) -> str:
+    """Text of a tool result (text blocks, embedded text resources, structured content if no text)."""
+    parts = []
+    for block in result.content:
+        if isinstance(block, types.TextContent):
+            parts.append(block.text)
+        elif isinstance(block, types.EmbeddedResource) and isinstance(block.resource, types.TextResourceContents):
+            parts.append(block.resource.text)
+    if not parts and result.structured_content is not None:
+        parts.append(json.dumps(result.structured_content, ensure_ascii=False, default=str))
+    return "\n".join(parts)
+
+
+def _auth(name: str, cfg: UpstreamConfig, index: int, config: ProxyConfig) -> Any:
+    if not cfg.oauth or not cfg.url:
+        return None
+    from anonymizer.proxy.oauth import oauth_provider
+
+    return oauth_provider(name, cfg.url, cfg.oauth_port or 33418 + index, config.oauth_dir)
 
 
 def _error(message: str) -> types.CallToolResult:

@@ -82,6 +82,9 @@ class Trace(BaseModel):
     tool: str | None = None
     mode: str | None = None  # enforce | observe
     fields: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # MCP proxy: size of the call arguments and of the result handed to the model (characters of text).
+    args_chars: int | None = None
+    result_chars: int | None = None
     # What was read (e.g. conversation id). Content: only kept when the store allows it (see module doc).
     resource: str | None = None
     content: list[ContentItem] = Field(default_factory=list)
@@ -288,8 +291,10 @@ class TraceStore:
         ops: dict[str, dict[str, Any]] = {}
         for t in traces:
             key = f"{t.upstream}__{t.tool}" if t.upstream and t.tool else t.route
-            o = ops.setdefault(key, {"calls": 0, "entities": 0, "not_allowed": 0, "errors": 0, "observe": 0, "_lat": []})
+            o = ops.setdefault(key, {"calls": 0, "entities": 0, "not_allowed": 0, "errors": 0, "observe": 0,
+                                     "result_chars": 0, "_lat": []})
             o["calls"] += 1
+            o["result_chars"] += t.result_chars or 0
             o["entities"] += sum(t.entity_counts.values())
             o["not_allowed"] += 1 if t.outcome and t.outcome != "allow" else 0
             o["errors"] += 1 if t.status >= 500 else 0
@@ -319,6 +324,7 @@ class TraceStore:
             "with_warnings": sum(1 for t in traces if t.warnings),
             "observe_mode": sum(1 for t in traces if t.mode == "observe"),
             "resources_read": len({t.resource for t in traces if t.resource}),
+            "result_chars": sum(t.result_chars or 0 for t in traces),
             "by_outcome": dict(Counter(t.outcome or "n/a" for t in traces)),
             "by_risk": dict(Counter(t.risk or "n/a" for t in traces)),
             "by_route": dict(Counter(t.route for t in traces)),

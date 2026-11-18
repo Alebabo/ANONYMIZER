@@ -28,6 +28,8 @@ export type Trace = {
   /** MCP proxy traces only: upstream system, tool, mode and entity types per JSON field path. */
   upstream?: string | null; tool?: string | null; mode?: string | null;
   fields?: Record<string, Record<string, number>>;
+  /** MCP proxy: characters of the call arguments and of the result handed to the model. */
+  args_chars?: number | null; result_chars?: number | null;
   /** What was read, e.g. a conversation id. */
   resource?: string | null;
   /** Only with ANONYMIZER_TRACE_CONTENT=1 and for admins: protected text and original values. */
@@ -40,7 +42,7 @@ export type TraceContent = {
 };
 
 export type ProxyUpstream = {
-  name: string; transport: "stdio" | "http"; mode: "enforce" | "observe"; policy: string; connected: boolean;
+  name: string; transport: "stdio" | "http"; mode: "enforce" | "observe" | "log"; policy: string; connected: boolean;
   error: string | null; tools_upstream: number; tools_exposed: number;
 };
 export type ProxyStatus = { path: string; destination: string; upstreams: ProxyUpstream[]; tools: string[] };
@@ -50,6 +52,7 @@ export type SeriesPoint = {
 };
 export type Operation = {
   name: string; calls: number; entities: number; not_allowed: number; errors: number; observe: number; p95_ms: number | null;
+  result_chars?: number;
 };
 export type Metrics = {
   window_hours: number; bucket_seconds?: number; requests: number; requests_with_detections: number; detection_rate: number;

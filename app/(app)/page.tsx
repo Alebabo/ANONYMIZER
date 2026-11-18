@@ -28,11 +28,11 @@ const RISK_COLORS: Record<string, string> = {
 };
 
 const attention = (t: Trace) =>
-  t.status >= 500 || (t.outcome && t.outcome !== "allow") || t.needs_review || t.warnings.length > 0 || t.mode === "observe";
+  t.status >= 500 || (t.outcome && t.outcome !== "allow") || t.needs_review || t.warnings.length > 0 || t.mode === "observe" || t.mode === "log";
 
 const why = (t: Trace) =>
   t.status >= 500 ? `error ${t.status}` : t.needs_review ? "needs review" : t.outcome && t.outcome !== "allow" ? t.outcome
-    : t.mode === "observe" ? "observe mode: sent unchanged" : t.warnings[0] ?? "warning";
+    : t.mode === "observe" || t.mode === "log" ? `${t.mode} mode: sent unchanged` : t.warnings[0] ?? "warning";
 
 const opName = (t: Trace) => (t.upstream && t.tool ? `${t.upstream}__${t.tool}` : t.route);
 
@@ -57,9 +57,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   if (proxy) {
     for (const u of proxy.upstreams) {
       status.push({ label: `Proxy · ${u.name}`, href: "/proxy",
-        state: !u.connected ? "error" : u.mode === "observe" ? "warn" : "ok",
+        state: !u.connected ? "error" : u.mode !== "enforce" ? "warn" : "ok",
         detail: !u.connected ? (u.error ?? "disconnected")
-          : `${u.mode}${u.mode === "observe" ? " (data passes unchanged)" : ""} · ${u.tools_exposed}/${u.tools_upstream} tools · ${u.policy}` });
+          : `${u.mode}${u.mode !== "enforce" ? " (data passes unchanged)" : ""} · ${u.tools_exposed}/${u.tools_upstream} tools · ${u.policy}` });
     }
   } else {
     status.push({ label: "MCP proxy", state: "off", detail: "Not configured", href: "/proxy" });

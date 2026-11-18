@@ -322,3 +322,57 @@ def test_upstream_reconnects_after_exit(tmp_path):
 
     first, dead, again = anyio.run(go)
     assert "pong" in first.content[0].text and dead.is_error and "pong" in again.content[0].text
+
+
+# --- data volume, log mode, OAuth -----------------------------------------------------------
+
+def test_traces_record_argument_and_result_size(tmp_path):
+    cfg = demo_config(tmp_path)
+    _, results = run_stdio(cfg, [("demo__get_customers", {})])
+    t = TraceStore(tmp_path / "traces.db").list(1)[0]
+    sent = "\n".join(b.text for b in results[0].content if isinstance(b, types.TextContent))
+    assert t.args_chars == 2 and t.result_chars == len(sent) > 0
+    assert not t.content  # content only with content traces
+
+
+def test_stdio_log_mode_passes_raw_data_without_detection(tmp_path):
+    cfg = demo_config(tmp_path, mode="log")
+    _, results = run_stdio(cfg, [("demo__get_customers", {})])
+    assert "Mustermann" in results[0].content[0].text
+    t = TraceStore(tmp_path / "traces.db").list(1)[0]
+    assert t.mode == "log" and not t.entity_counts and t.result_chars and t.result_chars > 100
+
+
+def test_oauth_config_needs_http_upstream():
+    with pytest.raises(ValueError):
+        ProxyConfig.model_validate({"upstreams": {"x": {"command": ["x"], "oauth": True}}})
+    cfg = ProxyConfig.model_validate({"upstreams": {"a": {"url": "http://127.0.0.1:9/mcp"},
+                                                    "b": {"url": "http://127.0.0.1:9/mcp", "oauth": True}}})
+    proxy = AnonymizerProxy(cfg)
+    assert proxy.upstreams["a"].auth is None and proxy.upstreams["b"].auth is not None
+
+
+def test_oauth_token_storage_and_callback(tmp_path):
+    import threading
+    import urllib.request
+
+    from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
+
+    from anonymizer.proxy.oauth import FileTokenStorage, _CallbackServer
+
+    store = FileTokenStorage(tmp_path / "a.json", "http://127.0.0.1:1/callback")
+    assert anyio.run(store.get_tokens) is None
+    anyio.run(store.set_tokens, OAuthToken(access_token="at", refresh_token="rt"))
+    anyio.run(store.set_client_info, OAuthClientInformationFull(client_id="c",
+                                                                redirect_uris=["http://127.0.0.1:1/callback"]))
+    assert anyio.run(store.get_tokens).refresh_token == "rt"
+    assert anyio.run(store.get_client_info).client_id == "c"
+    other = FileTokenStorage(tmp_path / "a.json", "http://127.0.0.1:2/callback")
+    assert anyio.run(other.get_client_info) is None  # other callback port: register again
+
+    server = _CallbackServer(0)
+    port = server.server.server_address[1]
+    threading.Thread(target=lambda: urllib.request.urlopen(
+        f"http://127.0.0.1:{port}/callback?code=abc&state=s1", timeout=5).read()).start()
+    got = server.wait(5)
+    assert got.code == "abc" and got.state == "s1"

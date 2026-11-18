@@ -66,7 +66,13 @@ class UpstreamConfig(BaseModel):
     cwd: str | None = None
     url: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
-    mode: Literal["enforce", "observe"] = "enforce"
+    # HTTP only: log in with OAuth (browser on first start, then refresh token). Callback on
+    # 127.0.0.1:oauth_port; default 33418 + position of the upstream in the file.
+    oauth: bool = False
+    oauth_port: int | None = None
+    # enforce: model sees the filtered result. observe: original result, detection recorded.
+    # log: original result, no detection; only tool, arguments size and result size are recorded.
+    mode: Literal["enforce", "observe", "log"] = "enforce"
     policy: str | None = None
     language: str | None = None
     tools: ToolFilter = Field(default_factory=ToolFilter)
@@ -78,6 +84,8 @@ class UpstreamConfig(BaseModel):
     def _one_transport(self) -> "UpstreamConfig":
         if bool(self.command) == bool(self.url):
             raise ValueError("set exactly one of 'command' (stdio) or 'url' (HTTP)")
+        if self.oauth and not self.url:
+            raise ValueError("'oauth' needs an HTTP upstream ('url')")
         return self
 
     def hints(self) -> dict[str, str]:
@@ -94,6 +102,7 @@ class ProxyConfig(BaseModel):
     trace_db: str | None = None
     audit_db: str | None = None
     org: str = "default"
+    oauth_dir: str | None = None  # token files of OAuth upstreams; default ~/.openanonymizer/oauth
     upstreams: dict[str, UpstreamConfig]
     base_dir: str | None = Field(default=None, exclude=True)  # directory of the config file; set by load()
 

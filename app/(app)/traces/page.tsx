@@ -50,7 +50,7 @@ export default async function Traces({ searchParams }: { searchParams: Promise<{
                   {t.upstream ? `${t.upstream}__${t.tool}` : t.tool ? `mcp · ${t.tool}` : t.route}
                 </Link>
                 {t.resource && <span className="text-muted-foreground font-mono"> · {t.resource}</span>}
-                {t.mode === "observe" && <> <Pill value="observe" /></>}
+                {(t.mode === "observe" || t.mode === "log") && <> <Pill value={t.mode} /></>}
               </TableCell>
               <TableCell><Pill value={t.status >= 500 ? "error" : t.outcome} /></TableCell>
               <TableCell><Pill value={t.risk} /></TableCell>
