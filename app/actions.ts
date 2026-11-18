@@ -3,13 +3,18 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ApiError, SESSION_COOKIE, api, apiLogin, isDemo, type ApiKey } from "@/lib/anonymizer-api";
+import { applyChanges, type PolicyJson } from "@/lib/policy-edit";
 
 /**
  * Server actions. Next.js checks the Origin header of every action (CSRF protection);
  * the API checks roles and organization scope for every call.
  */
 
-export type ActionState = { ok?: boolean; error?: string; message?: string; key?: string; email?: string };
+export type ActionState = {
+  ok?: boolean; error?: string; message?: string; key?: string; email?: string;
+  /** Policy test run: what the candidate would change on the sample text. */
+  diff?: { outcome_before: string; outcome_after: string; changes: { entity_type: string; before: string; after: string }[] };
+};
 
 const DEMO: ActionState = { error: "Demo mode: connect the API (ANONYMIZER_API_URL) to make changes." };
 
@@ -153,4 +158,31 @@ export async function deleteDataset(_: ActionState, form: FormData): Promise<Act
   }
   revalidatePath("/playground");
   redirect("/playground");
+}
+
+// -- policies --------------------------------------------------------------------------------
+/** Simple editor: "test" compares the edited policy with the saved one on a sample text, "save" stores it as the next version. */
+export async function editPolicy(_: ActionState, form: FormData): Promise<ActionState> {
+  const name = str(form, "name");
+  return run(async () => {
+    const current = await api<PolicyJson>(`/v1/policies/${encodeURIComponent(name)}`);
+    if (current.version !== Number(str(form, "version")))
+      return { error: `${name} was changed meanwhile (now v${current.version}). Reload the page.` };
+    const wanted: Record<string, string> = {};
+    for (const [k, v] of form.entries()) if (k.startsWith("entity:")) wanted[k.slice(7)] = String(v);
+    const next = applyChanges(current, wanted, str(form, "default_action") || current.default_action);
+    // JSON is valid YAML, so the API parses it like a policy file.
+    const yaml = JSON.stringify(next);
+    if (str(form, "intent") === "test") {
+      const text = str(form, "sample");
+      if (!text) return { error: "Enter a sample text to test with." };
+      const diff = await api<ActionState["diff"]>("/v1/policies/dry-run", {
+        method: "POST", body: JSON.stringify({ text, candidate_yaml: yaml, against: name, destination: "external" }),
+      });
+      return { diff, message: diff!.changes.length ? undefined : "No difference on this text." };
+    }
+    if (yaml === JSON.stringify({ ...current, version: current.version + 1 })) return { message: "Nothing changed." };
+    const saved = await api<{ version: number }>("/v1/policies", { method: "POST", body: JSON.stringify({ yaml }) });
+    return { message: `Saved as ${name} v${saved.version}. Applies to new requests right away.` };
+  }, "/settings/policies");
 }

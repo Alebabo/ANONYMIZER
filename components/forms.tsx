@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import type { ActionState } from "@/app/actions";
@@ -7,16 +7,24 @@ import { cn } from "@/lib/utils";
 
 type Action = (state: ActionState, form: FormData) => Promise<ActionState>;
 
-/** Form bound to a server action; shows the action's error or success message below the fields. */
-export function ActionForm({ action, children, className, resetOnSuccess, render }: {
-  action: Action; children: React.ReactNode; className?: string; resetOnSuccess?: boolean;
+/**
+ * Form bound to a server action; shows the action's error or success message below the fields.
+ * `keepValues` submits without React's automatic form reset, for editors whose fields stay in use.
+ */
+export function ActionForm({ action, children, className, resetOnSuccess, keepValues, render }: {
+  action: Action; children: React.ReactNode; className?: string; resetOnSuccess?: boolean; keepValues?: boolean;
   render?: (state: ActionState) => React.ReactNode;
 }) {
   const [state, formAction] = useActionState(action, {});
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (resetOnSuccess && state.ok) ref.current?.reset(); }, [state, resetOnSuccess]);
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter);
+    startTransition(() => formAction(data));
+  };
   return (
-    <form ref={ref} action={formAction} className={className}>
+    <form ref={ref} action={keepValues ? undefined : formAction} onSubmit={keepValues ? submit : undefined} className={className}>
       {children}
       <Feedback state={state} />
       {render?.(state)}
