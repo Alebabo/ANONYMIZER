@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "anonymizer-sdk"
 version = "0.1.0"
-description = "Python client for the Anonymizer privacy API (detect, classify, anonymize, protect legal data)."
+description = "Python client for the OpenAnonymizer privacy API (detect, classify, anonymize, protect legal data)."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"

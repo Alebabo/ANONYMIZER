@@ -1,4 +1,4 @@
-# Anonymizer default policy for legal work with external LLM providers.
+# OpenAnonymizer default policy for legal work with external LLM providers.
 # Conservative starting point; copy, adapt and version it for your firm.
 name: legal-default
 version: 1

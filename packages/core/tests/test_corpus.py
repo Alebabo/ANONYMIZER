@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from anonymizer.anonymize import DEFAULT_METHODS, Anonymizer, Method
+from anonymizer.anonymize import DEFAULT_METHODS, OpenAnonymizer, Method
 from anonymizer.detect import Detector
 from anonymizer.evaluation import evaluate_doc, load_corpus, summarize
 
@@ -34,7 +34,7 @@ def test_corpus_summary_thresholds():
 @pytest.mark.parametrize("doc", CORPUS, ids=[d["id"] for d in CORPUS])
 def test_corpus_anonymization_leaves_no_protected_value(doc):
     result = DETECTOR.scan(doc["text"], doc.get("language"))
-    out = Anonymizer().anonymize(doc["text"], result)  # strict: raises on residual values
+    out = OpenAnonymizer().anonymize(doc["text"], result)  # strict: raises on residual values
     for spec in doc.get("expected", []):
         if DEFAULT_METHODS.get(spec["type"], Method.REDACT) != Method.KEEP and len(spec["text"]) >= 3:
             assert spec["text"] not in out.text, spec

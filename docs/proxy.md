@@ -1,12 +1,12 @@
 # MCP proxy
 
-`anonymizer-proxy` puts Anonymizer in front of other MCP servers: databases, ticket systems, internal tools. The MCP client (Claude Code, Cursor, ...) sees one endpoint with the tools of every configured upstream. Every result is filtered before it reaches the model. Every call writes a trace and an audit entry.
+`anonymizer-proxy` puts OpenAnonymizer in front of other MCP servers: databases, ticket systems, internal tools. The MCP client (Claude Code, Cursor, ...) sees one endpoint with the tools of every configured upstream. Every result is filtered before it reaches the model. Every call writes a trace and an audit entry.
 
 ```
 Claude Code / Cursor
-      │  MCP (stdio, or HTTP with a Anonymizer key)
+      │  MCP (stdio, or HTTP with a OpenAnonymizer key)
       ▼
-Anonymizer proxy ── detect → classify → policy → pseudonymize ── trace + audit (metadata only)
+OpenAnonymizer proxy ── detect → classify → policy → pseudonymize ── trace + audit (metadata only)
       ├── upstream "db"    (stdio: e.g. postgres-mcp, read-only)
       └── upstream "jira"  (HTTP)
 ```
@@ -30,7 +30,7 @@ Anonymizer proxy ── detect → classify → policy → pseudonymize ── t
 ## Modes
 
 - `enforce` (default): the model only sees the filtered result.
-- `observe`: the model sees the **original** result. Anonymizer only records what it would have protected. Use it **only with synthetic or test data**, or with approval for the system in question. The dashboard shows a warning while an upstream runs in observe mode.
+- `observe`: the model sees the **original** result. OpenAnonymizer only records what it would have protected. Use it **only with synthetic or test data**, or with approval for the system in question. The dashboard shows a warning while an upstream runs in observe mode.
 
 ## Configuration
 
@@ -78,7 +78,7 @@ anonymizer-proxy --config anonymizer-proxy.yaml --check        # connect, print 
 claude mcp add anonymizer-proxy -- anonymizer-proxy --config /abs/path/anonymizer-proxy.yaml
 ```
 
-Point `trace_db` and `audit_db` (or `ANONYMIZER_TRACE_DB` / `ANONYMIZER_AUDIT_DB`) at the files of a running Anonymizer API to see the calls in its dashboard. The proxy writes into the `default` organization (`org:` in the file changes it).
+Point `trace_db` and `audit_db` (or `ANONYMIZER_TRACE_DB` / `ANONYMIZER_AUDIT_DB`) at the files of a running OpenAnonymizer API to see the calls in its dashboard. The proxy writes into the `default` organization (`org:` in the file changes it).
 
 ### HTTP inside the API (shared; keys and quotas per person)
 
@@ -88,7 +88,7 @@ claude mcp add --transport http anonymizer-proxy https://anonymizer.internal.exa
   --header "Authorization: Bearer anonymizer_..."
 ```
 
-- Every request needs a Anonymizer API key (401 otherwise). The key is the actor in the audit log.
+- Every request needs a OpenAnonymizer API key (401 otherwise). The key is the actor in the audit log.
 - `GET /v1/proxy` shows upstream status, mode, policy and tool counts.
 - Upstream subprocesses run inside the API container. With docker compose, mount the config and make the upstream's command available in the image.
 
@@ -97,13 +97,13 @@ claude mcp add --transport http anonymizer-proxy https://anonymizer.internal.exa
 - **MCP Proxy** (`/proxy`): upstream status, entity types found, calls per tool, and the field paths where personal data was found (`$.email`, `$.rows[].notiz`, ...).
 - **Traces** with the filter "MCP proxy": one trace per call with upstream, tool, mode, policy outcome, entity types per field and latency.
 
-Traces never contain values, placeholders or results. To check what the model actually received, look at the client side (the agent's transcript), not at Anonymizer.
+Traces never contain values, placeholders or results. To check what the model actually received, look at the client side (the agent's transcript), not at OpenAnonymizer.
 
 ## Limits
 
 - **Free SQL** can still extract information through aggregation or `LIKE` probes. Use a read-only user on a replica and prefer an allow list of tools.
 - **Recall is not 100 %.** Unusual names in free text can slip through NER. Field hints and known values reduce this for structured data. Measure on a real sample before using `enforce` on production data (see [plan.md](../plan.md) section 4).
 - **Different spellings** of the same value (`+49 170 …` vs. `0170 …`) get different placeholders.
-- **The client can bypass Anonymizer** if it has a direct MCP connection to the same system. Only network rules prevent that.
+- **The client can bypass OpenAnonymizer** if it has a direct MCP connection to the same system. Only network rules prevent that.
 - **Phone numbers stored as JSON numbers** under a field name that is not a hint are not recognised. Add the field to `field_hints`.
 - Resources and prompts of upstreams are not proxied yet, only tools.

@@ -1,4 +1,4 @@
-"""Anonymizer as an MCP server (stdio).
+"""OpenAnonymizer as an MCP server (stdio).
 
 Threat model: an MCP client is usually driven by a cloud LLM, so every tool
 *result* is sent to an external provider. Therefore:
@@ -30,7 +30,7 @@ Configuration (environment, set by the operator in the MCP client config):
 
 Conversation and prompt tools act for a principal. Over stdio that is the
 local operator; over HTTP (``ANONYMIZER_MCP_HTTP=1`` on the API, endpoint ``/mcp``)
-it is the Anonymizer API key in the ``Authorization`` header, which also scopes
+it is the OpenAnonymizer API key in the ``Authorization`` header, which also scopes
 data, quota and audit entries to the key's organization.
 """
 
@@ -191,7 +191,7 @@ class AnonymizerTools:
         scan, c = self._analyze(text, language)
         d = PolicyEngine(self.policy).evaluate(scan.detections, c, self.config.destination, dry_run=True)
         lines = [
-            "# Anonymizer privacy report",
+            "# OpenAnonymizer privacy report",
             "",
             f"- Risk: **{c.risk.value}**{' (needs review)' if c.needs_review else ''}",
             f"- Policy outcome for `{d.destination}`: **{d.outcome.value}** ({d.policy})",
@@ -258,7 +258,7 @@ class AnonymizerTools:
             import logging
 
             logging.getLogger("anonymizer.mcp").exception("tool failed")
-            raise ToolError("internal error; details are in the Anonymizer server log") from None
+            raise ToolError("internal error; details are in the OpenAnonymizer server log") from None
 
     # -- playground ---------------------------------------------------------------
     def _pg(self):
@@ -384,7 +384,7 @@ def parse_time(value: str | float | int | None) -> float | None:
     return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
 
 
-INSTRUCTIONS = """Anonymizer protects sensitive information before you process it.
+INSTRUCTIONS = """OpenAnonymizer protects sensitive information before you process it.
 - To read client documents, use read_document_protected instead of any raw file tool. You receive an
   anonymized version (placeholders like PERSON_001) or a refusal if the policy forbids it.
 - Before sending text to other tools or services, run anonymize_content and use only the returned text.
@@ -408,7 +408,7 @@ def build_server(tools: AnonymizerTools | None = None,
     import anonymizer
 
     t = tools or tools_from_env()
-    server = MCPServer(name="anonymizer", title="Anonymizer Privacy", version=anonymizer.__version__, instructions=INSTRUCTIONS)
+    server = MCPServer(name="anonymizer", title="OpenAnonymizer Privacy", version=anonymizer.__version__, instructions=INSTRUCTIONS)
     ro = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
     # Reading a conversation changes the quota counter, so it is not idempotent.
     ro_counted = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=False,
@@ -422,7 +422,7 @@ def build_server(tools: AnonymizerTools | None = None,
         headers = {k.lower(): v for k, v in ((ctx.headers if ctx is not None else None) or {}).items()}
         p = resolve_principal(bearer(headers))
         if p is None:
-            raise ToolError("invalid or missing Anonymizer API key")
+            raise ToolError("invalid or missing OpenAnonymizer API key")
         return p
 
     # Every tool call shows up under Traces (route /mcp/tools): tool name, latency, status, never
@@ -517,13 +517,16 @@ def build_server(tools: AnonymizerTools | None = None,
                 return t.get_kpis(since, until, principal=who(ctx))
 
     if t.playground is not None:
-        @server.tool(description="List playground datasets (CSV files uploaded in the Anonymizer dashboard): "
-                                 "id, name, columns, row count.", annotations=ro)
+        @server.tool(description="List playground datasets (CSV files uploaded in the OpenAnonymizer dashboard, "
+                                 "e.g. a chatbot sessions export with one row per message): id, name, columns, "
+                                 "row count.", annotations=ro)
         def list_datasets(ctx: Context) -> dict:
             return t.list_datasets(principal=who(ctx))
 
         @server.tool(description="Query a playground dataset. Optional query = case-insensitive text filter over "
-                                 "the given columns (all by default); limit up to 100, offset for paging. Rows "
+                                 "the given columns (all by default), e.g. a session id with columns=['Session ID'] "
+                                 "returns one whole chat; 'matched' is the total count, so a filter with limit=1 "
+                                 "counts rows. limit up to 100, offset for paging. Rows "
                                  "are anonymized (PERSON_001, EMAIL_001, ...); withheld values are [WITHHELD].",
                      annotations=ro)
         def query_dataset(ctx: Context, dataset_id: str, query: str | None = None, columns: list[str] | None = None,
@@ -551,8 +554,8 @@ def build_server(tools: AnonymizerTools | None = None,
 
         @server.tool(description="Save a new prompt version as a draft (no label). Give text for a text "
                                  "prompt or messages [{role, content}] for a chat prompt. Rejected if it "
-                                 "contains customer data or Anonymizer placeholders. Promotion to production is "
-                                 "done by a human in the Anonymizer dashboard.", annotations=write)
+                                 "contains customer data or OpenAnonymizer placeholders. Promotion to production is "
+                                 "done by a human in the OpenAnonymizer dashboard.", annotations=write)
         def create_prompt_draft(ctx: Context, name: str, text: str | None = None,
                                 messages: list[dict] | None = None, note: str | None = None) -> dict:
             return t.create_prompt_draft(name, text, messages, note, principal=who(ctx))
@@ -632,7 +635,7 @@ def _record_tool_call(traces, tool: str, ctx, who, start: float, status: int, er
 
 
 def bearer(headers: dict[str, str]) -> str | None:
-    """Anonymizer key from lower-cased headers: ``Authorization: Bearer`` or ``X-API-Key`` (same as the REST API)."""
+    """OpenAnonymizer key from lower-cased headers: ``Authorization: Bearer`` or ``X-API-Key`` (same as the REST API)."""
     auth = headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
         return auth[7:].strip() or None
@@ -642,7 +645,7 @@ def bearer(headers: dict[str, str]) -> str | None:
 class MCPHttpEndpoint:
     """ASGI endpoint for the streamable HTTP transport (stateless, JSON responses).
 
-    Requests without a valid Anonymizer key are rejected with 401 before they reach the MCP session manager;
+    Requests without a valid OpenAnonymizer key are rejected with 401 before they reach the MCP session manager;
     the tools resolve the principal again from the same header for scoping."""
 
     def __init__(self, server, resolve_principal: Callable[[str | None], Principal | None]) -> None:
@@ -654,7 +657,7 @@ class MCPHttpEndpoint:
 
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
         if self.resolve_principal(bearer(headers)) is None:
-            body = _json.dumps({"error": "invalid or missing Anonymizer API key"}).encode()
+            body = _json.dumps({"error": "invalid or missing OpenAnonymizer API key"}).encode()
             await send({"type": "http.response.start", "status": 401,
                         "headers": [(b"content-type", b"application/json"), (b"www-authenticate", b"Bearer"),
                                     (b"content-length", str(len(body)).encode())]})

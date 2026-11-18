@@ -151,7 +151,7 @@ class PromptLabelSet(_Strict):
 
 class PlaygroundUpload(_Strict):
     name: str = Field(min_length=1, max_length=120)
-    csv: str = Field(min_length=1, max_length=5_000_000)
+    csv: str = Field(min_length=1, max_length=100 * 1024 * 1024)  # playground.MAX_BYTES
 
 
 class PlaygroundQuery(_Strict):

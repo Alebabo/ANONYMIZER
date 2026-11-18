@@ -128,7 +128,7 @@ class ResultFilter:
             report.warnings.append(f"result larger than {self.max_chars} characters")
             if not self.observe:
                 report.withheld += 1
-                return types.CallToolResult(content=[_text(f"[Anonymizer: result withheld, larger than "
+                return types.CallToolResult(content=[_text(f"[OpenAnonymizer: result withheld, larger than "
                                                            f"{self.max_chars} characters]")],
                                             is_error=result.is_error), report
         for c in result.content:
@@ -157,7 +157,7 @@ class ResultFilter:
             uri = self._leaf(str(res.uri), "$resource.uri", None, report, self._lang)
             text = self._text_payload(res.text, "$resource", report)
             if uri == WITHHELD:
-                return _text(f"[Anonymizer: embedded resource withheld]\n{text}")
+                return _text(f"[OpenAnonymizer: embedded resource withheld]\n{text}")
             return types.EmbeddedResource(type="resource", resource=types.TextResourceContents(
                 uri=uri, mime_type=res.mime_type, text=text))
         report.non_text += 1
@@ -166,7 +166,7 @@ class ResultFilter:
             report.warnings.append(f"non-text content passed unchecked ({kind})")
             return block
         report.warnings.append(f"non-text content withheld ({kind})")
-        return _text(f"[Anonymizer: {kind} content withheld; only text content is filtered]")
+        return _text(f"[OpenAnonymizer: {kind} content withheld; only text content is filtered]")
 
     def _text_payload(self, text: str, path: str, report: FilterReport) -> str:
         stripped = text.strip()
@@ -288,7 +288,7 @@ class ResultFilter:
             report.withheld += 1
             if self.observe:
                 return text
-            return (f"[Anonymizer: content withheld by policy ({result.decision.outcome.value}): "
+            return (f"[OpenAnonymizer: content withheld by policy ({result.decision.outcome.value}): "
                     f"{'; '.join(result.decision.reasons)}]") if block else WITHHELD
         if self.observe or result.text is None:
             return text

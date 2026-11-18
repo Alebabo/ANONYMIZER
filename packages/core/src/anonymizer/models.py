@@ -1,4 +1,4 @@
-"""Core data model shared by all Anonymizer engines."""
+"""Core data model shared by all OpenAnonymizer engines."""
 
 from __future__ import annotations
 

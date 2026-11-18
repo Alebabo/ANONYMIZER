@@ -14,7 +14,7 @@ Basis: [docs/positioning.md](docs/positioning.md). Wedge: production MCPs. Verti
 | MCP proxy | **Phase A MVP implemented** (`anonymizer-proxy`, `/proxy/mcp`, dashboard `/proxy`): A1–A3, A5–A7. Open: A4 placeholder resolution in arguments. See [docs/proxy.md](docs/proxy.md) |
 | Gaps | no SQL source; dry run only in the CLI; no OAuth; scan/anonymize calls not audited; only plain text in `read_document_protected`; recall on real data unmeasured |
 
-**Core gap:** today Anonymizer only protects data that flows through **its own** tools. Teams already use MCP servers for Postgres, Jira, Zendesk, Slack and GitHub. The product is the layer **in front of** these servers.
+**Core gap:** today OpenAnonymizer only protects data that flows through **its own** tools. Teams already use MCP servers for Postgres, Jira, Zendesk, Slack and GitHub. The product is the layer **in front of** these servers.
 
 ## 2. Target
 
@@ -22,7 +22,7 @@ Basis: [docs/positioning.md](docs/positioning.md). Wedge: production MCPs. Verti
 Claude Code / Cursor / Desktop
         │  MCP (HTTP, key or OAuth)
         ▼
-Anonymizer MCP Proxy  ── policy per upstream and tool, audit, dry run
+OpenAnonymizer MCP Proxy  ── policy per upstream and tool, audit, dry run
    ├─ upstream: postgres-mcp   (stdio / HTTP)
    ├─ upstream: jira-mcp
    ├─ upstream: anonymizer built-ins (documents, conversations, prompts)
@@ -40,7 +40,7 @@ Anonymizer MCP Proxy  ── policy per upstream and tool, audit, dry run
 
 | # | Package | Content | Done when |
 |---|---|---|---|
-| A1 | Upstream client | Connect to MCP servers over stdio and HTTP, list tools, forward calls (official MCP SDK) | Postgres MCP and a filesystem MCP work through Anonymizer |
+| A1 | Upstream client | Connect to MCP servers over stdio and HTTP, list tools, forward calls (official MCP SDK) | Postgres MCP and a filesystem MCP work through OpenAnonymizer |
 | A2 | Tool registry | Prefixing, allow/deny list per upstream and tool, hide write tools by default | Write tools are invisible unless enabled |
 | A3 | Result filter | Text, JSON and resource content through the pipeline; JSON field by field (keys stay, values are protected) | No raw value from the synthetic corpus in any result |
 | A4 | Argument handling | Detect PII in arguments; placeholder resolution only with `resolve_placeholders: true` per upstream, audited | Model cannot exfiltrate restore through a tool call |
@@ -71,7 +71,7 @@ upstreams:
 |---|---|---|
 | B1 | GLiNER as a second NER | Run it next to spaCy. Union of hits (fail closed). Lowercase chat text and EU entities |
 | B2 | EU entities | BIC, depot/account numbers, licence plates, social security numbers AT/CH, UID numbers |
-| B3 | Public benchmark | `anonymizer bench`: Anonymizer vs. Presidio vs. LLM redaction on German data (German LER plus a synthetic chat/ticket corpus). Recall per type, published in the repo |
+| B3 | Public benchmark | `anonymizer bench`: OpenAnonymizer vs. Presidio vs. LLM redaction on German data (German LER plus a synthetic chat/ticket corpus). Recall per type, published in the repo |
 | B4 | Structured data | Column classification for SQL results: protect by column name and content, cached per table |
 | B5 | Real sample | Evaluation at the design partner, offline, by an authorized person |
 
@@ -93,7 +93,7 @@ upstreams:
 
 ## 4. Order and rationale
 
-1. **A1–A3, A5, A6** first. That is the minimal demo: "Hang Claude on your prod DB, see what Anonymizer would protect". Observe mode lowers the barrier to adoption.
+1. **A1–A3, A5, A6** first. That is the minimal demo: "Hang Claude on your prod DB, see what OpenAnonymizer would protect". Observe mode lowers the barrier to adoption.
 2. **B1, B3** in parallel. Without measurable quality, enforce mode is not credible.
 3. **A4, A7** before the first enforce rollout.
 4. **C** only with a concrete customer. Do not build enterprise features blindly.
@@ -104,7 +104,7 @@ upstreams:
 - **JSON and SQL results:** names in free-text columns, IDs in keys. Mitigation: column classification (B4), fail closed for unknown structures.
 - **Placeholder resolution in arguments** is a re-identification path. Off by default; enable only per upstream and audit it.
 - **Upstream MCPs are untrusted:** tool descriptions can contain prompt injection. Mitigation: descriptions get the same data notice; tool names come from config, not from the upstream.
-- **Scope:** no own LLM hosting, no chat UI. Anonymizer stays a layer.
+- **Scope:** no own LLM hosting, no chat UI. OpenAnonymizer stays a layer.
 
 ## 6. Prerequisites outside the code
 

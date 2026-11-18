@@ -1,13 +1,13 @@
-"""Python client for the Anonymizer privacy API.
+"""Python client for the OpenAnonymizer privacy API.
 
-    from anonymizer_sdk import Anonymizer
+    from anonymizer_sdk import OpenAnonymizer
 
-    anonymizer = Anonymizer(api_key="anonymizer_...")            # or ANONYMIZER_API_KEY / ANONYMIZER_BASE_URL
+    anonymizer = OpenAnonymizer(api_key="anonymizer_...")            # or ANONYMIZER_API_KEY / ANONYMIZER_BASE_URL
     result = anonymizer.protect("Max Mustermann is our client ...")
     if result.allowed:
         print(result.text)
 
-The client is thin on purpose: all privacy logic runs in the Anonymizer service,
+The client is thin on purpose: all privacy logic runs in the OpenAnonymizer service,
 so the same policies apply to every application.
 """
 
@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-__all__ = ["Anonymizer", "AnonymizerError", "PolicyViolation", "Result"]
+__all__ = ["OpenAnonymizer", "AnonymizerError", "PolicyViolation", "Result"]
 __version__ = "0.1.0"
 
 DEFAULT_BASE_URL = "http://localhost:8080"
@@ -54,7 +54,7 @@ def _wrap(data: Any) -> Any:
     return data
 
 
-class Anonymizer:
+class OpenAnonymizer:
     def __init__(
         self,
         api_key: str | None = None,
@@ -88,7 +88,7 @@ class Anonymizer:
         if self._owns_client:
             self._http.close()
 
-    def __enter__(self) -> "Anonymizer":
+    def __enter__(self) -> "OpenAnonymizer":
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -224,7 +224,7 @@ class Anonymizer:
 
     # -- gateway -----------------------------------------------------------------
     def openai(self, **kwargs: Any):
-        """An ``openai.OpenAI`` client that talks to the Anonymizer gateway."""
+        """An ``openai.OpenAI`` client that talks to the OpenAnonymizer gateway."""
         try:
             from openai import OpenAI
         except ImportError as exc:  # pragma: no cover

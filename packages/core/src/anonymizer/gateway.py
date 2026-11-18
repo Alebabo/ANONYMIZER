@@ -1,13 +1,13 @@
 """OpenAI-compatible privacy gateway (``POST /v1/chat/completions``).
 
-Existing applications only change ``base_url`` (and use a Anonymizer API key);
-Anonymizer protects every message before it reaches the provider and restores
+Existing applications only change ``base_url`` (and use a OpenAnonymizer API key);
+OpenAnonymizer protects every message before it reaches the provider and restores
 placeholders in the answer.
 
 Flow per request
 1. Collect text from ``messages[].content`` (string or text parts) and
    ``tool_calls[].function.arguments``. Non-text parts (images, audio) are
-   rejected: Anonymizer cannot inspect them.
+   rejected: OpenAnonymizer cannot inspect them.
 2. Protect each text with the active policy. A per-request in-memory vault
    keeps placeholders consistent across all messages of the request and is
    discarded afterwards (nothing about the mapping is persisted).
@@ -102,7 +102,7 @@ def _text_slots(body: dict[str, Any]) -> list[tuple[list, Any, str]]:
         elif isinstance(content, list):
             for part in content:
                 if not isinstance(part, dict) or part.get("type") != "text":
-                    raise GatewayError(400, "only text content is supported; Anonymizer cannot inspect images or audio",
+                    raise GatewayError(400, "only text content is supported; OpenAnonymizer cannot inspect images or audio",
                                        "unsupported_content", type_="invalid_request_error")
                 if part.get("text", "").strip():
                     slots.append((part, "text", part["text"]))
@@ -133,7 +133,7 @@ class Gateway:
     def chat_completions(self, body: dict[str, Any]) -> tuple[dict[str, Any], Trace]:
         start = time.perf_counter()
         if body.get("stream"):
-            raise GatewayError(400, "stream=true is not supported by Anonymizer yet", "stream_not_supported",
+            raise GatewayError(400, "stream=true is not supported by OpenAnonymizer yet", "stream_not_supported",
                                type_="invalid_request_error")
         if self.config.external is None and self.config.local is None:
             raise GatewayError(503, "no upstream provider configured", "no_upstream")
@@ -171,7 +171,7 @@ class Gateway:
             msg = {"local_only": "content may only be processed by a local model and no local upstream is configured",
                    "review": "content requires human review before it may be sent",
                    "block": "content must not be sent to a model"}[outcome]
-            raise GatewayError(403, f"Anonymizer policy: {msg}. Reasons: {'; '.join(reasons)}", outcome, trace,
+            raise GatewayError(403, f"OpenAnonymizer policy: {msg}. Reasons: {'; '.join(reasons)}", outcome, trace,
                                type_="anonymizer_policy_violation")
 
         for (container, key, _), result in zip(slots, results):

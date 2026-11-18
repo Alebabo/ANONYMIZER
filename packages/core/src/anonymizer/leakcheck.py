@@ -1,4 +1,4 @@
-"""Leak check against a running Anonymizer API: read conversations through the protected endpoint and look
+"""Leak check against a running OpenAnonymizer API: read conversations through the protected endpoint and look
 for anything that should never come out.
 
 Meant for the evaluation phase inside the protected environment (docs/conversations.md):

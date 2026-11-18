@@ -43,7 +43,7 @@ export default async function Playground({ searchParams }: { searchParams: Promi
       <SourceBanner source={source} />
       <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[280px_1fr]">
         <div className="space-y-4">
-          <Widget title="Datasets" description="Stored locally in the Anonymizer playground store">
+          <Widget title="Datasets" description="Stored locally in the OpenAnonymizer playground store">
             <ul className="mb-3 space-y-1">
               {datasets.map(d => (
                 <li key={d.id}>

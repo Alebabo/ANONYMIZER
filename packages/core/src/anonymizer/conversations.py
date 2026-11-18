@@ -4,8 +4,8 @@ The service sits between a :mod:`anonymizer.sources` adapter (raw data, read-onl
 and every caller (REST, MCP). Guarantees:
 
 * **Opaque ids.** Source ids, and source cursors that might encode them,
-  never leave Anonymizer. Callers see ``conv_<random>`` and ``cur_<random>``; the
-  mapping lives in Anonymizer's own database.
+  never leave OpenAnonymizer. Callers see ``conv_<random>`` and ``cur_<random>``; the
+  mapping lives in OpenAnonymizer's own database.
 * **Every message is protected** with the conversation policy for the
   ``external`` destination. One vault namespace per conversation keeps
   ``PERSON_001`` the same person across all messages. A message the policy

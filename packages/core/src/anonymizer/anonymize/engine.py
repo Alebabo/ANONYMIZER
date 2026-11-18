@@ -108,7 +108,7 @@ class AnonymizationResult(BaseModel):
     leaks: list[str] = Field(default_factory=list)  # detection ids whose value still appears
 
 
-class Anonymizer:
+class OpenAnonymizer:
     def __init__(self, config: AnonymizerConfig | None = None, vault: Vault | None = None) -> None:
         self.config = config or AnonymizerConfig()
         self.vault = vault

@@ -51,7 +51,7 @@ export default async function Proxy() {
   const observe = status?.upstreams.filter(u => u.mode === "observe") ?? [];
   return (
     <>
-      <PageHeader title="MCP Proxy" description="Other MCP servers behind Anonymizer · metadata only, no values stored" />
+      <PageHeader title="MCP Proxy" description="Other MCP servers behind OpenAnonymizer · metadata only, no values stored" />
       <SourceBanner source={source} />
       {observe.length > 0 && (
         <div className="bg-light-yellow text-dark-yellow border-b px-4 py-2 text-xs md:px-6">
@@ -133,7 +133,7 @@ export default async function Proxy() {
                 </TableBody></Table>
             </TableScroll>
             <p className="text-muted-foreground mt-3 text-xs">
-              Anonymizer stores types, counts and field paths only. Values, placeholders and results are never stored.
+              OpenAnonymizer stores types, counts and field paths only. Values, placeholders and results are never stored.
               Single calls: <Link className="text-link hover:text-link-hover" href="/traces?route=/mcp/proxy">traces of the proxy</Link>.
             </p>
           </CardContent></Card>

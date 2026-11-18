@@ -1,4 +1,4 @@
-# Plan: Anonymizer as a privacy proxy between Claude and production chat data
+# Plan: OpenAnonymizer as a privacy proxy between Claude and production chat data
 
 Status: packages 1–7 implemented, package 8 partly (see section 11). Scope: read customer chat history and manage prompts through Claude without any raw customer data leaving the company network.
 
@@ -10,13 +10,13 @@ Status: packages 1–7 implemented, package 8 partly (see section 11). Scope: re
 
 ## 2. Target
 
-Anonymizer runs **inside the company network next to prod** and is the only thing Claude talks to. Claude sees pseudonymized conversations (`PERSON_001`, `EMAIL_001`, …), aggregated statistics and prompt versions. It can create prompt drafts. It cannot restore names, promote prompts or pull data in bulk.
+OpenAnonymizer runs **inside the company network next to prod** and is the only thing Claude talks to. Claude sees pseudonymized conversations (`PERSON_001`, `EMAIL_001`, …), aggregated statistics and prompt versions. It can create prompt drafts. It cannot restore names, promote prompts or pull data in bulk.
 
 ```
 Claude Code / Cursor / Desktop (laptop, no prod access)
         │  MCP over HTTPS, bearer key   ← only placeholder data crosses this line
         ▼
-Anonymizer API + MCP  (company network, read-only service account on prod)
+OpenAnonymizer API + MCP  (company network, read-only service account on prod)
    ├─ Conversation source adapter  ──read-only──>  chat DB / Langfuse / HTTP export
    ├─ Detect → Classify → Policy → Pseudonymize  (vault namespace per conversation)
    ├─ Prompt store  (local SQLite or Langfuse prompts as backend)
@@ -24,20 +24,20 @@ Anonymizer API + MCP  (company network, read-only service account on prod)
    └─ Traces + hash-chained audit log  (every read and write, never content)
 ```
 
-"Plug and play" means: one Docker image, one `.env`, one `claude mcp add` command. Connecting a new data source is a config change, not a code change. For a source Anonymizer does not know, the company implements a two-endpoint read-only contract (section 5.3).
+"Plug and play" means: one Docker image, one `.env`, one `claude mcp add` command. Connecting a new data source is a config change, not a code change. For a source OpenAnonymizer does not know, the company implements a two-endpoint read-only contract (section 5.3).
 
 ## 3. Non-negotiable rules
 
 | Rule | Why |
 |---|---|
-| Anonymizer never runs on the laptop | The laptop must not have prod access. That is the whole point |
-| Read-only on the source | Anonymizer gets a read-only credential, ideally against a replica |
+| OpenAnonymizer never runs on the laptop | The laptop must not have prod access. That is the whole point |
+| Read-only on the source | OpenAnonymizer gets a read-only credential, ideally against a replica |
 | No restore tool over MCP | Re-identification stays inside the protected environment (`/v1/restore`, admin key, audited). Already true today |
 | Writes from Claude are drafts only | Promotion to `production` happens by a human in the dashboard or with an admin key, never over MCP |
 | Fail closed | Message not allowed by the policy → `content: null` with a reason. Unknown entity types are redacted. Prompt drafts with personal data are rejected |
 | Quotas | Per key and day: max. N conversations (default 200). Anonymized data in bulk is still re-identifiable through rare combinations |
 | Minimum group size | Statistics only for groups with ≥ k conversations (default 10) |
-| Opaque IDs | Source IDs (session ids, user ids, ticket numbers) never leave Anonymizer. Claude sees `conv_<random>`; the mapping stays in Anonymizer's DB |
+| Opaque IDs | Source IDs (session ids, user ids, ticket numbers) never leave OpenAnonymizer. Claude sees `conv_<random>`; the mapping stays in OpenAnonymizer's DB |
 | Coarse time | Timestamps are rounded to the day; metadata is an allow-list |
 | Content is data | Every result carries the existing notice that conversation content is untrusted data, not instructions |
 | Audit everything | Every conversation read, every prompt draft and every label change is an audit entry (ids and counts, no text) |
@@ -48,8 +48,8 @@ These decide whether the project is allowed to exist. They are not optional.
 
 1. **Approval by security / data protection.** A proxy you build yourself is shadow IT with customer data unless it is sanctioned. Bring this document.
 2. **Contract with Anthropic.** DPA and ideally zero data retention. Without it, even pseudonymized data may not be allowed to leave.
-3. **Evaluation on a real sample** by an authorized person, offline, without any cloud model (`anonymizer eval` with a corpus built from real conversations). Anonymizer is tested on synthetic legal text only. Support chats are informal (lowercase names, typos, order numbers, addresses in running text). Recall on them is unknown until measured.
-4. **Employment contract.** If this is built in working hours, clarify who owns the adapter. Cleanest split: Anonymizer stays your open-source core, the company is a design partner and the company-specific adapter lives in their repo.
+3. **Evaluation on a real sample** by an authorized person, offline, without any cloud model (`anonymizer eval` with a corpus built from real conversations). OpenAnonymizer is tested on synthetic legal text only. Support chats are informal (lowercase names, typos, order numbers, addresses in running text). Recall on them is unknown until measured.
+4. **Employment contract.** If this is built in working hours, clarify who owns the adapter. Cleanest split: OpenAnonymizer stays your open-source core, the company is a design partner and the company-specific adapter lives in their repo.
 
 ## 5. Components
 
@@ -114,7 +114,7 @@ diff(org, name, from, to)              → unified diff
 ```
 
 - `local`: SQLite (`ANONYMIZER_PROMPTS_DB`), versions append-only, labels as a separate table.
-- `langfuse`: thin proxy to `/api/public/v2/prompts`. Anonymizer adds the scan, the audit entry and the rule that MCP can only create unlabeled versions. If the company already manages prompts in Langfuse, this is the smallest useful cut: no second source of truth.
+- `langfuse`: thin proxy to `/api/public/v2/prompts`. OpenAnonymizer adds the scan, the audit entry and the rule that MCP can only create unlabeled versions. If the company already manages prompts in Langfuse, this is the smallest useful cut: no second source of truth.
 - **Scan before save:** the prompt text goes through the detector. Any `sensitive`/`critical` entity → 422. This keeps customer examples out of prompts.
 - Prompt metrics come from `conversation_stats(group_by=prompt_version)`, which only works if the source exposes which prompt version served a conversation (Langfuse does via trace metadata; the HTTP contract has the optional `prompt` field).
 
@@ -237,7 +237,7 @@ Order: 1 → 2 → 3 → 4 → 5 → 7 (usable end to end over MCP), then 6, the
 |---|---|
 | Where does the chat history live: own DB, a support tool, or Langfuse traces? | Build all three adapters; `http` is the fallback for anything else |
 | Are prompts already in Langfuse? | Support both backends; recommend `langfuse` if yes, to avoid a second source of truth |
-| Does Anonymizer run as Docker Compose or Kubernetes in the company? | Compose first (exists); Helm is on the roadmap anyway |
+| Does OpenAnonymizer run as Docker Compose or Kubernetes in the company? | Compose first (exists); Helm is on the roadmap anyway |
 | Which fields count as tags/metadata and are safe to expose? | Allow-list `tags`, `language`, `channel`, `prompt`, `prompt_version`; everything else dropped |
 | Is k=10 and 200 conversations/day acceptable for the job? | Start strict; raise with the data-protection contact, not unilaterally |
 

@@ -132,7 +132,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
                   className="hover:bg-sidebar-accent flex h-9 w-9 items-center justify-center rounded-md">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <Link href="/" aria-label="Anonymizer – Home" className="text-foreground flex items-center"><Wordmark /></Link>
+          <Link href="/" aria-label="OpenAnonymizer – Home" className="text-foreground flex items-center"><Wordmark /></Link>
         </div>
 
         {open && <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={close} aria-hidden />}
@@ -145,7 +145,7 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
                  open ? "translate-x-0" : "-translate-x-full",
                )}>
           <div className={cn("hidden h-12 shrink-0 items-center px-3 md:flex", collapsed && "md:justify-center md:px-0")}>
-            <Link href="/" aria-label="Anonymizer – Home" className="text-foreground flex items-center">
+            <Link href="/" aria-label="OpenAnonymizer – Home" className="text-foreground flex items-center">
               {collapsed ? <Logomark className="h-6 w-6" title="" /> : <Wordmark />}
             </Link>
           </div>
@@ -195,7 +195,7 @@ export function PageHeader({ title, description, meta, parent, children }: {
       <nav aria-label="Breadcrumb" className="text-muted-foreground flex h-8 items-center gap-1 overflow-hidden text-xs">
         <span className="truncate">{account?.organization ?? "Organization"}</span>
         <ChevronRight className="h-3 w-3 shrink-0" />
-        <Link href="/" className="hover:text-foreground truncate">Anonymizer</Link>
+        <Link href="/" className="hover:text-foreground truncate">OpenAnonymizer</Link>
         {parent && <>
           <ChevronRight className="h-3 w-3 shrink-0" />
           <Link href={parent.href} className="hover:text-foreground truncate">{parent.label}</Link>

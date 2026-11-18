@@ -1,4 +1,4 @@
-# Anonymizer self-hosting. Quickstart:
+# OpenAnonymizer self-hosting. Quickstart:
 #   cp .env.example .env   # set the keys (see comments there)
 #   docker compose up -d --build
 #   curl -s localhost:8080/health

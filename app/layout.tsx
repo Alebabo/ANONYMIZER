@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Anonymizer — Privacy Infrastructure for Legal AI",
+  title: "OpenAnonymizer — Privacy Infrastructure for Legal AI",
   description: "Detect, classify, anonymize and control sensitive legal data before AI processes it.",
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };

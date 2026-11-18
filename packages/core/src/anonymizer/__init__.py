@@ -1,4 +1,4 @@
-"""Anonymizer privacy engine."""
+"""OpenAnonymizer privacy engine."""
 
 from anonymizer.detect import Detector, DetectorConfig
 from anonymizer.models import Category, Detection, EntityType, ScanResult
@@ -30,6 +30,6 @@ def classify(text: str, language: str | None = None):
 def anonymize(text: str, language: str | None = None, *, vault=None, namespace: str | None = None, config=None):
     """Detect and anonymize with default methods. Pass a vault and namespace
     for reversible pseudonyms."""
-    from anonymizer.anonymize import Anonymizer
+    from anonymizer.anonymize import OpenAnonymizer
 
-    return Anonymizer(config, vault=vault).anonymize(text, scan(text, language), namespace=namespace)
+    return OpenAnonymizer(config, vault=vault).anonymize(text, scan(text, language), namespace=namespace)

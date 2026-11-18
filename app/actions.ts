@@ -37,7 +37,7 @@ export async function login(_: ActionState, form: FormData): Promise<ActionState
   try {
     session = await apiLogin(str(form, "email"), String(form.get("password") ?? ""));
   } catch (e) {
-    return { error: e instanceof ApiError ? e.message : "Anonymizer API not reachable.", email: str(form, "email") };
+    return { error: e instanceof ApiError ? e.message : "OpenAnonymizer API not reachable.", email: str(form, "email") };
   }
   (await cookies()).set(SESSION_COOKIE, session.token, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
@@ -128,7 +128,7 @@ export async function uploadDataset(_: ActionState, form: FormData): Promise<Act
   if (isDemo()) return DEMO;
   const file = form.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Choose a CSV file." };
-  if (file.size > 5_000_000) return { error: "File larger than 5 MB." };
+  if (file.size > 100 * 1024 * 1024) return { error: "File larger than 100 MB." };
   let id: string;
   try {
     const ds = await api<{ id: string }>("/v1/playground/datasets", {

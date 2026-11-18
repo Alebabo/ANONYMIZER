@@ -42,7 +42,7 @@ export default async function Prompts() {
               </TableBody></Table></TableScroll>
           </CardContent></Card>
         <p className="text-muted-foreground text-xs">
-          Every new version is checked before it is saved: customer data and Anonymizer placeholders are rejected. Creating a version never moves a label.
+          Every new version is checked before it is saved: customer data and OpenAnonymizer placeholders are rejected. Creating a version never moves a label.
         </p>
       </div>
     </>

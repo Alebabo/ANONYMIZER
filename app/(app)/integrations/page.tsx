@@ -10,7 +10,7 @@ function integrations(url: string): Integration[] {
   return [
     {
       id: "openai-python", title: "OpenAI SDK (Python)", lang: "python",
-      what: "Existing OpenAI code: change base_url and use a Anonymizer key. Every message is protected before it reaches the provider.",
+      what: "Existing OpenAI code: change base_url and use a OpenAnonymizer key. Every message is protected before it reaches the provider.",
       code: `from openai import OpenAI
 
 client = OpenAI(base_url="${url}/v1", api_key="anonymizer_...")
@@ -29,11 +29,11 @@ const client = new OpenAI({ baseURL: "${url}/v1", apiKey: process.env.ANONYMIZER
 await client.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "..." }] });`,
     },
     {
-      id: "sdk", title: "Anonymizer Python SDK", lang: "python",
+      id: "sdk", title: "OpenAnonymizer Python SDK", lang: "python",
       what: "Direct access to protect, anonymize, scan and document protection.",
-      code: `from anonymizer_sdk import Anonymizer
+      code: `from anonymizer_sdk import OpenAnonymizer
 
-anonymizer = Anonymizer(api_key="anonymizer_...", base_url="${url}")
+anonymizer = OpenAnonymizer(api_key="anonymizer_...", base_url="${url}")
 result = anonymizer.protect("Max Mustermann ist unser Mandant ...")
 print(result.text if result.allowed else result.outcome)
 anonymizer.protect_document("klage.docx").content   # anonymized DOCX`,

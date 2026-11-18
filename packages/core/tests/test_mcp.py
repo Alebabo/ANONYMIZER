@@ -44,7 +44,7 @@ def test_scan_classify_report_return_no_raw_values(tools):
     assert no_secrets(scan)
     assert no_secrets(tools.classify_content(CLIENT_LETTER, "de"))
     report = tools.get_privacy_report(CLIENT_LETTER, "de")
-    assert report.startswith("# Anonymizer privacy report") and "| person |" in report and no_secrets(report)
+    assert report.startswith("# OpenAnonymizer privacy report") and "| person |" in report and no_secrets(report)
 
 
 def test_anonymize_returns_safe_text_when_allowed(tools):

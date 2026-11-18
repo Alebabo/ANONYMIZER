@@ -5,7 +5,7 @@ The record shape follows Langfuse's audit log (MIT,
 ``before``/``after`` snapshots and an actor that is a user, an API key or
 the system.
 
-Additions for Anonymizer:
+Additions for OpenAnonymizer:
 * Append-only. The store has no update or delete method.
 * Tamper evidence: each entry carries ``hash = sha256(prev_hash + entry)``,
   chained per organization. :meth:`AuditLog.verify` recomputes the chain and

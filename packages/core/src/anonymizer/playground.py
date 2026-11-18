@@ -35,10 +35,18 @@ from anonymizer.proxy.filter import KnownValues, ResultFilter
 from anonymizer.tracing import Trace, TraceStep, TraceStore
 from anonymizer.vault import InMemoryVault, VaultKey
 
-MAX_BYTES = 5_000_000
-MAX_ROWS = 50_000
+MAX_BYTES = 100 * 1024 * 1024  # a full chatbot sessions export (one row per message) is about 100 MB
+MAX_ROWS = 2_000_000
 MAX_COLUMNS = 100
 MAX_LIMIT = 100
+_SEP = "\x1f"
+
+csv.field_size_limit(MAX_BYTES)  # chat messages with widget JSON exceed the default 128 KB per field
+
+
+def _search_text(row: dict[str, str], columns: list[str]) -> str:
+    """Lower-cased values joined by a separator a query cannot contain: lets SQLite filter rows."""
+    return _SEP.join((row.get(c) or "").lower() for c in columns)
 
 
 class PlaygroundError(RuntimeError):
@@ -61,6 +69,14 @@ class PlaygroundStore:
             CREATE TABLE IF NOT EXISTS dataset_rows (
                 dataset_id TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (dataset_id, idx));
         """)
+        cols = {r[1] for r in self._db.execute("PRAGMA table_info(dataset_rows)")}
+        if "search" not in cols:  # stores from before text search ran in SQLite
+            self._db.execute("ALTER TABLE dataset_rows ADD COLUMN search TEXT")
+            for ds_id, columns in self._db.execute("SELECT id, columns FROM datasets").fetchall():
+                cs = json.loads(columns)
+                rows = self._db.execute("SELECT idx, data FROM dataset_rows WHERE dataset_id = ?", (ds_id,)).fetchall()
+                self._db.executemany("UPDATE dataset_rows SET search = ? WHERE dataset_id = ? AND idx = ?",
+                                     [(_search_text(json.loads(d), cs), ds_id, i) for i, d in rows])
         self._db.commit()
 
     def add(self, org_id: str, name: str, columns: list[str], rows: list[dict[str, str]], created_by: str) -> dict:
@@ -69,8 +85,9 @@ class PlaygroundStore:
         with self._lock:
             self._db.execute("INSERT INTO datasets VALUES (?,?,?,?,?,?,?)",
                              (ds["id"], org_id, name, json.dumps(columns), len(rows), ds["created_at"], created_by))
-            self._db.executemany("INSERT INTO dataset_rows VALUES (?,?,?)",
-                                 [(ds["id"], i, json.dumps(r, ensure_ascii=False)) for i, r in enumerate(rows)])
+            self._db.executemany("INSERT INTO dataset_rows (dataset_id, idx, data, search) VALUES (?,?,?,?)",
+                                 ((ds["id"], i, json.dumps(r, ensure_ascii=False), _search_text(r, columns))
+                                  for i, r in enumerate(rows)))
             self._db.commit()
         return ds
 
@@ -92,6 +109,31 @@ class PlaygroundStore:
                                     (dataset_id,)).fetchall()
         return [(i, json.loads(d)) for i, d in rows]
 
+    def search(self, dataset_id: str, needle: str, columns: list[str] | None,
+               offset: int, limit: int) -> tuple[int, list[dict[str, str]]]:
+        """(number of matching rows, one page of them). ``needle`` is lower-case; empty matches all rows.
+        Filtering, counting and paging run in SQLite, so a 100 MB dataset is never loaded as a whole.
+        With ``columns`` (a subset) SQLite pre-filters on all columns and Python checks the subset."""
+        needle = needle.replace(_SEP, "")
+        where, args = "dataset_id = ?", [dataset_id]
+        if needle:
+            where += " AND instr(search, ?) > 0"
+            args.append(needle)
+        with self._lock:
+            if not needle or columns is None:
+                total = self._db.execute(f"SELECT COUNT(*) FROM dataset_rows WHERE {where}", args).fetchone()[0]
+                page = self._db.execute(f"SELECT data FROM dataset_rows WHERE {where} ORDER BY idx LIMIT ? OFFSET ?",
+                                        [*args, limit, offset]).fetchall()
+                return total, [json.loads(d) for (d,) in page]
+            total, out = 0, []
+            for (d,) in self._db.execute(f"SELECT data FROM dataset_rows WHERE {where} ORDER BY idx", args):
+                r = json.loads(d)
+                if any(needle in (r.get(c) or "").lower() for c in columns):
+                    if offset <= total < offset + limit:
+                        out.append(r)
+                    total += 1
+            return total, out
+
     def delete(self, org_id: str, dataset_id: str) -> bool:
         with self._lock:
             n = self._db.execute("DELETE FROM datasets WHERE org_id = ? AND id = ?", (org_id, dataset_id)).rowcount
@@ -110,7 +152,7 @@ def parse_csv(data: bytes | str) -> tuple[list[str], list[dict[str, str]]]:
     """CSV with a header row; delimiter , ; or tab is detected. UTF-8 (with or without BOM) or cp1252."""
     if isinstance(data, bytes):
         if len(data) > MAX_BYTES:
-            raise PlaygroundError(f"file larger than {MAX_BYTES // 1_000_000} MB", 413)
+            raise PlaygroundError(f"file larger than {MAX_BYTES // (1024 * 1024)} MB", 413)
         try:
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError:
@@ -188,10 +230,9 @@ class PlaygroundService:
         limit = max(1, min(int(limit), MAX_LIMIT))
         offset = max(0, int(offset))
         needle = (query or "").strip().lower()
-        matched = [(i, r) for i, r in self.store.rows(dataset_id)
-                   if not needle or any(needle in (r.get(c) or "").lower() for c in cols)]
-        page = matched[offset: offset + limit]
-        originals = [{c: r.get(c, "") for c in cols} for _, r in page]
+        n_matched, page = self.store.search(dataset_id, needle, None if cols == ds["columns"] else cols,
+                                            offset, limit)
+        originals = [{c: r.get(c, "") for c in cols} for r in page]
 
         pipeline = self.pipeline_factory(InMemoryVault(VaultKey.generate()))
         filt = ResultFilter(pipeline, self.destination, f"{principal.org_id}\x1fplayground:{dataset_id}",
@@ -211,7 +252,7 @@ class PlaygroundService:
         trace.resource = dataset_id
         trace.steps = [
             TraceStep(name="Tool call", detail=f"playground · {client} · {ds['name']}"),
-            TraceStep(name="Query", detail=f"{len(matched)} matching row(s) of {ds['rows']}"
+            TraceStep(name="Query", detail=f"{n_matched} matching row(s) of {ds['rows']}"
                                            f"{' for ' + repr(query) if needle else ''} · returned {len(page)}"),
             TraceStep(name="Privacy detection", detail=f"{report.values} values analysed · {report.changed} changed · "
                                                        f"{report.hinted} by column name · {report.learned} known value(s)",
@@ -225,7 +266,7 @@ class PlaygroundService:
 
         out: dict[str, Any] = {
             "dataset": {k: ds[k] for k in ("id", "name", "rows")},
-            "columns": cols, "matched": len(matched), "offset": offset, "limit": limit,
+            "columns": cols, "matched": n_matched, "offset": offset, "limit": limit,
             "rows": protected if protected is not None else sent_text,
             "trace_id": trace.id,
         }

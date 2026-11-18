@@ -1,12 +1,12 @@
 /**
- * Anonymizer brand mark: a single Roman column (capital, shaft, base) whose
+ * OpenAnonymizer brand mark: a single Roman column (capital, shaft, base) whose
  * centre channel is the accent color: the protected core inside the pillar
  * that carries AI workloads. Lines use currentColor; one accent color.
  */
 
 export const ACCENT = "#3D5AFE";
 
-export function Logomark({ className, title = "Anonymizer" }: { className?: string; title?: string }) {
+export function Logomark({ className, title = "OpenAnonymizer" }: { className?: string; title?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} role="img" aria-label={title || undefined} aria-hidden={title ? undefined : true}>
       <g fill="currentColor">
@@ -20,12 +20,12 @@ export function Logomark({ className, title = "Anonymizer" }: { className?: stri
   );
 }
 
-/** Mark + "anonymizer" set in the UI sans. */
+/** Mark + "openanonymizer" set in the UI sans. */
 export function Wordmark({ className }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 ${className ?? ""}`} aria-label="Anonymizer">
+    <span className={`inline-flex items-center gap-1.5 ${className ?? ""}`} aria-label="OpenAnonymizer">
       <Logomark className="h-6 w-6" title="" />
-      <span aria-hidden className="text-[17px] leading-none font-bold tracking-[-0.03em]">anonymizer</span>
+      <span aria-hidden className="text-[17px] leading-none font-bold tracking-[-0.03em]"><span className="font-normal">open</span>anonymizer</span>
     </span>
   );
 }

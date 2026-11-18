@@ -162,7 +162,7 @@ def test_mcp_http_requires_key(client):
     assert rpc(client, "initialize", init, headers={}).status_code == 401
     assert rpc(client, "initialize", init, headers={"Authorization": "Bearer wrong"}).status_code == 401
     r = rpc(client, "initialize", init)
-    assert r.status_code == 200 and "Anonymizer" in r.json()["result"]["instructions"]
+    assert r.status_code == 200 and "OpenAnonymizer" in r.json()["result"]["instructions"]
 
 
 def test_mcp_http_tools_and_scoping(client):

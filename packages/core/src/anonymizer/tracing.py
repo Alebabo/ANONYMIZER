@@ -6,7 +6,7 @@ contains the submitted text, detected values, placeholders or vault data,
 so the trace store itself does not become a privacy risk.
 
 Opt-in content traces (``ANONYMIZER_TRACE_CONTENT=1``, test data only):
-the store then also keeps what left Anonymizer (the protected text) and
+the store then also keeps what left OpenAnonymizer (the protected text) and
 each replacement with its original value. The trace store then holds
 personal data in clear text; only admins can read it.
 
@@ -46,8 +46,8 @@ class Replacement(BaseModel):
 class ContentItem(BaseModel):
     """One protected text: where it came from, what was sent on and what was replaced."""
     label: str | None = None       # e.g. message role or JSON path
-    input: str | None = None       # text as it reached Anonymizer (original)
-    output: str | None = None      # text as it left Anonymizer; None if withheld
+    input: str | None = None       # text as it reached OpenAnonymizer (original)
+    output: str | None = None      # text as it left OpenAnonymizer; None if withheld
     withheld: bool = False
     replacements: list[Replacement] = Field(default_factory=list)
 

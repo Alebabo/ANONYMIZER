@@ -1,15 +1,15 @@
 # anonymizer-sdk
 
-Python client for the [Anonymizer](../../README.md) privacy API.
+Python client for the [OpenAnonymizer](../../README.md) privacy API.
 
 ```bash
 pip install anonymizer-sdk            # plus "anonymizer-sdk[openai]" for the gateway helper
 ```
 
 ```python
-from anonymizer_sdk import Anonymizer
+from anonymizer_sdk import OpenAnonymizer
 
-anonymizer = Anonymizer(api_key="anonymizer_...", base_url="http://localhost:8080")   # or ANONYMIZER_API_KEY / ANONYMIZER_BASE_URL
+anonymizer = OpenAnonymizer(api_key="anonymizer_...", base_url="http://localhost:8080")   # or ANONYMIZER_API_KEY / ANONYMIZER_BASE_URL
 
 result = anonymizer.protect("Max Mustermann ist unser Mandant ...")
 if result.allowed:

@@ -1,4 +1,4 @@
-# Anonymizer default policy for customer support chats read by an external model.
+# OpenAnonymizer default policy for customer support chats read by an external model.
 # Strict starting point: copy, adapt and version it with your data-protection contact.
 name: support-default
 version: 1

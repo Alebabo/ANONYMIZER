@@ -1,6 +1,6 @@
 # Accounts, login and audit log
 
-Anonymizer has organizations, users with a simple e-mail/password login, organization-scoped API keys and an append-only audit log. Everything is stored in SQLite next to the traces (`/data` in Docker).
+OpenAnonymizer has organizations, users with a simple e-mail/password login, organization-scoped API keys and an append-only audit log. Everything is stored in SQLite next to the traces (`/data` in Docker).
 
 ## Model
 
@@ -61,7 +61,7 @@ The dashboard needs `ANONYMIZER_API_URL`. With it, every page requires a login; 
 
 ## Audit log
 
-The record shape follows Langfuse's audit log (`resourceType`, `resourceId`, `action`, `before`, `after`, actor = user / API key / system). The dashboard viewer under **Settings → Audit Logs** uses the same columns. It is Anonymizer's own implementation: Langfuse's viewer is in its `ee/` directory and is not MIT-licensed.
+The record shape follows Langfuse's audit log (`resourceType`, `resourceId`, `action`, `before`, `after`, actor = user / API key / system). The dashboard viewer under **Settings → Audit Logs** uses the same columns. It is OpenAnonymizer's own implementation: Langfuse's viewer is in its `ee/` directory and is not MIT-licensed.
 
 | Resource | Actions |
 |---|---|

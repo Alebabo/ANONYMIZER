@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from anonymizer.api import create_app
 from anonymizer.api.settings import Settings
-from anonymizer_sdk import Anonymizer, AnonymizerError, PolicyViolation
+from anonymizer_sdk import OpenAnonymizer, AnonymizerError, PolicyViolation
 
 USER = "anonymizer_test_user_key_0123456789abcdef"
 ADMIN = "anonymizer_test_admin_key_0123456789abcdef"
@@ -22,7 +22,7 @@ def app(tmp_path):
 
 
 def client(app, key=USER):
-    return Anonymizer(api_key=key, base_url="http://testserver", http_client=app)
+    return OpenAnonymizer(api_key=key, base_url="http://testserver", http_client=app)
 
 
 def test_protect_and_attribute_access(app):
@@ -76,10 +76,10 @@ def test_policies_traces_metrics(app):
 
 def test_errors(app):
     with pytest.raises(AnonymizerError) as exc:
-        Anonymizer(api_key="wrong-key-but-long-enough-000", base_url="http://testserver", http_client=app).scan("x")
+        OpenAnonymizer(api_key="wrong-key-but-long-enough-000", base_url="http://testserver", http_client=app).scan("x")
     assert exc.value.status == 401
     with pytest.raises(ValueError):
-        Anonymizer(api_key=None)
+        OpenAnonymizer(api_key=None)
 
 
 def test_conversations_and_prompts(tmp_path):

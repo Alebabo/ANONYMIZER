@@ -1,6 +1,6 @@
-# Übergabe: Anonymizer als Datenschutz-Proxy für Kundenchats und Prompts
+# Übergabe: OpenAnonymizer als Datenschutz-Proxy für Kundenchats und Prompts
 
-Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Anonymizer auf der Arbeit zu testen, an die eigene Umgebung anzupassen und später vor Produktion zu betreiben. Hintergrund und Designentscheidungen stehen in [plan.md](plan.md), die technische Referenz in [docs/conversations.md](docs/conversations.md), [docs/prompts.md](docs/prompts.md) und [docs/mcp.md](docs/mcp.md).
+Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um OpenAnonymizer auf der Arbeit zu testen, an die eigene Umgebung anzupassen und später vor Produktion zu betreiben. Hintergrund und Designentscheidungen stehen in [plan.md](plan.md), die technische Referenz in [docs/conversations.md](docs/conversations.md), [docs/prompts.md](docs/prompts.md) und [docs/mcp.md](docs/mcp.md).
 
 ---
 
@@ -8,7 +8,7 @@ Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Anonymizer auf der A
 
 **Problem:** Claude darf bei der Arbeit nur an `sbx`/`develop`, nicht an `prod`, weil dort Kundendaten liegen. Für Prompt-Arbeit braucht man aber echte Chats.
 
-**Lösung:** Anonymizer läuft **im Firmennetz neben Prod** und ist das Einzige, womit Claude spricht. Claude bekommt:
+**Lösung:** OpenAnonymizer läuft **im Firmennetz neben Prod** und ist das Einzige, womit Claude spricht. Claude bekommt:
 
 - **Kundenchats**, aber nur geschützt: `PERSON_001`, `EMAIL_001` und `ORDER_NUMBER_001` statt echter Werte, `[REDACTED]` statt IBAN. Nachrichten mit Gesundheitsdaten kommen gar nicht (`content: null`).
 - **Statistiken**, z. B. Konversationen pro Prompt-Version. Kleine Gruppen werden unterdrückt.
@@ -16,9 +16,9 @@ Stand: 15.11.2026. Diese Datei ist die Arbeitsanleitung, um Anonymizer auf der A
 
 ```
 Claude Code / Cursor (Laptop, kein Prod-Zugriff)
-        │  MCP über HTTPS + persönlicher Anonymizer-Key      ← nur Platzhalter-Daten
+        │  MCP über HTTPS + persönlicher OpenAnonymizer-Key      ← nur Platzhalter-Daten
         ▼
-Anonymizer (Firmennetz, neben Prod)
+OpenAnonymizer (Firmennetz, neben Prod)
    ├─ Quelle lesen (read-only): Langfuse | eigene Chat-DB über 2 HTTP-Endpunkte | JSONL-Export
    ├─ Erkennen → Klassifizieren → Policy → Pseudonymisieren (pro Nachricht)
    ├─ Prompt-Store (lokal oder Langfuse), Entwürfe geprüft
@@ -121,7 +121,7 @@ Was du sehen solltest:
 
 - Namen erscheinen als `PERSON_001`, Bestellnummern als `ORDER_NUMBER_001`.
 - Eine Nachricht mit „Diabetes“ hat `content: null`.
-- Einen Entwurf mit einem echten Namen lehnt Anonymizer ab.
+- Einen Entwurf mit einem echten Namen lehnt OpenAnonymizer ab.
 
 ### 3.4 Dashboard (optional, aber für das Promoten nötig)
 
@@ -149,7 +149,7 @@ Erwartet: `"findings": 0`. Zum Vergleich den Server ohne `ANONYMIZER_CUSTOM_PATT
 
 ## 4. Phase B: Gegen sbx / develop
 
-Hier wird zum ersten Mal eine Firmenquelle angeschlossen, aber eine, an die Claude ohnehin darf. Anonymizer kann dafür noch auf dem Laptop laufen.
+Hier wird zum ersten Mal eine Firmenquelle angeschlossen, aber eine, an die Claude ohnehin darf. OpenAnonymizer kann dafür noch auf dem Laptop laufen.
 
 ### 4.1 Welche Quelle?
 
@@ -180,10 +180,10 @@ anonymizer source-check --protect
 
 Worauf du achten musst:
 
-- **Mapping:** Jede Langfuse-Session wird eine Konversation. Jeder Trace wird zu `input` → user und `output` → assistant. Wenn eure App im Trace-Input den **ganzen Verlauf** loggt, nimmt Anonymizer die **letzte** User-Nachricht.
+- **Mapping:** Jede Langfuse-Session wird eine Konversation. Jeder Trace wird zu `input` → user und `output` → assistant. Wenn eure App im Trace-Input den **ganzen Verlauf** loggt, nimmt OpenAnonymizer die **letzte** User-Nachricht.
 - **Format prüfen:** Schau dir mit `get_conversation` 2–3 Konversationen an. Stimmen Reihenfolge und Rollen nicht, ist die Funktion `_text()` in `packages/core/src/anonymizer/sources/__init__.py` die Stelle zum Anpassen.
-- **Statistik nach Prompt-Version:** Anonymizer liest `prompt_name` (oder `prompt`) und `prompt_version` aus den **Trace-Metadaten**. Setzt eure App das nicht, fehlt die Zuordnung. Zusätzlich liefert die Session-Liste von Langfuse keine Prompts mit. `conversation_stats(group_by="prompt_version")` funktioniert mit Langfuse deshalb nur eingeschränkt. Die Alternative ist ein eigener HTTP-Endpunkt (4.3).
-- **Prompts in Langfuse:** Anonymizer legt Versionen **ohne Label** an. `production` setzt ein Admin im Anonymizer-Dashboard; Anonymizer ruft dafür die Langfuse-API auf. Ordner-Namen mit `/` werden nicht unterstützt.
+- **Statistik nach Prompt-Version:** OpenAnonymizer liest `prompt_name` (oder `prompt`) und `prompt_version` aus den **Trace-Metadaten**. Setzt eure App das nicht, fehlt die Zuordnung. Zusätzlich liefert die Session-Liste von Langfuse keine Prompts mit. `conversation_stats(group_by="prompt_version")` funktioniert mit Langfuse deshalb nur eingeschränkt. Die Alternative ist ein eigener HTTP-Endpunkt (4.3).
+- **Prompts in Langfuse:** OpenAnonymizer legt Versionen **ohne Label** an. `production` setzt ein Admin im OpenAnonymizer-Dashboard; OpenAnonymizer ruft dafür die Langfuse-API auf. Ordner-Namen mit `/` werden nicht unterstützt.
 
 ### 4.3 Eigene Chat-DB (HTTP-Vertrag)
 
@@ -201,7 +201,7 @@ Tipps:
 
 - Felder `prompt` und `prompt_version` mitliefern, dann funktioniert die Statistik pro Prompt-Version voll.
 - `tags` (Kategorie, Intent, Ergebnis) mitliefern, das macht die Auswertung viel nützlicher.
-- `next_cursor` darf eure interne ID sein. Anonymizer gibt ihn nie nach außen.
+- `next_cursor` darf eure interne ID sein. OpenAnonymizer gibt ihn nie nach außen.
 - Neueste Konversationen zuerst.
 - Multi-Agent-Bots: pro Nachricht `agent`, `action` und `subtopic` mitliefern. Nur Enum-Werte, nie Freitext.
 - Bezeichner wie `TRANSACTION` oder `CARD_LOCK_EMB` hält die Erkennung oft für Organisationen und verwirft sie. Die festen Namen in eine Datei unter `local/` schreiben, eine pro Zeile, exakt so wie im Tag (`agent:TRANSACTION`) bzw. im Feld (`TRANSACTION`), und `ANONYMIZER_CONVERSATIONS_LABELS` darauf setzen. `anonymizer source-check --protect` zeigt unter `labels`, wie viele noch wegfallen.
@@ -344,8 +344,8 @@ Beim Build hinter einem Firmen-Proxy braucht der Build das CA-Zertifikat: `docke
 
 ### 6.2 Netzwerk
 
-- Anonymizer lauscht nur auf `127.0.0.1:8080`. Davor gehört ein **Reverse Proxy mit TLS** (nginx, Traefik, euer Ingress), z. B. `https://anonymizer.firma.intern`.
-- **Ausgehend** braucht Anonymizer nur die Quelle (Langfuse bzw. euren Endpunkt), keinen Internetzugang.
+- OpenAnonymizer lauscht nur auf `127.0.0.1:8080`. Davor gehört ein **Reverse Proxy mit TLS** (nginx, Traefik, euer Ingress), z. B. `https://anonymizer.firma.intern`.
+- **Ausgehend** braucht OpenAnonymizer nur die Quelle (Langfuse bzw. euren Endpunkt), keinen Internetzugang.
 - **Eingehend** nur aus dem Netz, in dem die Laptops sind (VPN). Nicht öffentlich.
 - `ANONYMIZER_MCP_ALLOWED_HOSTS=anonymizer.firma.intern` aktiviert den Schutz gegen DNS-Rebinding.
 - Lesezugriff auf die Quelle: read-only User, wenn möglich auf einer **Replica**.
@@ -371,7 +371,7 @@ Das ist der wichtigste Schritt vor Prod. Er darf **nur von einer berechtigten Pe
 
 ### 7.1 Schnelltest: Leck-Check
 
-1. Anonymizer im geschützten Bereich gegen die Prod-Quelle starten (Docker, Abschnitt 6.1). Noch **kein** Laptop wird angebunden.
+1. OpenAnonymizer im geschützten Bereich gegen die Prod-Quelle starten (Docker, Abschnitt 6.1). Noch **kein** Laptop wird angebunden.
 2. Optional eine Liste bekannter echter Werte aus der Stichprobe exportieren: Kundennamen, E-Mails, Kunden- und Bestellnummern aus dem CRM. Eine Zeile pro Wert, nach `local/stichprobe.secrets.txt` (gitignoriert).
 3. Leck-Check:
 
@@ -430,7 +430,7 @@ ANONYMIZER_CUSTOM_PATTERNS=local/patterns.yaml anonymizer eval local/korpus
 
 ## 8. Arbeiten mit Claude: Beispiele
 
-Mit Anonymizer als MCP-Server in Claude Code:
+Mit OpenAnonymizer als MCP-Server in Claude Code:
 
 - „Zeig mir die Statistik der letzten 7 Tage nach Tag. Welche Themen dominieren?“
 - „Lies 10 Konversationen mit Tag `retoure` und sag mir, wo der Bot schlecht antwortet. Zitiere die Stellen.“
@@ -468,7 +468,7 @@ Regeln, die Claude über die Server-Anweisungen kennt, die du aber auch kennen s
 | `ANONYMIZER_PROMPTS_DB` | `data/prompts.db` | local |
 | `ANONYMIZER_PROMPTS_URL` / `_PUBLIC_KEY` / `_SECRET_KEY` | – | Langfuse, falls nicht dieselbe Instanz wie die Quelle |
 | `ANONYMIZER_MCP_HTTP` | 0 | `1` = MCP unter `/mcp` |
-| `ANONYMIZER_MCP_ALLOWED_HOSTS` | – | eure Anonymizer-Domain |
+| `ANONYMIZER_MCP_ALLOWED_HOSTS` | – | eure OpenAnonymizer-Domain |
 | `ANONYMIZER_VAULT_KEY` | – | **in Prod setzen**: stabile Platzhalter, Admin kann zurückübersetzen |
 | `ANONYMIZER_API_KEYS` / `ANONYMIZER_ADMIN_KEYS` | – | Admin-Key nur für Policy und Labels; Personen-Keys über die API (5.3) |
 
@@ -507,7 +507,7 @@ Werkzeuge, die keine Inhalte ausgeben:
 ## 11. Firmenspezifisches und Git
 
 - **`local/`** ist gitignoriert: eigene Patterns, Policies, Korpus, Secrets-Listen, Notizen. Echte Kundendaten (Stichproben, Secrets-Dateien) gehören **nie** in ein Repo, auch nicht in ein privates.
-- Generische Verbesserungen (bessere Erkennung, Bugfixes) können ins Anonymizer-Repo. Firmenspezifische Adapter (z. B. euer HTTP-Endpunkt) gehören ins Firmen-Repo.
+- Generische Verbesserungen (bessere Erkennung, Bugfixes) können ins OpenAnonymizer-Repo. Firmenspezifische Adapter (z. B. euer HTTP-Endpunkt) gehören ins Firmen-Repo.
 - Vorher Abschnitt 2, Punkt 4 (IP) klären.
 - Entwicklungsablauf: Branch, `python -m pytest -q` in `packages/core`, für Dashboard-Änderungen `npx tsc --noEmit && npx next build`. Die CI (`.github/workflows/ci.yml`) macht dasselbe plus `anonymizer eval tests/corpus`.
 
@@ -538,7 +538,7 @@ Werkzeuge, die keine Inhalte ausgeben:
 
 **Welche Kontrollen gibt es?**
 
-- Read-only-Zugriff auf die Quelle; Anonymizer schreibt nie in die Chat-DB.
+- Read-only-Zugriff auf die Quelle; OpenAnonymizer schreibt nie in die Chat-DB.
 - Persönliche Keys mit Tageslimit; jeder Lesezugriff steht im manipulationssicheren Audit-Log.
 - Die Rückübersetzung von Platzhaltern geht nur mit Admin-Key im Haus und wird ebenfalls protokolliert.
 - Claude kann keine Prompts in Produktion bringen; das macht ein Mensch.
@@ -557,18 +557,18 @@ Werkzeuge, die keine Inhalte ausgeben:
 - Ob Gesundheitsdaten zurückgehalten oder nur geschwärzt werden.
 - Ob der Vertrag mit Anthropic die Übermittlung pseudonymisierter Daten abdeckt.
 
-Anonymizer ist eine technische Schutzmaßnahme, keine Rechtsgrundlage und keine Zertifizierung.
+OpenAnonymizer ist eine technische Schutzmaßnahme, keine Rechtsgrundlage und keine Zertifizierung.
 
 ---
 
-## 9. MCP-Proxy testen (andere MCP-Server hinter Anonymizer)
+## 9. MCP-Proxy testen (andere MCP-Server hinter OpenAnonymizer)
 
-Referenz: [docs/proxy.md](docs/proxy.md). Der Proxy setzt Anonymizer vor fremde MCP-Server (Datenbank, Tickets usw.). Claude sieht deren Tools mit Präfix (`demo__get_customers`), jede Antwort wird vorher gefiltert, jeder Aufruf erscheint im Dashboard unter **MCP Proxy** und **Traces**.
+Referenz: [docs/proxy.md](docs/proxy.md). Der Proxy setzt OpenAnonymizer vor fremde MCP-Server (Datenbank, Tickets usw.). Claude sieht deren Tools mit Präfix (`demo__get_customers`), jede Antwort wird vorher gefiltert, jeder Aufruf erscheint im Dashboard unter **MCP Proxy** und **Traces**.
 
 ### 9.1 Mit der Demo-Datenbank (synthetische Daten, ca. 10 Minuten)
 
 ```bash
-cd Anonymizer
+cd OpenAnonymizer
 pip install -e packages/core
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
 
@@ -623,7 +623,7 @@ Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config
    ```
 
 3. Erst `anonymizer-proxy --config … --check`, dann anbinden.
-4. **Modus `observe` nur mit Test- oder synthetischen Daten**: Claude sieht dann die Originaldaten, Anonymizer protokolliert nur, was es geschützt hätte. Sinnvoll, um vor dem Umschalten auf `enforce` zu sehen, welche Felder betroffen sind.
+4. **Modus `observe` nur mit Test- oder synthetischen Daten**: Claude sieht dann die Originaldaten, OpenAnonymizer protokolliert nur, was es geschützt hätte. Sinnvoll, um vor dem Umschalten auf `enforce` zu sehen, welche Felder betroffen sind.
 5. Im Dashboard unter `/proxy` die Spalten mit personenbezogenen Daten prüfen. Fehlt ein Feld (z. B. `kunde_bezeichnung`), in `field_hints` ergänzen.
 
 ### 9.3 Bekannte Grenzen
@@ -631,4 +631,4 @@ Die Traces landen dann in `packages/core/data/traces.db` (in der Beispiel-Config
 - Freies SQL kann über Aggregation oder `LIKE` Informationen herauslocken. Lesender Benutzer, Replica, Tool-Allow-List.
 - Platzhalter in Abfragen (`WHERE name = 'PERSON_001'`) funktionieren nicht. Die Datenbank kennt nur echte Werte.
 - Unterschiedliche Schreibweisen (`+49 170 …` und `0170 …`) bekommen unterschiedliche Platzhalter.
-- Hat Claude zusätzlich einen direkten MCP-Zugang zum selben System, umgeht es Anonymizer.
+- Hat Claude zusätzlich einen direkten MCP-Zugang zum selben System, umgeht es OpenAnonymizer.

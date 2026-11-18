@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Anonymizer API – self-hosted privacy engine with spaCy models included.
+# OpenAnonymizer API – self-hosted privacy engine with spaCy models included.
 # Build:  docker build -t anonymizer-api packages/core
 FROM python:3.12-slim AS base
 

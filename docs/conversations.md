@@ -1,17 +1,17 @@
 # Conversations: protected access to customer chats
 
-Anonymizer can sit between an AI agent (Claude Code, Cursor, any MCP or REST client) and the place where customer chats are stored. The agent reads conversations through Anonymizer and only ever receives protected messages: `PERSON_001` instead of names, `EMAIL_001` instead of addresses, `[REDACTED]` instead of IBANs, and `content: null` for messages the policy keeps away from external models.
+OpenAnonymizer can sit between an AI agent (Claude Code, Cursor, any MCP or REST client) and the place where customer chats are stored. The agent reads conversations through OpenAnonymizer and only ever receives protected messages: `PERSON_001` instead of names, `EMAIL_001` instead of addresses, `[REDACTED]` instead of IBANs, and `content: null` for messages the policy keeps away from external models.
 
-Typical use: your team may connect AI tools to sandbox and development, but not to production, because production holds customer data. Anonymizer runs **inside your network next to production**, reads with a read-only account and hands out only what the policy allows.
+Typical use: your team may connect AI tools to sandbox and development, but not to production, because production holds customer data. OpenAnonymizer runs **inside your network next to production**, reads with a read-only account and hands out only what the policy allows.
 
 ```
 Claude Code / Cursor (laptop, no production access)
-        │  MCP over HTTPS + Anonymizer key   ← only placeholder data crosses this line
+        │  MCP over HTTPS + OpenAnonymizer key   ← only placeholder data crosses this line
         ▼
-Anonymizer (your network)  ──read-only──>  chat database / Langfuse / export
+OpenAnonymizer (your network)  ──read-only──>  chat database / Langfuse / export
 ```
 
-> **Before you connect production:** get approval from your security / data-protection contact and check the contract with your model provider. Anonymizer is a technical safeguard, not a legal basis. Measure recall on a sample of your own conversations first (see [Evaluation](#evaluation-before-production)).
+> **Before you connect production:** get approval from your security / data-protection contact and check the contract with your model provider. OpenAnonymizer is a technical safeguard, not a legal basis. Measure recall on a sample of your own conversations first (see [Evaluation](#evaluation-before-production)).
 
 ## Quickstart with the synthetic example
 
@@ -79,7 +79,7 @@ Listed labels skip detection; everything else is still checked. Patterns are del
 
 ### HTTP contract
 
-Two read-only endpoints, bearer- or basic-authenticated, JSON. Implement them next to your chat database; Anonymizer needs nothing else.
+Two read-only endpoints, bearer- or basic-authenticated, JSON. Implement them next to your chat database; OpenAnonymizer needs nothing else.
 
 ```
 GET {ANONYMIZER_SOURCE_URL}/conversations?since=<unix>&until=<unix>&limit=<n>&cursor=<opaque>&tag=<t>
@@ -89,7 +89,7 @@ GET {ANONYMIZER_SOURCE_URL}/conversations/{id}
   → {conversation with "messages"}          404 if unknown
 ```
 
-Newest first. `cursor` is whatever you returned as `next_cursor`; Anonymizer never shows it to clients.
+Newest first. `cursor` is whatever you returned as `next_cursor`; OpenAnonymizer never shows it to clients.
 
 Minimal implementation (FastAPI, read-only database user):
 
@@ -132,12 +132,12 @@ ANONYMIZER_SOURCE=python
 ANONYMIZER_SOURCE_CLASS=local/my_source.py:MySource
 ```
 
-The class is called as `MySource(env=..., timeout=..., transport=...)` and implements `list`, `get` and `describe` like the built-in sources. An optional `kpis(since, until) -> dict` exposes aggregate figures the system already computes (sessions per day, solving rate, ratings) as `GET /v1/conversations/kpis` and the MCP tool `get_kpis`. Anonymizer passes only numbers, booleans, dates and short labels without detectable values; every other string becomes `[REDACTED]`.
+The class is called as `MySource(env=..., timeout=..., transport=...)` and implements `list`, `get` and `describe` like the built-in sources. An optional `kpis(since, until) -> dict` exposes aggregate figures the system already computes (sessions per day, solving rate, ratings) as `GET /v1/conversations/kpis` and the MCP tool `get_kpis`. OpenAnonymizer passes only numbers, booleans, dates and short labels without detectable values; every other string becomes `[REDACTED]`.
 
 ### Langfuse
 
 - `GET /api/public/sessions` (list) and `GET /api/public/sessions/{id}` (detail) with basic auth.
-- Each trace becomes a user turn (`input`) and an assistant turn (`output`). When an application logs the full chat history in every trace input, Anonymizer takes the last user message.
+- Each trace becomes a user turn (`input`) and an assistant turn (`output`). When an application logs the full chat history in every trace input, OpenAnonymizer takes the last user message.
 - The prompt that served a trace is read from trace metadata `prompt_name` (or `prompt`) and `prompt_version`. Set them in your application if you want statistics by prompt version.
 - Session listings carry no prompt information, so `conversation_stats(group_by="prompt_version")` needs the `http` or `jsonl` source, or a source that includes the prompt in the listing.
 
@@ -158,7 +158,7 @@ The class is called as `MySource(env=..., timeout=..., transport=...)` and imple
 | Every message is protected | Each message runs through detection, classification and the conversation policy (`ANONYMIZER_CONVERSATIONS_POLICY`, default `support-default`) for the `external` destination |
 | Same person, same placeholder | One vault namespace per conversation. With `ANONYMIZER_VAULT_KEY` the placeholders are stable across reads and an admin can restore them (`POST /v1/restore`, namespace `conversation:<id>`); without it they are generated per read |
 | Withheld instead of leaked | A message the policy does not allow (e.g. health data under `support-default`) comes back as `content: null` with the reason. Messages over 50,000 characters are withheld unchecked |
-| Opaque ids | Source ids and source cursors stay in Anonymizer's database (`ANONYMIZER_CONVERSATIONS_DB`); callers see `conv_…`/`cur_…`. Ids and cursors are scoped to the organization |
+| Opaque ids | Source ids and source cursors stay in OpenAnonymizer's database (`ANONYMIZER_CONVERSATIONS_DB`); callers see `conv_…`/`cur_…`. Ids and cursors are scoped to the organization |
 | Metadata allow-list | Day instead of timestamp, minute offsets instead of message times. Tags, channel and prompt names are dropped if they contain anything detectable |
 | Quota | `ANONYMIZER_CONVERSATIONS_DAILY_LIMIT` full reads per key (or dashboard user) and UTC day, default 200. Listing and statistics do not count |
 | k-anonymity | Statistics groups with fewer than `ANONYMIZER_CONVERSATIONS_MIN_GROUP` conversations (default 10) are suppressed; so is the total. Note: the listing already shows each conversation's allow-listed metadata, so k protects aggregate views, not the metadata itself |

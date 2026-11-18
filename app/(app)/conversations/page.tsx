@@ -79,7 +79,7 @@ export default async function Conversations({ searchParams }: { searchParams: Pr
             )}
           </CardContent></Card>
         <p className="text-muted-foreground text-xs">
-          Source ids never leave Anonymizer; the ids shown here are opaque. Tags or prompt names that contain detectable data are dropped.
+          Source ids never leave OpenAnonymizer; the ids shown here are opaque. Tags or prompt names that contain detectable data are dropped.
           {sources.mcp_http ? " Agents use the same data through the MCP endpoint /mcp with their own API key and quota." : ""}
         </p>
       </div>

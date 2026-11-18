@@ -1,6 +1,6 @@
-# Anonymizer as an MCP server
+# OpenAnonymizer as an MCP server
 
-`anonymizer-mcp` provides Anonymizer as a Model Context Protocol server (stdio). AI agents in Claude Desktop, Claude Code, Cursor or other MCP clients can use it to check and anonymize legal content before they process it.
+`anonymizer-mcp` provides OpenAnonymizer as a Model Context Protocol server (stdio). AI agents in Claude Desktop, Claude Code, Cursor or other MCP clients can use it to check and anonymize legal content before they process it.
 
 ## Threat model
 
@@ -16,7 +16,7 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | Prompt injection in documents | Results carry a notice that the content is data, not instructions. The server instructions say so too |
 | Unwanted side effects | All tools are marked read-only and not open-world. No network access, no write access |
 
-**Limitation:** if the agent already has a document's raw text in its context (e.g. pasted by the user), it was already sent to the provider. Anonymizer only protects what goes through Anonymizer. For client documents that means: use the folder plus `read_document_protected`, not copy-paste.
+**Limitation:** if the agent already has a document's raw text in its context (e.g. pasted by the user), it was already sent to the provider. OpenAnonymizer only protects what goes through OpenAnonymizer. For client documents that means: use the folder plus `read_document_protected`, not copy-paste.
 
 ## Tools
 
@@ -102,7 +102,7 @@ Not available over MCP on purpose: moving a label (promotion), restore, and ever
 
 ## HTTP transport (remote MCP)
 
-`ANONYMIZER_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a Anonymizer API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
+`ANONYMIZER_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a OpenAnonymizer API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
 
 ```bash
 claude mcp add --transport http anonymizer https://anonymizer.internal.example/mcp \

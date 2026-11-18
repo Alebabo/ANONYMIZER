@@ -8,7 +8,7 @@ import {
 } from "@/lib/mock";
 
 /**
- * Server-side access to the Anonymizer API. Tokens never reach browser JavaScript.
+ * Server-side access to the OpenAnonymizer API. Tokens never reach browser JavaScript.
  *
  * Modes:
  *  - demo: ANONYMIZER_API_URL is not set. Pages show clearly labelled example data, no login.
@@ -169,7 +169,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (res.status === 401) redirect("/login?expired=1");
   if (!res.ok) {
-    let detail = `Anonymizer API ${res.status}`;
+    let detail = `OpenAnonymizer API ${res.status}`;
     try {
       const body = await res.json();
       if (typeof body.detail === "string") detail = body.detail;

@@ -18,16 +18,16 @@ The same works for LangChain (`ChatOpenAI(base_url=..., api_key=...)`), LlamaInd
    - `messages[].content` (string or text parts)
    - `tool_calls[].function.arguments`
 
-   Images and audio are rejected, because Anonymizer cannot inspect them.
+   Images and audio are rejected, because OpenAnonymizer cannot inspect them.
 2. **Protect** every text with the active policy. A **per-request vault** keeps placeholders identical across all messages (`PERSON_001` in the system prompt = `PERSON_001` in the user message). It lives in memory only and is discarded after the request.
 3. **Decide** (the most restrictive outcome across all messages wins):
    - `allow`: forwarded to the external provider.
    - `local_only`: forwarded to the **local model** (`ANONYMIZER_LOCAL_UPSTREAM_URL`, e.g. Ollama) if one is configured. The policy is evaluated again for destination `local`. Without a local model: 403.
    - `review` / `block`: 403 with an OpenAI-style error (`type: anonymizer_policy_violation`, `code: review|block|local_only`).
 4. **Restore:** placeholders in the response (`content`, `tool_calls`) are replaced with the original values. The calling application sent those values itself. Placeholders the model invented stay unchanged and are counted in the trace.
-5. **Trace:** the request is recorded with metadata only (see below). Every response carries the headers `X-Anonymizer-Trace-Id` and `X-Anonymizer-Outcome`.
+5. **Trace:** the request is recorded with metadata only (see below). Every response carries the headers `X-OpenAnonymizer-Trace-Id` and `X-OpenAnonymizer-Outcome`.
 
-The provider key (`ANONYMIZER_UPSTREAM_KEY`) exists only on the server. Clients only know their Anonymizer key.
+The provider key (`ANONYMIZER_UPSTREAM_KEY`) exists only on the server. Clients only know their OpenAnonymizer key.
 
 ## Configuration
 
@@ -41,7 +41,7 @@ The provider key (`ANONYMIZER_UPSTREAM_KEY`) exists only on the server. Clients 
 | `ANONYMIZER_GATEWAY_RESTORE` | `0` = return placeholders instead of original values |
 | `ANONYMIZER_GATEWAY_TIMEOUT` | Seconds (default 120) |
 
-Anthropic, Bedrock and Vertex can be reached through an OpenAI-compatible proxy (e.g. LiteLLM) placed after Anonymizer. Native endpoints for these providers are not included yet.
+Anthropic, Bedrock and Vertex can be reached through an OpenAI-compatible proxy (e.g. LiteLLM) placed after OpenAnonymizer. Native endpoints for these providers are not included yet.
 
 ## Traces & metrics
 

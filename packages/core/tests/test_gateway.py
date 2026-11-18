@@ -60,7 +60,7 @@ def test_messages_are_protected_before_reaching_provider_and_restored(tmp_path):
     assert "Mustermann" not in sent and "DE89" not in sent and "PERSON_001" in sent
     assert provider.requests[0]["auth"] == "Bearer sk-upstream-secret"  # provider key stays server-side
     assert r.json()["choices"][0]["message"]["content"] == "Antwort an Max Mustermann: Ihr Anliegen wird bearbeitet."
-    assert r.headers["X-Anonymizer-Outcome"] == "allow"
+    assert r.headers["X-OpenAnonymizer-Outcome"] == "allow"
 
 
 def test_placeholders_consistent_across_messages(tmp_path):
@@ -95,7 +95,7 @@ def test_local_only_content_is_routed_to_local_model(tmp_path):
     assert r.status_code == 200
     req = provider.requests[0]
     assert req["url"].startswith("http://ollama.local/v1") and req["body"]["model"] == "llama3.1"
-    trace = c.get(f"/v1/traces/{r.headers['X-Anonymizer-Trace-Id']}", headers=H).json()
+    trace = c.get(f"/v1/traces/{r.headers['X-OpenAnonymizer-Trace-Id']}", headers=H).json()
     assert trace["destination"] == "local" and "routed to local model" in json.dumps(trace["steps"])
 
 

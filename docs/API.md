@@ -1,4 +1,4 @@
-# Anonymizer REST API
+# OpenAnonymizer REST API
 
 The Python API lives in `packages/core` (FastAPI). The full OpenAPI spec is at `/openapi.json`, with interactive docs at `/docs`.
 

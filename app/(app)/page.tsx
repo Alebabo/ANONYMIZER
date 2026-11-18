@@ -98,7 +98,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
 
   return (
     <>
-      <PageHeader title="Home" description="What passed through Anonymizer, what was protected and whether the setup is healthy."
+      <PageHeader title="Home" description="What passed through OpenAnonymizer, what was protected and whether the setup is healthy."
                   meta={m.last_trace_at ? <>Last request {ago(m.last_trace_at)}</> : undefined}>
         <RangePicker value={range.key} />
       </PageHeader>

@@ -10,10 +10,10 @@ Rules enforced here, independent of the backend:
 * **Scan before save.** A new version is rejected if it contains anything
   classified ``sensitive`` or ``critical`` (customer names, e-mails, IBANs,
   health data, ...). This keeps customer examples out of prompts.
-* **No placeholders in drafts.** A draft containing Anonymizer placeholders
+* **No placeholders in drafts.** A draft containing OpenAnonymizer placeholders
   (``PERSON_001``) would write pseudonyms back over real values; it is
   rejected.
-* **Reads are protected.** If a stored prompt (e.g. created outside Anonymizer)
+* **Reads are protected.** If a stored prompt (e.g. created outside OpenAnonymizer)
   contains sensitive data, readers get the anonymized text and
   ``protected: true``.
 * **Labels are separate from versions.** Creating a version never moves a
@@ -228,7 +228,7 @@ class LocalPromptBackend:
 
 class LangfusePromptBackend:
     """Langfuse prompt management (``/api/public/v2/prompts``). Langfuse projects have no notion of
-    Anonymizer organizations, so only the default organization may use this backend."""
+    OpenAnonymizer organizations, so only the default organization may use this backend."""
 
     kind = "langfuse"
 
@@ -400,7 +400,7 @@ class PromptService:
         warnings: set[str] = set()
         for t in texts:
             if PLACEHOLDER.search(t):
-                raise PromptError("prompt contains Anonymizer placeholders (e.g. PERSON_001 or [REDACTED]); "
+                raise PromptError("prompt contains OpenAnonymizer placeholders (e.g. PERSON_001 or [REDACTED]); "
                                   "write the real template text instead of pasting protected output", 422)
             hard, soft = self._findings(t)
             if hard:
@@ -419,7 +419,7 @@ class PromptService:
         if soft:
             out["warnings"] = [f"possibly contains {t} (statistical detection; check before promoting)"
                                for t in soft]
-        # Notes and config can come from outside Anonymizer (Langfuse commit messages); same rule.
+        # Notes and config can come from outside OpenAnonymizer (Langfuse commit messages); same rule.
         if v.note and self._findings(v.note)[0]:
             out["note"] = self.protect_text(v.note)
             out["protected"] = True
@@ -490,7 +490,7 @@ class PromptService:
                               after={"name": name, "version": v.version, "hash": v.hash, "type": type_,
                                      "warnings": warnings})
         return {**self._protect(v), "draft": True,
-                "notice": "Saved as a new version without labels. A human promotes it in the Anonymizer dashboard."}
+                "notice": "Saved as a new version without labels. A human promotes it in the OpenAnonymizer dashboard."}
 
     def set_label(self, principal, name: str, version: int, label: str) -> dict[str, Any]:
         check_name(name)

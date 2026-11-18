@@ -2,7 +2,7 @@
 
 A source returns raw conversations. Nothing in this module protects data:
 the :mod:`anonymizer.conversations` service runs every message through the
-pipeline before anything leaves Anonymizer. Sources never write.
+pipeline before anything leaves OpenAnonymizer. Sources never write.
 
 Adapters (``ANONYMIZER_SOURCE``):
 
@@ -35,7 +35,7 @@ class Message(BaseModel):
     role: Role
     content: str
     created_at: float | None = None
-    # Optional short labels per message (e.g. which agent or workflow answered). Anonymizer passes them on
+    # Optional short labels per message (e.g. which agent or workflow answered). OpenAnonymizer passes them on
     # only if they contain nothing detectable, like tags.
     agent: str | None = None
     action: str | None = None
@@ -43,7 +43,7 @@ class Message(BaseModel):
 
 
 class ConversationHead(BaseModel):
-    """Listing entry as the source returns it. ``id`` is the source id and never leaves Anonymizer."""
+    """Listing entry as the source returns it. ``id`` is the source id and never leaves OpenAnonymizer."""
 
     id: str
     created_at: float

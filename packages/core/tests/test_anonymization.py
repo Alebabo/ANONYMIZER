@@ -6,7 +6,7 @@ import pytest
 
 from anonymizer import scan
 from anonymizer.anonymize import (
-    Anonymizer, AnonymizerConfig, LeakError, Method, build_diff, restore,
+    OpenAnonymizer, AnonymizerConfig, LeakError, Method, build_diff, restore,
 )
 from anonymizer.anonymize.transforms import generalize, mask
 from anonymizer.models import Category, make_detection
@@ -27,7 +27,7 @@ def vault():
 
 
 def anonymize(text, vault=None, namespace=None, **cfg):
-    return Anonymizer(AnonymizerConfig(**cfg), vault=vault).anonymize(text, scan(text, "de"), namespace=namespace)
+    return OpenAnonymizer(AnonymizerConfig(**cfg), vault=vault).anonymize(text, scan(text, "de"), namespace=namespace)
 
 
 # --- methods -------------------------------------------------------------------
@@ -107,13 +107,13 @@ def test_plan_overrides_type_defaults():
     text = "Herr Max Mustermann, IBAN DE89 3704 0044 0532 0130 00"
     result = scan(text, "de")
     iban = next(d for d in result.detections if d.entity_type == "iban")
-    r = Anonymizer().anonymize(text, result, plan={iban.id: Method.MASK})
+    r = OpenAnonymizer().anonymize(text, result, plan={iban.id: Method.MASK})
     assert "DE89 **** **** **** **30 00" in r.text
 
 
 def test_unknown_types_fail_closed():
     det = make_detection("client_number", Category.LEGAL_DATA, 4, 14, "MDT-004711", 0.9, "custom:client_number")
-    r = Anonymizer().anonymize("Nr. MDT-004711", [det])
+    r = OpenAnonymizer().anonymize("Nr. MDT-004711", [det])
     assert r.text == "Nr. [REDACTED]"
 
 
@@ -144,7 +144,7 @@ def test_diff_reconstructs_both_sides(vault):
 def test_sweep_catches_missed_repetitions():
     text = "Herr Max Mustermann. Max Mustermann hat unterschrieben."
     first = [d for d in scan(text, "de").detections if d.start < 20]  # simulate detector missing 2nd mention
-    r = Anonymizer().anonymize(text, first)
+    r = OpenAnonymizer().anonymize(text, first)
     assert "Max Mustermann" not in r.text
     assert any(t.swept for t in r.transformations)
 
@@ -152,7 +152,7 @@ def test_sweep_catches_missed_repetitions():
 def test_sweep_catches_case_and_line_wrap_variants():
     text = "Herr Max Mustermann. MAX MUSTERMANN unterschrieb, ebenso Max\nMustermann."
     first = [d for d in scan(text, "de").detections if d.start < 20]
-    r = Anonymizer().anonymize(text, first)
+    r = OpenAnonymizer().anonymize(text, first)
     assert r.text == "Herr PERSON_001. PERSON_001 unterschrieb, ebenso PERSON_001."
     assert [t.swept for t in r.transformations] == [False, True, True]
 
@@ -161,8 +161,8 @@ def test_leak_check_raises_in_strict_mode():
     text = "Herr Max Mustermann. MAX MUSTERMANN unterschrieb."
     first = [d for d in scan(text, "de").detections if d.start < 20]
     with pytest.raises(LeakError):
-        Anonymizer(AnonymizerConfig(sweep=False)).anonymize(text, first)
-    r = Anonymizer(AnonymizerConfig(sweep=False, strict=False)).anonymize(text, first)
+        OpenAnonymizer(AnonymizerConfig(sweep=False)).anonymize(text, first)
+    r = OpenAnonymizer(AnonymizerConfig(sweep=False, strict=False)).anonymize(text, first)
     assert r.leaks
 
 
@@ -173,7 +173,7 @@ def test_file_vault_batch_writes_once(tmp_path, monkeypatch):
     persist = v._persist
     monkeypatch.setattr(v, "_persist", lambda: (writes.append(1), persist()))
     text = "Herr Max Mustermann und Frau Erika Musterfrau, max@example.org, erika@example.org."
-    r = Anonymizer(vault=v).anonymize(text, scan(text, "de"), namespace="m")
+    r = OpenAnonymizer(vault=v).anonymize(text, scan(text, "de"), namespace="m")
     assert len(writes) == 1 and len(v.known_placeholders("m")) >= 4
     reloaded = FileVault(tmp_path / "vault.json", key)
     assert restore(r.text, reloaded, "m").text == text

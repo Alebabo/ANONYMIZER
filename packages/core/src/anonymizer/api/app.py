@@ -1,4 +1,4 @@
-"""Anonymizer REST API.
+"""OpenAnonymizer REST API.
 
 Security properties:
 * Every /v1 endpoint requires an API key or a dashboard session token
@@ -45,7 +45,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 import anonymizer
-from anonymizer.anonymize import Anonymizer, AnonymizerConfig, LeakError, restore
+from anonymizer.anonymize import OpenAnonymizer, AnonymizerConfig, LeakError, restore
 from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from anonymizer.api.schemas import (
     AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, LoginRequest, MemberCreate,
@@ -59,6 +59,7 @@ from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
 from anonymizer.pipeline import Pipeline
+from anonymizer.playground import MAX_BYTES as PLAYGROUND_MAX_BYTES
 from anonymizer.playground import PlaygroundError, PlaygroundService, PlaygroundStore
 from anonymizer.policy import (
     DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
@@ -210,7 +211,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
 
     app = FastAPI(
         lifespan=lifespan,
-        title="Anonymizer API",
+        title="OpenAnonymizer API",
         version=anonymizer.__version__,
         description="Privacy infrastructure for legal AI: detect, classify, anonymize and control sensitive "
                     "information before AI models process it. Responses contain offsets, never raw values.",
@@ -278,6 +279,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     max_body_bytes = settings.max_chars * 4 + 512_000
     # Document uploads have their own limit plus multipart framing.
     max_upload_body_bytes = settings.max_upload_bytes + 65_536
+    # Playground CSV arrives as a JSON string: escaping (quotes, line breaks) can double its size.
+    max_playground_body_bytes = 2 * PLAYGROUND_MAX_BYTES + 65_536
 
     def check_size(text: str) -> None:
         if len(text) > settings.max_chars:
@@ -294,7 +297,9 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         # before authentication). Chunked uploads carry no length; cap those
         # at the reverse proxy.
         length = request.headers.get("content-length", "0")
-        limit = max_upload_body_bytes if request.url.path.startswith("/v1/documents/") else max_body_bytes
+        path = request.url.path
+        limit = (max_upload_body_bytes if path.startswith("/v1/documents/")
+                 else max_playground_body_bytes if path == "/v1/playground/datasets" else max_body_bytes)
         if not length.isdigit() or int(length) > limit:
             response = JSONResponse(status_code=413, content={"detail": "request body too large"})
         else:
@@ -382,7 +387,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             raise HTTPException(status_code=400, detail="namespace given but no vault configured (ANONYMIZER_VAULT_KEY)")
         r = state.detector.scan(req.text, req.language)
         cfg = AnonymizerConfig(methods=req.methods, include_role=req.include_role)
-        return Anonymizer(cfg, vault=state.vault if req.namespace else None).anonymize(
+        return OpenAnonymizer(cfg, vault=state.vault if req.namespace else None).anonymize(
             req.text, r, namespace=scoped(p, req.namespace))
 
     @app.post("/v1/protect", response_model=ProtectResponse, tags=["privacy"])
@@ -453,8 +458,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     @app.post("/v1/chat/completions", tags=["gateway"])
     async def chat_completions(request: Request, p: User) -> JSONResponse:
         """OpenAI-compatible chat completions. Messages are protected by the active policy before they
-        reach the provider; placeholders in the answer are restored. Use your Anonymizer API key as the
-        OpenAI API key and Anonymizer's URL as base_url."""
+        reach the provider; placeholders in the answer are restored. Use your OpenAnonymizer API key as the
+        OpenAI API key and OpenAnonymizer's URL as base_url."""
         try:
             body = await request.json()
         except ValueError:
@@ -473,10 +478,10 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         except GatewayError as exc:
             if exc.trace is not None:
                 state.traces.add(exc.trace, p.org_id)
-            headers = {"X-Anonymizer-Trace-Id": exc.trace.id} if exc.trace else {}
+            headers = {"X-OpenAnonymizer-Trace-Id": exc.trace.id} if exc.trace else {}
             return JSONResponse(status_code=exc.status, content=exc.body(), headers=headers)
         state.traces.add(trace, p.org_id)
-        return JSONResponse(content=data, headers={"X-Anonymizer-Trace-Id": trace.id, "X-Anonymizer-Outcome": trace.outcome or ""})
+        return JSONResponse(content=data, headers={"X-OpenAnonymizer-Trace-Id": trace.id, "X-OpenAnonymizer-Outcome": trace.outcome or ""})
 
     # -- observability ---------------------------------------------------------
     @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
@@ -725,7 +730,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
 
     @app.post("/v1/prompts", status_code=201, tags=["prompts"])
     def create_prompt(req: PromptCreate, p: User) -> dict:
-        """New version without labels. Rejected if it contains sensitive data or Anonymizer placeholders."""
+        """New version without labels. Rejected if it contains sensitive data or OpenAnonymizer placeholders."""
         body = req.prompt if isinstance(req.prompt, str) else [m.model_dump() for m in req.prompt]
         return prompts().create(p, req.name, body, req.config, req.note)
 
@@ -788,7 +793,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         mcp_holder["server"] = server
         app.router.routes.append(Route("/mcp", endpoint=endpoint))
 
-    # -- MCP proxy (other MCP servers behind Anonymizer) -----------------------------------------------
+    # -- MCP proxy (other MCP servers behind OpenAnonymizer) -----------------------------------------------
     if settings.env.get("ANONYMIZER_PROXY_CONFIG"):
         from starlette.routing import Route
 

@@ -93,3 +93,16 @@ def _err(fn):
     except Exception as exc:
         return str(exc)
     return ""
+
+
+def test_store_search_counts_and_pages_in_sqlite(tmp_path):
+    from anonymizer.playground import PlaygroundStore
+    store = PlaygroundStore(tmp_path / "p.db")
+    rows = [{"Session ID": f"s{i // 3}", "Nachricht": "Hallo Ärger" if i % 2 else "Konto"} for i in range(30)]
+    ds = store.add("org", "export.csv", ["Session ID", "Nachricht"], rows, "me")
+    assert store.search(ds["id"], "", None, 0, 5)[0] == 30
+    total, page = store.search(ds["id"], "ärger", None, 2, 3)
+    assert total == 15 and [r["Nachricht"] for r in page] == ["Hallo Ärger"] * 3
+    total, page = store.search(ds["id"], "s1", ["Session ID"], 0, 100)  # s1, s10..s19 minus missing
+    assert total == sum(1 for r in rows if "s1" in r["Session ID"]) and all("s1" in r["Session ID"] for r in page)
+    assert store.search(ds["id"], "hallo", ["Session ID"], 0, 10) == (0, [])

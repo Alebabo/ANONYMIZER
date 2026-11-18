@@ -56,7 +56,7 @@ class Settings:
     ANONYMIZER_SOURCE / ANONYMIZER_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
     ANONYMIZER_CONVERSATIONS_*                policy, quota, k, database, label allow-list for conversation access
     ANONYMIZER_PROMPTS / ANONYMIZER_PROMPTS_*       prompt store (local | langfuse), see docs/prompts.md
-    ANONYMIZER_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a Anonymizer API key)
+    ANONYMIZER_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a OpenAnonymizer API key)
     """
 
     api_key_hashes: set[str]

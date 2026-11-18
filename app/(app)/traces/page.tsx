@@ -18,7 +18,7 @@ export default async function Traces({ searchParams }: { searchParams: Promise<{
   const { data: traces, source } = await getTraces(100, route);
   return (
     <>
-      <PageHeader title="Traces" description="One trace per request: what was detected, which policy decided and what left Anonymizer."
+      <PageHeader title="Traces" description="One trace per request: what was detected, which policy decided and what left OpenAnonymizer."
                   meta={<>{traces.length} latest</>} />
       <SourceBanner source={source} />
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 md:px-6">

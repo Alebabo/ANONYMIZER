@@ -1,4 +1,4 @@
-# Anonymizer MCP proxy: demo configuration with a synthetic customer database.
+# OpenAnonymizer MCP proxy: demo configuration with a synthetic customer database.
 # Relative paths are resolved against this file.
 destination: external
 policy: support-default

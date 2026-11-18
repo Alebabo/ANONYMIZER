@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from anonymizer.anonymize import AnonymizationResult, Anonymizer, AnonymizerConfig
+from anonymizer.anonymize import AnonymizationResult, OpenAnonymizer, AnonymizerConfig
 from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.detect import Detector
 from anonymizer.policy import Policy, PolicyDecision, PolicyEngine, builtin_policy
@@ -40,7 +40,7 @@ class Pipeline:
         self.policy = policy or builtin_policy()
         self.detector = detector or Detector()
         self.classifier = classifier or Classifier()
-        self.anonymizer = Anonymizer(anonymizer_config, vault=vault)
+        self.anonymizer = OpenAnonymizer(anonymizer_config, vault=vault)
 
     def protect(
         self,

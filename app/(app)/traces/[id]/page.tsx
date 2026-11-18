@@ -3,7 +3,7 @@ import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Pill, SourceBanner } from "@/components/dashboard";
 import { Chip, Dot, ms, stamp, type DotState } from "@/components/widgets";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getTrace } from "@/lib/anonymizer-api";
+import { getTrace, type TraceContent } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -106,41 +106,7 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
               <p className="text-dark-yellow mb-3 text-xs">
                 Content trace: shows original values in clear text. Test data only (ANONYMIZER_TRACE_CONTENT=1).
               </p>
-              <div className="space-y-4">
-                {t.content.map((c, i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="font-mono break-all">{c.label ?? `#${i + 1}`}</span>
-                      {c.withheld && <Pill value="withheld" />}
-                    </div>
-                    <div className={cn("grid gap-2", c.input != null && "md:grid-cols-2")}>
-                      {c.input != null && (
-                        <div>
-                          <div className="text-muted-foreground mb-1 text-2xs">Input (Anonymizer sees)</div>
-                          <pre className="bg-light-red max-h-72 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-words">{c.input}</pre>
-                        </div>
-                      )}
-                      <div>
-                        {c.input != null && <div className="text-muted-foreground mb-1 text-2xs">Output (Claude gets)</div>}
-                        <pre className={cn("max-h-72 overflow-auto rounded-md p-3 font-mono text-xs whitespace-pre-wrap break-words",
-                          c.input != null ? "bg-light-green" : "bg-surface-code")}>
-                          {c.output ?? "– not sent (withheld by policy) –"}</pre>
-                      </div>
-                    </div>
-                    {c.replacements.length > 0 && (
-                      <TableScroll minWidth={420}><Table><TableHeader><TableRow>
-                        <TableHead>Type</TableHead><TableHead>Original</TableHead><TableHead>Sent as</TableHead><TableHead>Method</TableHead>
-                      </TableRow></TableHeader>
-                        <TableBody>{c.replacements.map((r, j) => (
-                          <TableRow key={j} className="h-8">
-                            <TableCell>{r.type}</TableCell>
-                            <TableCell className="font-mono break-all">{r.original}</TableCell>
-                            <TableCell className="font-mono break-all">{r.replacement ?? "withheld"}</TableCell>
-                            <TableCell>{r.method ?? "–"}</TableCell>
-                          </TableRow>))}
-                        </TableBody></Table></TableScroll>)}
-                  </div>))}
-              </div>
+              <ContentTable items={t.content} />
             </Section>
           ) : (
             <Section title="Output">
@@ -189,5 +155,74 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
         </div>
       </div>
     </>
+  );
+}
+
+/** Marks every occurrence of the given values in a text (replaced originals or placeholders). */
+function Marked({ text, marks, className }: { text: string; marks: { value: string; title: string }[]; className: string }) {
+  const valid = marks.filter(m => m.value);
+  if (!valid.length) return <>{text}</>;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const titles = new Map(valid.map(m => [m.value, m.title]));
+  const parts = text.split(new RegExp(`(${[...titles.keys()].sort((a, b) => b.length - a.length).map(esc).join("|")})`, "g"));
+  return <>{parts.map((p, i) => titles.has(p)
+    ? <mark key={i} title={titles.get(p)} className={cn("rounded-sm px-0.5", className)}>{p}</mark>
+    : <span key={i}>{p}</span>)}</>;
+}
+
+/** One row per protected text: field, original, what Claude gets. Replaced values are highlighted
+ *  (hover shows type and method); unchanged fields are folded away. */
+function ContentTable({ items }: { items: TraceContent[] }) {
+  const field = (c: TraceContent, i: number) => (c.label ?? `#${i + 1}`).replace(/^\$\[\]\./, "").replace(/^\$\./, "");
+  const changed = (c: TraceContent) => c.withheld || c.replacements.length > 0 || (c.input != null && c.input !== c.output);
+  const rows = items.map((c, i) => ({ c, i })).filter(({ c }) => changed(c));
+  const same = items.map((c, i) => ({ c, i })).filter(({ c }) => !changed(c));
+  const hasInput = items.some(c => c.input != null);
+  const row = ({ c, i }: { c: TraceContent; i: number }, muted = false) => {
+    const tip = (r: TraceContent["replacements"][number]) => `${r.type} · ${r.method ?? "–"}`;
+    return (
+      <TableRow key={i} className={cn("align-top", muted && "text-muted-foreground")}>
+        <TableCell className="text-muted-foreground w-40 font-mono text-2xs break-all">{field(c, i)}</TableCell>
+        {hasInput && (
+          <TableCell className="font-mono text-xs break-words whitespace-pre-wrap">
+            <div className="max-h-40 overflow-auto">
+              <Marked text={c.input ?? ""} className="bg-light-red text-dark-red"
+                      marks={c.replacements.map(r => ({ value: r.original, title: tip(r) }))} />
+            </div>
+          </TableCell>
+        )}
+        <TableCell className="font-mono text-xs break-words whitespace-pre-wrap">
+          <div className="max-h-40 overflow-auto">
+            {c.output == null ? <Pill value="withheld" /> : (
+              <Marked text={c.output} className="bg-light-green text-dark-green"
+                      marks={c.replacements.filter(r => r.replacement).map(r => ({ value: r.replacement!, title: `${tip(r)} · was: ${r.original}` }))} />
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
+  const head = (
+    <TableHeader><TableRow>
+      <TableHead className="w-40">Field</TableHead>
+      {hasInput && <TableHead>Original</TableHead>}
+      <TableHead>Claude gets</TableHead>
+    </TableRow></TableHeader>
+  );
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground text-2xs">
+        {items.length} fields · {rows.length} changed · {same.length} unchanged. Hover a highlighted value for type and method.
+      </p>
+      {rows.length > 0 && (
+        <TableScroll minWidth={560}><Table>{head}<TableBody>{rows.map(r => row(r))}</TableBody></Table></TableScroll>
+      )}
+      {same.length > 0 && (
+        <details className="text-xs">
+          <summary className="text-muted-foreground cursor-pointer py-1">Show {same.length} unchanged fields</summary>
+          <TableScroll minWidth={560}><Table>{head}<TableBody>{same.map(r => row(r, true))}</TableBody></Table></TableScroll>
+        </details>
+      )}
+    </div>
   );
 }

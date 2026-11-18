@@ -66,7 +66,7 @@ class PolicyDecision(BaseModel):
 
     @property
     def plan(self) -> dict[str, Method]:
-        """Detection id -> anonymization method, for :class:`anonymizer.anonymize.Anonymizer`."""
+        """Detection id -> anonymization method, for :class:`anonymizer.anonymize.OpenAnonymizer`."""
         return {e.detection_id: e.method for e in self.entities}
 
     @property

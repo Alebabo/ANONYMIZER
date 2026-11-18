@@ -11,7 +11,7 @@ Security notes
   degraded (never "low") and puts the document into review.
 * PDF: only the text layer is extracted; the result is anonymized plain
   text, not a redacted PDF. Pages without a text layer (scans) are reported:
-  OCR is not part of Anonymizer yet, so such documents must not be treated as
+  OCR is not part of OpenAnonymizer yet, so such documents must not be treated as
   clean.
 """
 
@@ -23,7 +23,7 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Literal
 
-from anonymizer.anonymize import Anonymizer
+from anonymizer.anonymize import OpenAnonymizer
 from anonymizer.detect import Detector
 from anonymizer.models import ScanResult
 
@@ -330,5 +330,5 @@ def protect_document(pipeline, data: bytes, filename: str | None = None, destina
 __all__ = [
     "DocumentResult", "protect_document",
     "DocumentError", "Extracted", "anonymize_docx", "extract", "extract_docx", "extract_pdf", "scan_document",
-    "sniff", "with_document_warnings", "Anonymizer",
+    "sniff", "with_document_warnings", "OpenAnonymizer",
 ]

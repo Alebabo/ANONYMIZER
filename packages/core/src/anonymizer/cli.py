@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     lc = sub.add_parser("leak-check", help="read conversations through a running API and report anything "
                                            "that should not be in protected output (values are masked)")
     lc.add_argument("--api", default=os.environ.get("ANONYMIZER_BASE_URL", "http://127.0.0.1:8080"))
-    lc.add_argument("--key", default=os.environ.get("ANONYMIZER_API_KEY"), help="Anonymizer API key (or ANONYMIZER_API_KEY)")
+    lc.add_argument("--key", default=os.environ.get("ANONYMIZER_API_KEY"), help="OpenAnonymizer API key (or ANONYMIZER_API_KEY)")
     lc.add_argument("--limit", type=int, default=50, help="conversations to read (counts against the quota)")
     lc.add_argument("--secrets", help="file with known real values, one per line (never printed)")
     lc.add_argument("--details", action="store_true", help="list every finding (masked)")
@@ -128,12 +128,12 @@ def _read(path: str) -> str:
 
 
 def _anonymize(args: argparse.Namespace) -> int:
-    from anonymizer.anonymize import Anonymizer
+    from anonymizer.anonymize import OpenAnonymizer
     from anonymizer.vault import FileVault, VaultKey
 
     text = _read(args.path)
     vault = FileVault(args.vault, VaultKey.from_env()) if args.vault else None
-    result = Anonymizer(vault=vault).anonymize(text, Detector().scan(text, args.language), namespace=args.namespace)
+    result = OpenAnonymizer(vault=vault).anonymize(text, Detector().scan(text, args.language), namespace=args.namespace)
     if args.json:
         json.dump(result.model_dump(mode="json"), sys.stdout, ensure_ascii=False, indent=2)
         sys.stdout.write("\n")

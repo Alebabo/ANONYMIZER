@@ -1,4 +1,4 @@
-// Illustrative example data in the shape of the Anonymizer API. No real content.
+// Illustrative example data in the shape of the OpenAnonymizer API. No real content.
 import type {
   ApiKey, AuditEntry, Conversation, ConversationPage, ConversationStats, Dataset, GatewayStatus, Info, PlaygroundResult, Me, Metrics, PolicySummary,
   PromptHistoryItem, PromptListItem, PromptVersion, ProxyStatus, SourcesInfo, Trace, User,
