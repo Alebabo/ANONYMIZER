@@ -88,6 +88,14 @@ class Detector:
         self.recognizers: list[Recognizer] = base
 
     # ------------------------------------------------------------------
+    def prefetch(self, texts: list[str], language: str) -> None:
+        """Prepare NER for texts that are about to be scanned one by one (see SpacyRecognizer.prefetch)."""
+        if self._ner is not None and texts:
+            try:
+                self._ner.prefetch(texts, language)
+            except NERUnavailable:
+                pass  # scan() reports it
+
     def scan(self, text: str, language: str | None = None) -> ScanResult:
         lang = language or detect_language(text)
         warnings: list[str] = []

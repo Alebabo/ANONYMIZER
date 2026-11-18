@@ -94,6 +94,8 @@ class NERUnavailable(RuntimeError):
 
 # Process-wide model cache: loading a large model takes seconds.
 _MODEL_CACHE: dict[str, Any] = {}
+# Documents prepared by prefetch() and not yet analysed; bounded so a huge result cannot pile them up.
+_DOC_CACHE_MAX = 5000
 
 
 class SpacyRecognizer:
@@ -103,6 +105,7 @@ class SpacyRecognizer:
         self.models = models or DEFAULT_MODELS
         self.stopwords = stopwords or set()
         self.languages = frozenset(self.models)
+        self._docs: dict[tuple[str, str], Any] = {}
 
     def _nlp(self, language: str) -> Any:
         model = self.models[language]
@@ -117,10 +120,26 @@ class SpacyRecognizer:
                 raise NERUnavailable(f"spaCy model '{model}' is not installed") from exc
         return _MODEL_CACHE[model]
 
+    def prefetch(self, texts: Iterable[str], language: str) -> None:
+        """Run the model over many texts in one batch (much faster than one call per text); analyze()
+        then takes the prepared document instead of running the model again. Results are identical."""
+        texts = list(dict.fromkeys(texts))
+        for lang in [language] if language in self.models else list(self.models):
+            model = self.models[lang]
+            todo = [t for t in texts if (model, t) not in self._docs]
+            if not todo:
+                continue
+            if len(self._docs) + len(todo) > _DOC_CACHE_MAX:
+                self._docs.clear()
+            for t, doc in zip(todo[:_DOC_CACHE_MAX], self._nlp(lang).pipe(todo[:_DOC_CACHE_MAX], batch_size=64)):
+                self._docs[(model, t)] = doc
+
     def analyze(self, text: str, language: str) -> Iterable[Detection]:
         languages = [language] if language in self.models else list(self.models)
         for lang in languages:
-            doc = self._nlp(lang)(text)
+            doc = self._docs.pop((self.models[lang], text), None)
+            if doc is None:
+                doc = self._nlp(lang)(text)
             for ent in doc.ents:
                 mapped = _LABELS.get(ent.label_)
                 if mapped is None:

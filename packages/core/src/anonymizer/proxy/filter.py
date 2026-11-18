@@ -133,14 +133,22 @@ class ResultFilter:
                 return types.CallToolResult(content=[_text(f"[OpenAnonymizer: result withheld, larger than "
                                                            f"{self.max_chars} characters]")],
                                             is_error=result.is_error), report
+        parsed = []
         for c in result.content:
             if isinstance(c, types.TextContent) and c.text.strip()[:1] in "{[":
                 try:
-                    self._learn(json.loads(c.text), None)
+                    parsed.append(json.loads(c.text))
                 except ValueError:
                     pass
         if result.structured_content is not None:
-            self._learn(result.structured_content, None)
+            parsed.append(result.structured_content)
+        for data in parsed:
+            self._learn(data, None)
+        # All values that need NER go through the model in one batch before they are protected one by one.
+        texts: list[str] = []
+        for data in parsed:
+            self._ner_texts(data, None, texts)
+        self.pipeline.detector.prefetch(texts, self._lang)
         content = [self._block(c, report) for c in result.content]
         structured = result.structured_content
         if structured is not None:
@@ -211,6 +219,21 @@ class ResultFilter:
             return value if out == str(value) else out
         return value
 
+    def _needs_ner(self, text: str, hint: str | None) -> bool:
+        """Values scanned with the full detector: no column hint and not identifier-like (see _leaf_uncached)."""
+        return not hint and bool(text.strip()) and not ((bool(_IDENTIFIER.match(text)) or text.isdigit()
+                                                         or bool(ID_LIKE.fullmatch(text))) and text not in self.known.values)
+
+    def _ner_texts(self, value: Any, key: str | None, out: list[str]) -> None:
+        if isinstance(value, dict):
+            for k, v in value.items():
+                self._ner_texts(v, str(k) if self._safe_key(str(k)) else None, out)
+        elif isinstance(value, list):
+            for v in value:
+                self._ner_texts(v, key, out)
+        elif isinstance(value, str) and self._needs_ner(value, self.hints.get(norm_key(key)) if key else None):
+            out.append(value)
+
     def _learn(self, value: Any, key: str | None) -> None:
         if isinstance(value, dict):
             for k, v in value.items():
@@ -252,7 +275,11 @@ class ResultFilter:
         report.values += 1
         identifier = not hint and (bool(_IDENTIFIER.match(text)) or text.isdigit() or bool(ID_LIKE.fullmatch(text))
                                    ) and text not in self.known.values
-        scan = (self.rules if identifier else self.pipeline.detector).scan(text, lang)
+        # With a column hint the hint decides the type, so rules are enough (NER is most of the cost). Only
+        # if a rule match covers the value but leaves letters outside it, the full detector looks at the rest.
+        scan = (self.rules if identifier or hint else self.pipeline.detector).scan(text, lang)
+        if hint and _covers(scan, len(text), hint) and _letters_outside(text, scan):
+            scan = self.pipeline.detector.scan(text, lang)
         if hint and not _covers(scan, len(text), hint):
             # The column name wins over another type (e.g. NER reads a surname as an organisation), so the
             # value gets the same placeholder here and in free text. Checksum-validated values keep their type.
@@ -302,6 +329,14 @@ def _covers(scan: ScanResult, length: int, hint: str) -> bool:
     """A detection of the hinted type, or a checksum-validated one, already spans (almost) the whole value."""
     return any(d.end - d.start >= length * 0.8 and (d.entity_type == hint or d.validated is True)
                for d in scan.detections)
+
+
+def _letters_outside(text: str, scan: ScanResult) -> bool:
+    """Letters that no detection covers, e.g. a name next to a phone number in the same cell."""
+    rest = list(text)
+    for d in scan.detections:
+        rest[d.start:d.end] = " " * (d.end - d.start)
+    return any(ch.isalpha() for ch in rest)
 
 
 def _text(text: str) -> types.TextContent:

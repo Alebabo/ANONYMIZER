@@ -245,6 +245,32 @@ def test_long_numbers_without_hint_are_checked(pipeline):
     assert report.trace().entity_counts == {"credit_card": 1}
 
 
+def fresh_pipeline():
+    return Pipeline(builtin_policy("support-default"), vault=InMemoryVault(VaultKey.generate()))
+
+
+def test_ner_batch_only_for_free_text_and_output_unchanged(monkeypatch):
+    rows = ROWS + [{"id": 3, "vorname": "Jan", "notiz": "Anruf von Erika Musterfrau aus Köln wegen der Karte."}]
+    unbatched = fresh_pipeline()
+    monkeypatch.setattr(unbatched.detector, "prefetch", lambda texts, lang: None)
+    expected = make_filter(unbatched).apply(text_result(rows))[0].content[0].text
+
+    batched, seen = fresh_pipeline(), []
+    real = batched.detector.prefetch
+    monkeypatch.setattr(batched.detector, "prefetch", lambda texts, lang: (seen.extend(texts), real(texts, lang)))
+    assert make_filter(batched).apply(text_result(rows))[0].content[0].text == expected
+    assert rows[2]["notiz"] in seen                                  # free text goes through the batch
+    assert not {"Max", "Mustermann", "max.mustermann@example.org", "privat"} & set(seen)  # hinted / identifiers
+
+
+def test_hinted_value_with_extra_letters_gets_the_full_detector(monkeypatch):
+    p, calls = fresh_pipeline(), []
+    real = p.detector.scan
+    monkeypatch.setattr(p.detector, "scan", lambda text, lang=None: (calls.append(text), real(text, lang))[1])
+    make_filter(p).apply(text_result([{"email": "max.mustermann@example.org"}, {"email": "max.mustermann@example.org Max"}]))
+    assert calls == ["max.mustermann@example.org Max"]  # the clean value needs rules only
+
+
 def test_oversized_structured_content_is_withheld(pipeline):
     raw = types.CallToolResult(content=[types.TextContent(type="text", text="ok")],
                                structured_content={"rows": ROWS})
