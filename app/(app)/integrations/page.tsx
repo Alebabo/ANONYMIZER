@@ -74,7 +74,7 @@ export default function Integrations() {
   const url = (process.env.ANONYMIZER_PUBLIC_API_URL ?? process.env.ANONYMIZER_API_URL ?? "https://anonymizer.example.com").replace(/\/$/, "");
   return (
     <>
-      <PageHeader title="Integrations" description="Connect applications and agents" />
+      <PageHeader section="setup" title="Integrations" description="Connect applications and agents" />
       <div className="space-y-4 p-4 md:p-6">
         <p className="text-muted-foreground text-xs">
           Create a key under <Link className="text-link hover:text-link-hover" href="/api-keys">API Keys</Link> and replace{" "}

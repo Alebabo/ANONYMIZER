@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Play } from "lucide-react";
 import { PageHeader, TableScroll } from "@/components/app-shell";
-import { SourceBanner, fmt } from "@/components/dashboard";
+import { SourceBanner, ago, fmt } from "@/components/dashboard";
 import { Chip, Widget, stamp } from "@/components/widgets";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getDatasets, queryDataset, type PlaygroundResult } from "@/lib/anonymizer-api";
+import { getDatasets, queryDataset, type Dataset, type PlaygroundResult } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
+import { Process } from "./process";
 import { DeleteDataset, UploadForm } from "./upload-form";
 
 export const dynamic = "force-dynamic";
@@ -43,18 +44,19 @@ export default async function Playground({ searchParams }: { searchParams: Promi
       <SourceBanner source={source} />
       <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[280px_1fr]">
         <div className="space-y-4">
-          <Widget title="Datasets" description="Stored locally in the OpenAnonymizer playground store">
+          <Widget title="Uploads" description="Click a file to see how it was anonymized">
             <ul className="mb-3 space-y-1">
-              {datasets.map(d => (
+              {[...datasets].sort((a, b) => b.created_at - a.created_at).map(d => (
                 <li key={d.id}>
-                  <Link href={`/playground?ds=${d.id}`}
-                        className={cn("block rounded-md px-2 py-1.5 text-xs", d.id === active?.id ? "bg-muted font-medium" : "hover:bg-muted/50")}>
-                    <div className="truncate">{d.name}</div>
-                    <div className="text-muted-foreground font-mono text-2xs">{d.id} · {fmt(d.rows)} rows · {d.columns.length} cols</div>
+                  <Link href={`/playground?ds=${d.id}`} aria-current={d.id === active?.id ? "page" : undefined}
+                        className={cn("block rounded-md border px-2 py-1.5 text-xs",
+                          d.id === active?.id ? "bg-muted border-border-contrast font-medium" : "hover:bg-muted/50 border-transparent")}>
+                    <div className="truncate" title={d.name}>{d.name}</div>
+                    <div className="text-muted-foreground text-2xs">{ago(d.created_at)} · {fmt(d.rows)} rows · {d.columns.length} cols</div>
                   </Link>
                 </li>
               ))}
-              {!datasets.length && <li className="text-muted-foreground py-2 text-xs">No datasets yet</li>}
+              {!datasets.length && <li className="text-muted-foreground py-2 text-xs">Nothing uploaded yet</li>}
             </ul>
             <UploadForm />
           </Widget>
@@ -71,7 +73,7 @@ export default async function Playground({ searchParams }: { searchParams: Promi
         <div className="min-w-0 space-y-4">
           {!active && (
             <div className="text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
-              Upload a CSV or pick a dataset on the left.
+              Upload a CSV or pick an upload on the left to see its anonymization step by step.
             </div>
           )}
           {active && (
@@ -88,7 +90,7 @@ export default async function Playground({ searchParams }: { searchParams: Promi
                   <Play className="h-3.5 w-3.5" />Run
                 </button>
               </form>
-              {result ? <Result r={result} view={view} link={link} offset={offset} limit={limit} /> : (
+              {result ? <Result ds={active} r={result} view={view} link={link} offset={offset} limit={limit} /> : (
                 <p className="text-muted-foreground text-xs">Dataset not found.</p>
               )}
             </>
@@ -99,8 +101,8 @@ export default async function Playground({ searchParams }: { searchParams: Promi
   );
 }
 
-function Result({ r, view, link, offset, limit }: {
-  r: PlaygroundResult; view: string; link: (o: Partial<Params>) => string; offset: number; limit: number;
+function Result({ ds, r, view, link, offset, limit }: {
+  ds: Dataset; r: PlaygroundResult; view: string; link: (o: Partial<Params>) => string; offset: number; limit: number;
 }) {
   const sent = Array.isArray(r.rows) ? r.rows : null;
   const orig = r.original ?? [];
@@ -112,7 +114,10 @@ function Result({ r, view, link, offset, limit }: {
         {Object.entries(r.entities ?? {}).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).map(([k, n]) => <Chip key={k}>{k} {n}</Chip>)}
         {!!r.withheld && <Chip className="bg-light-red text-dark-red">{r.withheld} withheld</Chip>}
         <Link href={`/traces/${r.trace_id}`} className="text-link hover:text-link-hover ml-auto">Trace {r.trace_id} →</Link>
+        <DeleteDataset id={ds.id} />
       </div>
+
+      <Process ds={ds} r={r} />
 
       <div className="bg-muted inline-flex rounded-md p-0.5 text-xs" role="tablist">
         {VIEWS.map(v => (

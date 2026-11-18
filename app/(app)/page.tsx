@@ -71,7 +71,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
     status.push({ label: "Name detection", state: info.ner === "available" ? "ok" : info.ner === "disabled" ? "warn" : "error",
       detail: info.ner === "available" ? "NER model loaded" : info.ner === "disabled" ? "NER disabled: names only found by rules"
         : "NER model missing: names may pass unredacted" });
-    status.push({ label: "Default policy", state: "ok", detail: info.default_policy, href: "/policies" });
+    status.push({ label: "Default policy", state: "ok", detail: info.default_policy, href: "/settings/policies" });
     status.push({ label: "Content traces", state: info.trace_content ? "warn" : "ok",
       detail: info.trace_content ? "ON: original values stored in clear text (test data only)" : "Off: metadata only" });
     status.push({ label: "Retention", state: "ok", detail: `Traces kept ${info.trace_retention_days ?? "–"} days` });
@@ -127,10 +127,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
           <Kpi label="Requests" value={fmt(m.requests)} href="/traces"
                delta={<Delta now={m.requests} prev={prev?.requests} />}
                sub={`${pct(m.detection_rate)} contained personal data`} />
-          <Kpi label="Personal data found" value={fmt(m.detections)} href="/privacy"
+          <Kpi label="Personal data found" value={fmt(m.detections)} href="/traces"
                delta={<Delta now={m.detections} prev={prev?.detections} />}
                sub={m.entities_per_request ? `Ø ${m.entities_per_request} per affected request` : "values detected"} />
-          <Kpi label="Anonymized" value={pct(m.anonymization_rate)} href="/privacy"
+          <Kpi label="Anonymized" value={pct(m.anonymization_rate)} href="/traces"
                sub={`${fmt(m.anonymized_entities)} values replaced`} />
           <Kpi label="Not sent" value={fmt(m.not_allowed)} href="/traces" tone={m.not_allowed ? "warn" : undefined}
                delta={<Delta now={m.not_allowed} prev={prev?.not_allowed} good="down" />}
@@ -154,7 +154,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <Widget title="Personal data by type" description={`${fmt(m.detections)} values detected`} action={{ label: "Details", href: "/privacy" }}>
+          <Widget title="Personal data by type" description={`${fmt(m.detections)} values detected`}>
             <BarList data={m.entity_distribution} color="--chart-fill-3" empty="No personal data detected" />
           </Widget>
           <Widget title="Where it was found" description="JSON fields with most detections (MCP proxy)">
