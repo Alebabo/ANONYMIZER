@@ -3,58 +3,62 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  Activity, BarChart3, ChevronRight, FileClock, FileText, FlaskConical, Home, Info, KeyRound, LogOut, Menu, MessagesSquare, Network,
-  PanelLeft, Plug, ScrollText, Settings, ShieldCheck, Waypoints, X,
+  Activity, ChevronRight, FileText, FlaskConical, Home, Info, LogOut, Menu, MessagesSquare, PanelLeft, Plug, Settings, X,
 } from "lucide-react";
 import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
 import { Logomark, Wordmark } from "@/components/logo";
 
-// Navigation follows the Langfuse layout: unlabeled home, product groups, configuration pinned to the bottom.
-const groups: { title?: string; items: NavItem[] }[] = [
-  { items: [{ href: "/", label: "Home", icon: Home }] },
-  {
-    title: "Observability",
-    items: [
-      { href: "/traces", label: "Traces", icon: Activity },
-      { href: "/conversations", label: "Conversations", icon: MessagesSquare },
-      { href: "/proxy", label: "MCP Proxy", icon: Network },
-      { href: "/gateway", label: "Gateway", icon: Waypoints },
+type Tab = { href: string; label: string };
+
+// Pages that belong together share one nav entry and switch via tabs in the page header.
+const sections = {
+  setup: {
+    label: "Setup",
+    tabs: [
+      { href: "/integrations", label: "Integrations" }, { href: "/gateway", label: "Gateway" },
+      { href: "/proxy", label: "MCP Proxy" }, { href: "/api-keys", label: "API Keys" },
     ],
   },
-  {
-    title: "Privacy",
-    items: [
-      { href: "/privacy", label: "Detections", icon: ShieldCheck },
-      { href: "/metrics", label: "Metrics", icon: BarChart3 },
-      { href: "/policies", label: "Policies", icon: ScrollText },
+  settings: {
+    label: "Settings",
+    tabs: [
+      { href: "/settings", label: "General" }, { href: "/settings/members", label: "Members" },
+      { href: "/settings/policies", label: "Policies" }, { href: "/settings/audit-logs", label: "Audit Logs" },
     ],
   },
-  {
-    title: "Prompt Management",
-    items: [
-      { href: "/prompts", label: "Prompts", icon: FileText },
-      { href: "/playground", label: "Playground", icon: FlaskConical },
-    ],
-  },
+} satisfies Record<string, { label: string; tabs: Tab[] }>;
+type Section = keyof typeof sections;
+
+const main: NavItem[] = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/traces", label: "Traces", icon: Activity },
+  { href: "/conversations", label: "Conversations", icon: MessagesSquare },
+  { href: "/prompts", label: "Prompts", icon: FileText },
+  { href: "/playground", label: "Playground", icon: FlaskConical },
 ];
 const bottom: NavItem[] = [
-  { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/api-keys", label: "API Keys", icon: KeyRound },
-  { href: "/settings/audit-logs", label: "Audit Logs", icon: FileClock },
-  { href: "/settings", label: "Settings", icon: Settings, exclude: "/settings/audit-logs" },
+  { href: "/integrations", label: "Setup", icon: Plug, section: "setup" },
+  { href: "/settings", label: "Settings", icon: Settings, section: "settings" },
 ];
 
-type NavItem = { href: string; label: string; icon: typeof Home; exclude?: string };
+type NavItem = { href: string; label: string; icon: typeof Home; section?: Section };
+
+const under = (path: string, href: string) => path === href || path.startsWith(href + "/");
+
+/** The tab with the longest matching href, so /settings/members does not also light up /settings. */
+function activeTab(path: string, tabs: Tab[]) {
+  return tabs.filter(t => under(path, t.href)).sort((a, b) => b.href.length - a.href.length)[0];
+}
 
 export type Account = { name: string; email: string; role: string; organization: string; demo: boolean };
 
 const AccountContext = createContext<Account | null>(null);
 const COLLAPSE_KEY = "anonymizer.sidebar.collapsed";
 
-function isActive(path: string, { href, exclude }: NavItem) {
+function isActive(path: string, { href, section }: NavItem) {
   if (href === "/") return path === "/";
-  return (path === href || path.startsWith(href + "/")) && !(exclude && path.startsWith(exclude));
+  return section ? !!activeTab(path, sections[section].tabs) : under(path, href);
 }
 
 function NavLink({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boolean; onNavigate?: () => void }) {
@@ -151,16 +155,9 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
           </div>
           <div className="h-12 md:hidden" />
           <nav className="flex flex-1 flex-col gap-3 px-2 py-1" aria-label="Main">
-            {groups.map((g, i) => (
-              <div key={i}>
-                {g.title && (
-                  <div className={cn("text-muted-foreground px-2 pb-1 text-2xs", collapsed && "md:sr-only")}>{g.title}</div>
-                )}
-                <div className="space-y-0.5">
-                  {g.items.map(item => <NavLink key={item.href} item={item} collapsed={collapsed} onNavigate={close} />)}
-                </div>
-              </div>
-            ))}
+            <div className="space-y-0.5">
+              {main.map(item => <NavLink key={item.href} item={item} collapsed={collapsed} onNavigate={close} />)}
+            </div>
             <div className="mt-auto space-y-0.5 pt-3">
               {bottom.map(item => <NavLink key={item.href} item={item} collapsed={collapsed} onNavigate={close} />)}
             </div>
@@ -184,12 +181,17 @@ export function AppShell({ children, account }: { children: React.ReactNode; acc
 /**
  * Langfuse-style page header: breadcrumb (organization / workspace / parent), title with an info
  * hint, actions on the right. `description` shows as tooltip; `meta` stays visible next to the title.
+ * `section` adds the tab bar of that section below the title.
  */
-export function PageHeader({ title, description, meta, parent, children }: {
+export function PageHeader({ title, description, meta, parent, section, children }: {
   title: string; description?: string; meta?: React.ReactNode; parent?: { label: string; href: string };
-  children?: React.ReactNode;
+  section?: Section; children?: React.ReactNode;
 }) {
   const account = useContext(AccountContext);
+  const path = usePathname();
+  const tabs = section ? sections[section].tabs : [];
+  const current = activeTab(path, tabs);
+  if (section && !parent && title !== sections[section].label) parent = { label: sections[section].label, href: tabs[0]!.href };
   return (
     <header className="bg-background sticky top-0 z-20 border-b px-4 md:px-6">
       <nav aria-label="Breadcrumb" className="text-muted-foreground flex h-8 items-center gap-1 overflow-hidden text-xs">
@@ -213,6 +215,17 @@ export function PageHeader({ title, description, meta, parent, children }: {
         </div>
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
       </div>
+      {tabs.length > 0 && (
+        <nav aria-label={sections[section!].label} className="-mb-px flex gap-1 overflow-x-auto">
+          {tabs.map(t => (
+            <Link key={t.href} href={t.href} aria-current={t === current ? "page" : undefined}
+                  className={cn("border-b-2 px-2 py-2 text-sm whitespace-nowrap",
+                    t === current ? "border-foreground font-medium" : "text-muted-foreground hover:text-foreground border-transparent")}>
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   );
 }

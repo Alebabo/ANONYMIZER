@@ -29,7 +29,7 @@ export default async function Gateway() {
   const local = m.by_provider.local ?? 0;
   return (
     <>
-      <PageHeader title="Gateway" description={`OpenAI-compatible · POST ${g.endpoint}`} />
+      <PageHeader section="setup" title="Gateway" description={`OpenAI-compatible · POST ${g.endpoint}`} />
       <SourceBanner source={source} />
       <div className="space-y-4 p-4 md:space-y-6 md:p-6">
         <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">

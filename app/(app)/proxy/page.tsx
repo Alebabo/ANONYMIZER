@@ -68,7 +68,7 @@ export default async function Proxy() {
   const observe = status?.upstreams.filter(u => u.mode !== "enforce") ?? [];
   return (
     <>
-      <PageHeader title="MCP Proxy" description="Other MCP servers behind OpenAnonymizer · metadata only, no values stored" />
+      <PageHeader section="setup" title="MCP Proxy" description="Other MCP servers behind OpenAnonymizer · metadata only, no values stored" />
       <SourceBanner source={source} />
       {observe.length > 0 && (
         <div className="bg-light-yellow text-dark-yellow border-b px-4 py-2 text-xs md:px-6">

@@ -16,7 +16,7 @@ export default async function ApiKeys() {
   const active = keys.filter(k => !k.revoked_at);
   return (
     <>
-      <PageHeader title="API Keys" description={`${active.length} active · keys belong to ${me.organization.name}`} />
+      <PageHeader section="setup" title="API Keys" description={`${active.length} active · keys belong to ${me.organization.name}`} />
       <SourceBanner source={source} />
       <div className="space-y-4 p-4 md:p-6">
         <Card><CardHeader><CardDescription>Create a key</CardDescription></CardHeader>

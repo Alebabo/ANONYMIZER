@@ -1,4 +1,4 @@
-import { PageHeader, TableScroll } from "@/components/app-shell";
+import { TableScroll } from "@/components/app-shell";
 import { SourceBanner } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +14,6 @@ export default async function Policies() {
   const body = detail?.data ? JSON.stringify(detail.data, null, 2) : examplePolicyYaml;
   return (
     <>
-      <PageHeader title="Policies" description="Deterministic · versioned · managed via API (admin key)" />
       <SourceBanner source={source} />
       <div className="space-y-4 p-4 md:p-6">
         <Card><CardHeader><CardDescription>Policies</CardDescription></CardHeader>
