@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDatasets, queryDataset, type Dataset, type PlaygroundResult } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
+import { InlineDiff } from "@/components/inline-diff";
 import { Process } from "./process";
 import { DeleteDataset, UploadForm } from "./upload-form";
 
@@ -106,6 +107,7 @@ function Result({ ds, r, view, link, offset, limit }: {
 }) {
   const sent = Array.isArray(r.rows) ? r.rows : null;
   const orig = r.original ?? [];
+  const titles = new Map((r.replacements ?? []).filter(x => x.replacement).map(x => [x.replacement!, `${x.type} · ${x.method ?? "–"}`]));
   return (
     <>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -147,13 +149,8 @@ function Result({ ds, r, view, link, offset, limit }: {
                       const before = orig[i]?.[c] ?? "";
                       const changed = view === "compare" && orig.length > 0 && before !== after;
                       return (
-                        <TableCell key={c} className="py-1.5 align-top break-words">
-                          {changed ? (
-                            <div className="space-y-0.5">
-                              <div className="bg-light-red text-dark-red rounded-sm px-1 line-through decoration-1">{before || "∅"}</div>
-                              <div className="bg-light-green text-dark-green rounded-sm px-1">{after || "∅"}</div>
-                            </div>
-                          ) : <span>{after}</span>}
+                        <TableCell key={c} className="py-1.5 align-top leading-6 break-words">
+                          {changed ? <InlineDiff before={before} after={after} titles={titles} /> : <span>{after}</span>}
                         </TableCell>
                       );
                     })}

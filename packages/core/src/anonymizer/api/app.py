@@ -48,7 +48,7 @@ import anonymizer
 from anonymizer.anonymize import OpenAnonymizer, AnonymizerConfig, LeakError, restore
 from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from anonymizer.api.schemas import (
-    AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, LoginRequest, MemberCreate,
+    AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, DryRunResult, LoginRequest, MemberCreate,
     MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
     PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
 )
@@ -58,18 +58,18 @@ from anonymizer.anonymize.engine import AnonymizationResult, RestoreResult
 from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
-from anonymizer.pipeline import Pipeline
+from anonymizer.pipeline import Pipeline, ProtectResult
 from anonymizer.playground import MAX_BYTES as PLAYGROUND_MAX_BYTES
 from anonymizer.playground import PlaygroundError, PlaygroundService, PlaygroundStore
 from anonymizer.policy import (
-    DecisionDiff, FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
+    FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
 from anonymizer.documents import DocumentError, protect_document
 from anonymizer.gateway import Gateway, GatewayConfig, GatewayError
 from anonymizer.prompts import PromptError, PromptService, backend_from_env
 from anonymizer.sources import source_from_env
 from anonymizer.tracing import Trace, TraceStep, TraceStore, trace_from_protect
-from anonymizer.vault import FileVault, VaultError, VaultKey
+from anonymizer.vault import FileVault, InMemoryVault, VaultError, VaultKey
 
 log = logging.getLogger("anonymizer.api")
 
@@ -552,8 +552,8 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
                            before=prev.model_dump() if prev else None, after=summary.model_dump())
         return summary
 
-    @app.post("/v1/policies/dry-run", response_model=DecisionDiff, tags=["policies"])
-    def dry_run(req: DryRunRequest, _: User) -> DecisionDiff:
+    @app.post("/v1/policies/dry-run", response_model=DryRunResult, tags=["policies"])
+    def dry_run(req: DryRunRequest, _: User) -> DryRunResult:
         """Compare a candidate policy (not saved) with an active one on a sample text."""
         check_size(req.text)
         try:
@@ -566,7 +566,15 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         c = state.classifier.classify_text(req.text, r)
         live = PolicyEngine(active).evaluate(r.detections, c, req.destination)
         cand = PolicyEngine(candidate).evaluate(r.detections, c, req.destination, dry_run=True)
-        return diff_decisions(live, cand)
+
+        def preview(policy: Policy) -> ProtectResult:
+            # Throwaway vault: the sample shows real placeholders, the persistent vault stays untouched.
+            return Pipeline(policy, detector=state.detector, classifier=state.classifier,
+                            vault=InMemoryVault(VaultKey.generate())).protect_scan(req.text, r, req.destination, "dry-run")
+
+        before, after = preview(active), preview(candidate)
+        return DryRunResult(**diff_decisions(live, cand).model_dump(), text_before=before.text, text_after=after.text,
+                            reasons_before=before.decision.reasons, reasons_after=after.decision.reasons)
 
     # -- auth & accounts -----------------------------------------------------------
     def me_body(p: Principal) -> dict:

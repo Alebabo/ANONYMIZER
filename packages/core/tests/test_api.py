@@ -159,6 +159,17 @@ def test_policy_dry_run_diff(client):
     body = r.json()
     assert body["outcome_after"] == "block"
     assert any(c["entity_type"] == "iban" and c["after"] == "block" for c in body["changes"])
+    assert body["text_before"] and "Mustermann" not in body["text_before"]  # protected sample, live policy
+    assert body["text_after"] is None and body["reasons_after"]              # blocked: nothing would be sent
+
+
+def test_policy_dry_run_preview_leaves_the_vault_alone(client):
+    candidate = "name: candidate\nrules:\n  - {entity: person, action: pseudonymize}\ndefault_action: redact\n"
+    body = client.post("/v1/policies/dry-run", json={"text": "Herr Max Mustermann ruft an.", "candidate_yaml": candidate},
+                       headers=USER).json()
+    assert "PERSON_" in body["text_after"]
+    restored = client.post("/v1/restore", json={"text": body["text_after"], "namespace": "dry-run"}, headers=ADMIN).json()
+    assert restored["restored"] == 0
 
 
 # --- leak protection -------------------------------------------------------------------------

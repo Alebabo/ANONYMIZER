@@ -13,7 +13,11 @@ import { applyChanges, type PolicyJson } from "@/lib/policy-edit";
 export type ActionState = {
   ok?: boolean; error?: string; message?: string; key?: string; email?: string;
   /** Policy test run: what the candidate would change on the sample text. */
-  diff?: { outcome_before: string; outcome_after: string; changes: { entity_type: string; before: string; after: string }[] };
+  diff?: {
+    outcome_before: string; outcome_after: string; changes: { entity_type: string; before: string; after: string }[];
+    /** The sample as it would leave OpenAnonymizer; null = not sent. */
+    text_before: string | null; text_after: string | null; reasons_before: string[]; reasons_after: string[];
+  };
 };
 
 const DEMO: ActionState = { error: "Demo mode: connect the API (ANONYMIZER_API_URL) to make changes." };

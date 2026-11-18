@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from anonymizer.anonymize import Method
 from anonymizer.classify import DocumentClassification, RiskLevel
 from anonymizer.models import Signal
-from anonymizer.policy import Outcome, PolicyDecision
+from anonymizer.policy import DecisionDiff, Outcome, PolicyDecision
 
 Language = Literal["de", "en"]
 Destination = Literal["external", "local"]
@@ -95,6 +95,14 @@ class DryRunRequest(TextRequest):
     candidate_yaml: str = Field(min_length=1, max_length=100_000)
     destination: Destination = "external"
     against: str | None = Field(None, description="active policy name to compare with (default: default policy)")
+
+
+class DryRunResult(DecisionDiff):
+    """Decision diff plus the protected sample text under both policies (None: not sent)."""
+    text_before: str | None = None
+    text_after: str | None = None
+    reasons_before: list[str] = []
+    reasons_after: list[str] = []
 
 
 # -- accounts ----------------------------------------------------------------------

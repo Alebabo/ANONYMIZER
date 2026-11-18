@@ -21,10 +21,30 @@ function ActionSelect({ name, value, onChange, defaultLabel, changed }: {
   );
 }
 
+function Output({ title, text, reasons, outcome, changed }: {
+  title: string; text: string | null; reasons: string[]; outcome: string; changed?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-muted-foreground mb-1 flex items-center gap-1.5">{title}<Chip>{outcome}</Chip></div>
+      {text != null ? (
+        <pre className={cn("rounded-md border p-2 font-mono whitespace-pre-wrap break-words",
+          changed ? "border-dark-yellow bg-light-yellow" : "bg-background")}>{text}</pre>
+      ) : (
+        <div className="bg-light-red text-dark-red rounded-md p-2">Not sent{reasons.length ? `: ${reasons.join("; ")}` : ""}</div>
+      )}
+    </div>
+  );
+}
+
 function Diff({ diff }: { diff: NonNullable<ActionState["diff"]> }) {
   return (
-    <div className="bg-muted/50 mt-3 space-y-2 rounded-md p-3 text-xs">
-      <div>Result for this text: <b>{diff.outcome_before}</b> → <b>{diff.outcome_after}</b></div>
+    <div className="bg-muted/50 mt-3 space-y-3 rounded-md p-3 text-xs">
+      <div className="grid gap-3 md:grid-cols-2">
+        <Output title="Now" text={diff.text_before} reasons={diff.reasons_before} outcome={diff.outcome_before} />
+        <Output title="With your changes" text={diff.text_after} reasons={diff.reasons_after} outcome={diff.outcome_after}
+                changed={diff.text_after !== diff.text_before} />
+      </div>
       {diff.changes.length > 0 && (
         <ul className="space-y-1">
           {diff.changes.map((c, i) => (

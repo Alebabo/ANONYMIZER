@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Pill, SourceBanner } from "@/components/dashboard";
+import { InlineDiff, delClass, insClass } from "@/components/inline-diff";
 import { Chip, Dot, ms, stamp, type DotState } from "@/components/widgets";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getTrace, type TraceContent } from "@/lib/anonymizer-api";
@@ -158,11 +159,14 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
   );
 }
 
-/** Marks every occurrence of the given values in a text (replaced originals or placeholders). */
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+type Replacement = TraceContent["replacements"][number];
+const tip = (r: Replacement) => `${r.type} · ${r.method ?? "–"}`;
+
+/** Marks every occurrence of the given values in a text (used when only the output is stored). */
 function Marked({ text, marks, className }: { text: string; marks: { value: string; title: string }[]; className: string }) {
   const valid = marks.filter(m => m.value);
   if (!valid.length) return <>{text}</>;
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const titles = new Map(valid.map(m => [m.value, m.title]));
   const parts = text.split(new RegExp(`(${[...titles.keys()].sort((a, b) => b.length - a.length).map(esc).join("|")})`, "g"));
   return <>{parts.map((p, i) => titles.has(p)
@@ -170,57 +174,52 @@ function Marked({ text, marks, className }: { text: string; marks: { value: stri
     : <span key={i}>{p}</span>)}</>;
 }
 
-/** One row per protected text: field, original, what Claude gets. Replaced values are highlighted
- *  (hover shows type and method); unchanged fields are folded away. */
+/** Original with only the replaced spots marked; without a stored input, the placeholders in the output. */
+function ContentDiff({ c }: { c: TraceContent }) {
+  if (c.input == null) {
+    return c.output == null ? <Pill value="withheld" /> : (
+      <Marked text={c.output} className={insClass}
+              marks={c.replacements.filter(r => r.replacement).map(r => ({ value: r.replacement!, title: `${tip(r)} · was: ${r.original}` }))} />
+    );
+  }
+  const titles = new Map(c.replacements.filter(r => r.replacement).map(r => [r.replacement!, tip(r)]));
+  return <InlineDiff before={c.input} after={c.output} titles={titles} />;
+}
+
+/** One row per protected text: field and the inline diff. Unchanged fields are folded away. */
 function ContentTable({ items }: { items: TraceContent[] }) {
   const field = (c: TraceContent, i: number) => (c.label ?? `#${i + 1}`).replace(/^\$\[\]\./, "").replace(/^\$\./, "");
   const changed = (c: TraceContent) => c.withheld || c.replacements.length > 0 || (c.input != null && c.input !== c.output);
   const rows = items.map((c, i) => ({ c, i })).filter(({ c }) => changed(c));
   const same = items.map((c, i) => ({ c, i })).filter(({ c }) => !changed(c));
-  const hasInput = items.some(c => c.input != null);
-  const row = ({ c, i }: { c: TraceContent; i: number }, muted = false) => {
-    const tip = (r: TraceContent["replacements"][number]) => `${r.type} · ${r.method ?? "–"}`;
-    return (
-      <TableRow key={i} className={cn("align-top", muted && "text-muted-foreground")}>
-        <TableCell className="text-muted-foreground w-40 font-mono text-2xs break-all">{field(c, i)}</TableCell>
-        {hasInput && (
-          <TableCell className="font-mono text-xs break-words whitespace-pre-wrap">
-            <div className="max-h-40 overflow-auto">
-              <Marked text={c.input ?? ""} className="bg-light-red text-dark-red"
-                      marks={c.replacements.map(r => ({ value: r.original, title: tip(r) }))} />
-            </div>
-          </TableCell>
-        )}
-        <TableCell className="font-mono text-xs break-words whitespace-pre-wrap">
-          <div className="max-h-40 overflow-auto">
-            {c.output == null ? <Pill value="withheld" /> : (
-              <Marked text={c.output} className="bg-light-green text-dark-green"
-                      marks={c.replacements.filter(r => r.replacement).map(r => ({ value: r.replacement!, title: `${tip(r)} · was: ${r.original}` }))} />
-            )}
-          </div>
-        </TableCell>
-      </TableRow>
-    );
-  };
+  const row = ({ c, i }: { c: TraceContent; i: number }, muted = false) => (
+    <TableRow key={i} className={cn("align-top", muted && "text-muted-foreground")}>
+      <TableCell className="text-muted-foreground w-40 font-mono text-2xs break-all">{field(c, i)}</TableCell>
+      <TableCell className="font-mono text-xs leading-6 break-words whitespace-pre-wrap">
+        <div className="max-h-60 overflow-auto"><ContentDiff c={c} /></div>
+      </TableCell>
+    </TableRow>
+  );
   const head = (
     <TableHeader><TableRow>
       <TableHead className="w-40">Field</TableHead>
-      {hasInput && <TableHead>Original</TableHead>}
-      <TableHead>Claude gets</TableHead>
+      <TableHead>
+        <span className={delClass}>original</span> <span className={insClass}>what Claude gets</span>
+      </TableHead>
     </TableRow></TableHeader>
   );
   return (
     <div className="space-y-2">
       <p className="text-muted-foreground text-2xs">
-        {items.length} fields · {rows.length} changed · {same.length} unchanged. Hover a highlighted value for type and method.
+        {items.length} fields · {rows.length} changed · {same.length} unchanged. Hover a change for type and method.
       </p>
       {rows.length > 0 && (
-        <TableScroll minWidth={560}><Table>{head}<TableBody>{rows.map(r => row(r))}</TableBody></Table></TableScroll>
+        <TableScroll minWidth={480}><Table>{head}<TableBody>{rows.map(r => row(r))}</TableBody></Table></TableScroll>
       )}
       {same.length > 0 && (
         <details className="text-xs">
           <summary className="text-muted-foreground cursor-pointer py-1">Show {same.length} unchanged fields</summary>
-          <TableScroll minWidth={560}><Table>{head}<TableBody>{same.map(r => row(r, true))}</TableBody></Table></TableScroll>
+          <TableScroll minWidth={480}><Table>{head}<TableBody>{same.map(r => row(r, true))}</TableBody></Table></TableScroll>
         </details>
       )}
     </div>
