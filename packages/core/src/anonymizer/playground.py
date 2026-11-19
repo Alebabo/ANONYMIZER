@@ -39,6 +39,9 @@ MAX_BYTES = 100 * 1024 * 1024  # a full chatbot sessions export (one row per mes
 MAX_ROWS = 2_000_000
 MAX_COLUMNS = 100
 MAX_LIMIT = 100
+# Part of the stored dashboard views' key: bump it when detection or filtering changes, so pages anonymized
+# by an older version are computed again instead of shown from the store.
+_CACHE_REV = 3
 _SEP = "\x1f"
 
 csv.field_size_limit(MAX_BYTES)  # chat messages with widget JSON exceed the default 128 KB per field
@@ -262,7 +265,7 @@ class PlaygroundService:
         needle = (query or "").strip().lower()
         # Dashboard views are stored: once an upload page was anonymized it is shown again from the store.
         # The key covers everything that changes the result (query, columns, page, policy).
-        cache_key = (json.dumps([needle, cols, limit, offset, self.policy, self.destination])
+        cache_key = (json.dumps([_CACHE_REV, needle, cols, limit, offset, self.policy, self.destination])
                      if include_original and client == "dashboard" else None)
         if cache_key and (hit := self.store.cached(dataset_id, cache_key)) is not None:
             return hit

@@ -302,7 +302,7 @@ HEALTH = RegexRecognizer(
             r"Schlaganfall", r"Demenz", r"Reha(?:bilitation)?", r"Klinikaufenthalt", r"Krankheit", r"erkrankt",
             r"Erkrankung",
             r"diagnos(?:is|ed)", r"depression", r"cancer", r"tumou?r", r"pregnan(?:t|cy)", r"psychiatric",
-            r"psychotherapy", r"disability", r"disabled", r"medication", r"addiction", r"sick leave",
+            r"psychotherapy", r"disability", r"medication", r"addiction", r"sick leave",
             r"medical condition", r"illness", r"heart attack", r"stroke", r"dementia", r"chemotherapy",
         ]), 0.8, flags=I),
         Pattern(r"(?i:\bICD(?:-10)?(?:-Code)?\s*:?\s*)(?P<v>[A-TV-Z]\d{2}(?:\.\d{1,2})?)\b", 0.95, group="v"),

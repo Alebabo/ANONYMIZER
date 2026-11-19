@@ -22,7 +22,10 @@ def docs(tmp_path):
     (root / "gesundheit.md").write_text(HEALTH_LETTER, encoding="utf-8")
     (root / "binary.exe").write_bytes(b"MZ\x90\x00")
     (tmp_path / "outside.txt").write_text("Herr Geheim Außerhalb", encoding="utf-8")
-    os.symlink(tmp_path / "outside.txt", root / "escape.txt")
+    try:
+        os.symlink(tmp_path / "outside.txt", root / "escape.txt")
+    except OSError:  # Windows without developer mode: no symlink privilege; the escape case is skipped
+        pass
     return root
 
 
@@ -84,7 +87,9 @@ def test_list_documents_excludes_unsupported_and_escaping_files(tools):
     ("missing.txt", "not found"),
     ("brief.txt\x00.md", "invalid"),
 ])
-def test_file_access_guards(tools, path, msg):
+def test_file_access_guards(tools, docs, path, msg):
+    if path == "escape.txt" and not (docs / path).is_symlink():
+        pytest.skip("creating symlinks needs a privilege this account lacks")
     with pytest.raises(ToolError, match=msg):
         tools.read_document_protected(path)
 

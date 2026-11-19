@@ -27,6 +27,9 @@ _LABELS = {
 }
 
 _LEADING_HONORIFIC = re.compile(r"^(?:(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+)+")
+# JSON, markup or escapes inside a span: serialised data, never a name ("angezeigt.\",\"links\":[").
+# Bullets join list items ("Kongo⦁ Laos⦁") into one span that is never a single name.
+_CODE_CHARS = re.compile(r'["{}\[\]\\<>=|_•⦁·▪●◦]')
 _CODE_LIKE = re.compile(r"^[A-Z]{1,4}\d*$|\d")
 # Reference numbers such as "K-1001", "AB12345", "INC-42/7": letters, optional separator, digits.
 ID_LIKE = re.compile(r"[A-Za-z]{1,4}[-_./ ]?\d[\d\-_./]*")
@@ -36,6 +39,9 @@ _HONORIFICS = {"Herr", "Herrn", "Frau", "Hr.", "Fr.", "Hr", "Fr", "Mr.", "Mrs.",
 # A person/organisation span from NER alone is kept only if the model's own tagger sees a proper noun in it
 # or a title stands right before it. Real names in hinted columns or with rule cues do not depend on this.
 _PROPER = {"PROPN", "X"}
+# Types whose NER spans must look like a name. Locations too: German compounds ("Karteneinstellungen",
+# "Dispozinsen") are tagged NOUN, real places ("Deutschland", "London") PROPN.
+_TAGGED = (E.PERSON, E.ORGANIZATION, E.LOCATION)
 _NAME_PARTICLES = {"von", "van", "vom", "zu", "zum", "zur", "de", "da", "di", "du", "del", "della", "der", "den",
                    "ten", "ter", "le", "la", "al", "el", "bin", "ibn", "y", "und", "and", "of", "&"}
 
@@ -47,7 +53,7 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
     ("Beklagte"), headings spanning line breaks, abbreviations ("Az", "NDA")
     and code fragments ("DE00") as entities.
     """
-    if "\n" in text or "@" in text or "/" in text:
+    if "\n" in text or "@" in text or "/" in text or _CODE_CHARS.search(text):
         return None
     m = _LEADING_HONORIFIC.match(text)
     if m:
@@ -63,6 +69,15 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
     text = " ".join(tokens)
     if len(text) < 3 or not tokens or all(t in stopwords for t in tokens):
         return None
+    # Names start with a capital letter; "drawable-xxxhdpi", "counterpart-logos" are code, not names.
+    if not any(ch.isupper() for ch in text):
+        return None
+    # camelCase identifiers ("cardSettings", "creditComparison") start lower-case; name particles may.
+    if text[0].islower() and tokens[0] not in _NAME_PARTICLES:
+        return None
+    # A single all-caps word of 5+ letters is an enum or status value (GREETING, TRANSACTION), not a name.
+    if len(tokens) == 1 and len(text) >= 5 and text.isupper():
+        return None
     if entity_type == E.PERSON and any(ch.isdigit() for ch in text):
         return None
     # "sein Dispolimit", "nach Urlaub": a plain lower-case word is not part of a name (particles are).
@@ -76,16 +91,56 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
     return start, text
 
 
-def _name_like(doc: Any, start: int, end: int) -> bool:
-    """A proper noun inside the span, or a title right before it. Without a tagger: keep the span."""
+def _name_like(doc: Any, start: int, end: int, pos: dict[int, str] | None = None) -> bool:
+    """A proper noun inside the span, or a title right before it. Without a tagger: keep the span.
+
+    ``pos`` maps token index to POS when the tagger ran on windows only (see ``_window_pos``);
+    otherwise the POS is read from ``doc``."""
     span = doc.char_span(start, end, alignment_mode="expand")
     if span is None or not len(span):
         return True
-    if not any(t.pos_ for t in span):
+    tags = [pos.get(t.i, "") if pos is not None else t.pos_ for t in span]
+    if not any(tags):
         return True
-    if any(t.pos_ in _PROPER for t in span):
+    if any(p in _PROPER for p in tags):
         return True
     return span.start > 0 and doc[span.start - 1].text in _HONORIFICS
+
+
+# The tagger only matters for PERSON/ORGANIZATION candidates (``_name_like``), yet its shared tok2vec costs about
+# as much as NER itself. So NER runs alone and the tagging pipes run only on small windows around candidates.
+# The CNN tok2vec sees 4 tokens to each side (window 1, depth 4); a margin of 8 keeps the POS identical.
+_TAG_MARGIN = 8
+
+
+def _ner_only(nlp: Any) -> list[str]:
+    """Pipes to skip for the NER pass; empty if NER listens to the shared tok2vec and cannot run alone."""
+    if "ner" not in nlp.pipe_names:
+        return []
+    arch = nlp.get_pipe_config("ner").get("model", {}).get("tok2vec", {}).get("@architectures", "")
+    if "Listener" in arch:
+        return []
+    return [n for n in nlp.pipe_names if n != "ner"]
+
+
+def _window_pos(nlp: Any, doc: Any, spans: list[tuple[int, int]]) -> dict[int, str]:
+    """POS for the tokens of ``spans`` (token ranges), tagging only merged windows around them."""
+    pipes = [(n, p) for n, p in nlp.pipeline if n != "ner"]
+    windows: list[list[int]] = []
+    for s, e in sorted(spans):
+        lo, hi = max(0, s - _TAG_MARGIN), min(len(doc), e + _TAG_MARGIN)
+        if windows and lo <= windows[-1][1]:
+            windows[-1][1] = max(windows[-1][1], hi)
+        else:
+            windows.append([lo, hi])
+    pos: dict[int, str] = {}
+    for lo, hi in windows:
+        part = doc[lo:hi].as_doc()
+        for _, proc in pipes:
+            part = proc(part)
+        for t in part:
+            pos[lo + t.i] = t.pos_
+    return pos
 
 
 class NERUnavailable(RuntimeError):
@@ -101,9 +156,13 @@ _DOC_CACHE_MAX = 5000
 class SpacyRecognizer:
     name = "spacy_ner"
 
-    def __init__(self, models: dict[str, str] | None = None, stopwords: set[str] | None = None) -> None:
+    def __init__(self, models: dict[str, str] | None = None, stopwords: set[str] | None = None,
+                 keep: list[str] | None = None) -> None:
         self.models = models or DEFAULT_MODELS
         self.stopwords = stopwords or set()
+        # "C24" matches "C24 Bank" and "C24-WiKn", not "C245".
+        terms = [re.escape(t.strip()) for t in keep or [] if t.strip()]
+        self._keep = re.compile(rf"^(?:{'|'.join(terms)})(?![^\W_])", re.IGNORECASE) if terms else None
         self.languages = frozenset(self.models)
         self._docs: dict[tuple[str, str], Any] = {}
 
@@ -131,25 +190,38 @@ class SpacyRecognizer:
                 continue
             if len(self._docs) + len(todo) > _DOC_CACHE_MAX:
                 self._docs.clear()
-            for t, doc in zip(todo[:_DOC_CACHE_MAX], self._nlp(lang).pipe(todo[:_DOC_CACHE_MAX], batch_size=64)):
+            nlp = self._nlp(lang)
+            docs = nlp.pipe(todo[:_DOC_CACHE_MAX], batch_size=64, disable=_ner_only(nlp))
+            for t, doc in zip(todo[:_DOC_CACHE_MAX], docs):
                 self._docs[(model, t)] = doc
 
     def analyze(self, text: str, language: str) -> Iterable[Detection]:
         languages = [language] if language in self.models else list(self.models)
         for lang in languages:
+            nlp = self._nlp(lang)
+            skipped = _ner_only(nlp)
             doc = self._docs.pop((self.models[lang], text), None)
             if doc is None:
-                doc = self._nlp(lang)(text)
+                doc = nlp(text, disable=skipped)
+            found = []
             for ent in doc.ents:
                 mapped = _LABELS.get(ent.label_)
                 if mapped is None:
                     continue
                 entity_type, category, confidence = mapped
                 cleaned = clean_entity(ent.text, ent.start_char, entity_type, self.stopwords)
-                if cleaned is None:
-                    continue
-                start, value = cleaned
-                if entity_type in (E.PERSON, E.ORGANIZATION) and not _name_like(doc, start, start + len(value)):
+                if cleaned is not None and not (self._keep and self._keep.match(cleaned[1])):
+                    found.append((entity_type, category, confidence, *cleaned))
+            pos = None
+            if skipped:
+                spans = []
+                for entity_type, _, _, start, value in found:
+                    span = doc.char_span(start, start + len(value), alignment_mode="expand")
+                    if entity_type in _TAGGED and span is not None and len(span):
+                        spans.append((max(0, span.start - 1), span.end))  # the title before it counts too
+                pos = _window_pos(nlp, doc, spans) if spans else {}
+            for entity_type, category, confidence, start, value in found:
+                if entity_type in _TAGGED and not _name_like(doc, start, start + len(value), pos):
                     continue
                 yield make_detection(entity_type, category, start, start + len(value), value,
                                      confidence, self.name)

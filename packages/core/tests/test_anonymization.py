@@ -207,7 +207,8 @@ def test_file_vault_has_no_plaintext_and_restricted_permissions(tmp_path):
     raw = path.read_text(encoding="utf-8")
     for s in SECRETS + ["matter-1", key.to_b64()]:
         assert s not in raw
-    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    if os.name != "nt":  # Windows has no POSIX mode bits; ACLs come from the user profile
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     # Reload with the same key: mapping persists
     assert restore(r.text, FileVault(path, key), "matter-1").text.startswith("Unser Mandant Herr Max Mustermann")
 

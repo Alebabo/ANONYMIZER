@@ -575,7 +575,8 @@ def tools_from_env(env: dict[str, str] | None = None) -> AnonymizerTools:
     env = dict(os.environ if env is None else env)
     config = MCPConfig.from_env(env)
     custom = load_custom_patterns(env["ANONYMIZER_CUSTOM_PATTERNS"]) if env.get("ANONYMIZER_CUSTOM_PATTERNS") else []
-    detector = Detector(DetectorConfig(custom_entities=custom, enable_ner=env.get("ANONYMIZER_ENABLE_NER", "1") != "0"))
+    detector = Detector(DetectorConfig(custom_entities=custom, enable_ner=env.get("ANONYMIZER_ENABLE_NER", "1") != "0",
+                                       keep_terms=[t for t in env.get("ANONYMIZER_KEEP_TERMS", "").split(",") if t.strip()]))
     classifier = Classifier()
     try:
         source = source_from_env(env)

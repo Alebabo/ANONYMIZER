@@ -252,3 +252,12 @@ def test_scan_scales_linearly(unit):
     start = time.perf_counter()
     RULES_ONLY.scan(text, "de")
     assert time.perf_counter() - start < 5
+
+
+def test_keep_terms_leave_own_brands_unchanged():
+    from anonymizer.detect import Detector, DetectorConfig
+    text = "Frau Anna Schmidt hat die C24 Mastercard bei der C24 Bank beantragt."
+    kept = Detector(DetectorConfig(keep_terms=["C24"])).scan(text, "de")
+    found = [text[d.start:d.end] for d in kept.detections]
+    assert not any(v.startswith("C24") for v in found)
+    assert any("Schmidt" in v for v in found)

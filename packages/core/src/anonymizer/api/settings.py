@@ -52,6 +52,7 @@ class Settings:
     ANONYMIZER_UPSTREAM_URL / _KEY / _PROVIDER            external OpenAI-compatible provider
     ANONYMIZER_LOCAL_UPSTREAM_URL / _KEY / ANONYMIZER_LOCAL_MODEL  optional local model for local_only content
     ANONYMIZER_GATEWAY_RESTORE "0" to return placeholders instead of restored values
+    ANONYMIZER_KEEP_TERMS      comma-separated own brands/products kept unchanged by NER (e.g. "C24")
     ANONYMIZER_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
     ANONYMIZER_SOURCE / ANONYMIZER_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
     ANONYMIZER_CONVERSATIONS_*                policy, quota, k, database, label allow-list for conversation access
@@ -75,6 +76,7 @@ class Settings:
     audit_db: str = "data/audit.db"
     session_hours: float = 12
     custom_patterns: str | None = None
+    keep_terms: list[str] = field(default_factory=list)
     conversations_db: str = "data/conversations.db"
     playground_db: str = "data/playground.db"
     mcp_http: bool = False
@@ -108,6 +110,7 @@ class Settings:
             audit_db=env.get("ANONYMIZER_AUDIT_DB", "data/audit.db"),
             session_hours=float(env.get("ANONYMIZER_SESSION_HOURS", "12")),
             custom_patterns=env.get("ANONYMIZER_CUSTOM_PATTERNS") or None,
+            keep_terms=_split(env.get("ANONYMIZER_KEEP_TERMS")),
             conversations_db=env.get("ANONYMIZER_CONVERSATIONS_DB", "data/conversations.db"),
             playground_db=env.get("ANONYMIZER_PLAYGROUND_DB", "data/playground.db"),
             mcp_http=env.get("ANONYMIZER_MCP_HTTP", "0") == "1",
