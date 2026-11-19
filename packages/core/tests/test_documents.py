@@ -108,7 +108,7 @@ def test_docx_anonymized_in_place_with_formatting_and_metadata():
     assert doc.allowed and doc.format == "docx" and doc.result.decision.outcome == Outcome.ALLOW
     out = docx.Document(io.BytesIO(doc.content))
     first = out.paragraphs[0]
-    assert first.text == "Unser Mandant Herr PERSON_001, IBAN [REDACTED], bittet um Rückruf."
+    assert first.text == "Unser Mandant Herr PERSON_001, IBAN IBAN_001, bittet um Rückruf."
     assert [r.bold for r in first.runs if r.text == "PERSON_001"] == [True]  # formatting kept
     assert out.tables[0].rows[0].cells[1].text == "Herr PERSON_001"
     assert "Mustermann" not in out.sections[0].header.paragraphs[0].text

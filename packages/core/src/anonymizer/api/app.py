@@ -91,7 +91,8 @@ class State:
                               actor_label="system (bootstrap)")
             log.warning("bootstrap admin created; change the password after the first login")
         custom = load_custom_patterns(settings.custom_patterns) if settings.custom_patterns else []
-        self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner, custom_entities=custom))
+        self.detector = Detector(DetectorConfig(enable_ner=settings.enable_ner, custom_entities=custom,
+                                                keep_terms=settings.keep_terms))
         self.classifier = Classifier()
         self.vault = (FileVault(settings.vault_path, VaultKey.from_b64(settings.vault_key))
                       if settings.vault_key else None)
@@ -350,12 +351,16 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     def health() -> dict:
         return {"status": "ok"}
 
+    ner_status: dict[str, str] = {}
+
     @app.get("/v1/info", tags=["system"])
     def info(_: User) -> dict:
-        ner = state.detector.scan("Herr Max Mustermann", "de").warnings
+        # Model availability does not change while the process runs: probe once, not on every call.
+        if "de" not in ner_status:
+            ner_status["de"] = "unavailable" if state.detector.scan("Herr Max Mustermann", "de").warnings else "available"
         return {
             "version": anonymizer.__version__,
-            "ner": "disabled" if not settings.enable_ner else ("unavailable" if ner else "available"),
+            "ner": "disabled" if not settings.enable_ner else ner_status["de"],
             "vault": state.vault is not None,
             "admin_endpoints": admin_keys_exist(),
             "default_policy": settings.default_policy,

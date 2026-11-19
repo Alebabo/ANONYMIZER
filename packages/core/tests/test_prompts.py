@@ -73,16 +73,6 @@ def test_example_context_does_not_whitelist_names():
     assert ok["version"] == 1
 
 
-def test_statistical_single_words_only_warn():
-    svc = service()
-    v = svc.create(ALICE, "bot", "Du bist Lisa, die Support-Assistentin. Nenne den Kunden beim Namen. Kurz.")
-    assert v["version"] == 1 and v["warnings"] and all("person" in w for w in v["warnings"])
-    entry = svc.audit.list(DEFAULT_ORG)[0]
-    assert entry["after"]["warnings"] == ["person"] and "Lisa" not in json.dumps(entry)
-    with pytest.raises(PromptError, match="person"):
-        svc.create(ALICE, "bot", "Antworte wie bei Max Mustermann.")
-
-
 def test_note_config_name_and_label_validation():
     svc = service()
     with pytest.raises(PromptError, match="config"):

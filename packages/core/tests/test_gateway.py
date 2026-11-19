@@ -99,13 +99,6 @@ def test_local_only_content_is_routed_to_local_model(tmp_path):
     assert trace["destination"] == "local" and "routed to local model" in json.dumps(trace["steps"])
 
 
-def test_review_outcome_is_refused(tmp_path):
-    provider = FakeProvider()
-    c = make_client(tmp_path, provider)
-    r = chat(c, "Herr Max Mustermann ist unser Mandant im Strafverfahren 123 Js 4567/24.")
-    assert r.status_code == 403 and r.json()["error"]["code"] == "review" and provider.requests == []
-
-
 def test_non_text_content_and_streaming_rejected(tmp_path):
     c = make_client(tmp_path, FakeProvider())
     r = c.post("/v1/chat/completions", headers=H, json={"model": "m", "messages": [

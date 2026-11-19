@@ -36,6 +36,8 @@ NER_STOPWORDS = {
     # Chat greetings and thanks that German NER labels as names.
     "Danke", "Vielen", "Hallo", "Hi", "Hey", "Moin", "Servus", "Gruß", "Grüße", "LG", "VG", "MfG", "Thanks",
     "Thank", "Hello", "Cheers",
+    # Short answers from chat buttons ("Ja", "Nein") that NER labels as places or organisations.
+    "Ja", "Nein", "Yes", "No", "Ok", "Okay", "Jein",
 }
 
 # Entity types whose text is a value (name, address, ...). Context words
@@ -73,6 +75,9 @@ class DetectorConfig(BaseModel):
     ner_models: dict[str, str] | None = None
     custom_entities: list[dict] = Field(default_factory=list)
     disabled_recognizers: list[str] = Field(default_factory=list)
+    # Own brands and products ("ACME" keeps "ACME Bank", "ACME Mastercard"): NER spans starting with one of
+    # these words are not personal data and stay unchanged. Rule-based detections are not affected.
+    keep_terms: list[str] = Field(default_factory=list)
 
 
 class Detector:
@@ -82,7 +87,7 @@ class Detector:
         base = [r for r in base if r.name not in self.config.disabled_recognizers]
         base += [custom_recognizer(spec) for spec in self.config.custom_entities]
         self._ner = (
-            SpacyRecognizer(self.config.ner_models, NAME_STOPWORDS | NER_STOPWORDS)
+            SpacyRecognizer(self.config.ner_models, NAME_STOPWORDS | NER_STOPWORDS, keep=self.config.keep_terms)
             if self.config.enable_ner and "spacy_ner" not in self.config.disabled_recognizers else None
         )
         self.recognizers: list[Recognizer] = base

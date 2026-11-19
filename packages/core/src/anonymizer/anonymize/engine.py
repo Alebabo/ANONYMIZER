@@ -201,7 +201,8 @@ class OpenAnonymizer:
             # Same tolerance as the leak check (case, wrapped lines): what the
             # leak check would reject is replaced here instead.
             pattern = INNER_WS.join(re.escape(token) for token in tokens)
-            for m in re.finditer(rf"(?<![\w-]){pattern}(?![\w-])", text, re.IGNORECASE):
+            # Same word boundaries as the leak check: "Temu" in "Temu-Bestellung" is an occurrence too.
+            for m in re.finditer(rf"(?<!\w){pattern}(?!\w)", text, re.IGNORECASE):
                 span = (m.start(), m.end())
                 i = bisect_right(covered, span)
                 if (i and covered[i - 1][1] > span[0]) or (i < len(covered) and covered[i][0] < span[1]):

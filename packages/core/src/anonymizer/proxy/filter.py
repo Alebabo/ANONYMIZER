@@ -30,7 +30,8 @@ from anonymizer.tracing import Trace, merge_traces, trace_from_protect
 
 WITHHELD = "[WITHHELD]"
 _SAFE_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]{0,48}$")
-_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,63}$")  # column/table/status names: no NER (over-redaction)
+# Column/table/status names and enum values (GREETING, P_ACCOUNT_OPENING_AC): no NER (over-redaction).
+_IDENTIFIER = re.compile(r"^(?:[a-z_][a-z0-9_]{0,63}|[A-Z][A-Z0-9_]{2,63})$")
 # Values learned from hinted fields are searched for in free text (e.g. a surname from a customer table
 # inside a ticket). Only these types, only values of at least this length.
 _LEARN_TYPES = {"person", "email", "phone", "iban", "address", "tax_id", "social_security_number"}
@@ -207,6 +208,12 @@ class ResultFilter:
         if isinstance(value, list):
             return [self._walk(v, f"{path}[]", key, report, lang) for v in value]
         if isinstance(value, str):
+            nested = _nested_json(value)
+            if nested is not None:
+                # A JSON document stored as a string (e.g. a chat widget payload): filter its values, keep its
+                # keys and structure, instead of running NER over the serialised text.
+                out = self._walk(nested, path, key, report, lang)
+                return value if out == nested else json.dumps(out, ensure_ascii=False, separators=(",", ":"))
             return self._leaf(value, path, key, report, lang)
         if value is None or isinstance(value, bool):
             return value
@@ -231,6 +238,8 @@ class ResultFilter:
         elif isinstance(value, list):
             for v in value:
                 self._ner_texts(v, key, out)
+        elif isinstance(value, str) and (nested := _nested_json(value)) is not None:
+            self._ner_texts(nested, key, out)
         elif isinstance(value, str) and self._needs_ner(value, self.hints.get(norm_key(key)) if key else None):
             out.append(value)
 
@@ -323,6 +332,18 @@ class ResultFilter:
             return text
         return result.text
 
+
+
+def _nested_json(text: str) -> dict | list | None:
+    """The parsed value if ``text`` is a JSON object or array, else None."""
+    s = text.strip()
+    if len(s) < 2 or s[0] not in "{[" or s[-1] not in "}]":
+        return None
+    try:
+        data = json.loads(s)
+    except ValueError:
+        return None
+    return data if isinstance(data, (dict, list)) and data else None
 
 
 def _covers(scan: ScanResult, length: int, hint: str) -> bool:
