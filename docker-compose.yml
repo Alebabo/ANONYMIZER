@@ -1,0 +1,30 @@
+# OpenAnonymizer self-hosting. Quickstart:
+#   cp .env.example .env   # set the keys (see comments there)
+#   docker compose up -d --build
+#   curl -s localhost:8080/health
+services:
+  api:
+    build: ./packages/core
+    image: anonymizer-api:local
+    env_file: .env
+    environment:
+      ANONYMIZER_HOST: 0.0.0.0
+    # Published on localhost only. Put a TLS-terminating reverse proxy in
+    # front before exposing it to a network.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - anonymizer-data:/data
+      # Conversation access with the synthetic example (docs/conversations.md):
+      # - ./examples/support:/examples:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  anonymizer-data:

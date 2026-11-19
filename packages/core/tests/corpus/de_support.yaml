@@ -1,0 +1,22 @@
+# Support chat (synthetic): informal, partly lowercase, self-introductions instead of
+# honorifics. Order numbers need deployment patterns (ANONYMIZER_CUSTOM_PATTERNS) and are
+# therefore documented as misses of the default detector.
+id: de_support
+language: de
+text: |
+  hallo, mein name ist anna müller und meine bestellung ist nicht angekommen.
+  Ich bin Lena Probe, meine Mail ist lena.probe@example.org und Tel 0151 2345678.
+  Lieferadresse: Musterstraße 12, 10115 Berlin.
+  Die Abbuchung von DE89 3704 0044 0532 0130 00 kam doppelt.
+  Vielen Dank für Ihre Hilfe!
+expected_risk: critical
+expected:
+  - {type: person, text: anna müller}
+  - {type: person, text: Lena Probe}
+  - {type: email, text: lena.probe@example.org}
+  - {type: phone, text: 0151 2345678}
+  - {type: address, text: "Musterstraße 12, 10115 Berlin"}
+  - {type: iban, text: DE89 3704 0044 0532 0130 00}
+must_not_detect:
+  - {type: person, text: Vielen}
+  - {type: person, text: Dank}

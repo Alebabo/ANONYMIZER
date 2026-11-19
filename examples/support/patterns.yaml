@@ -1,0 +1,14 @@
+# Example deployment patterns for support chats. Adapt the regexes to your
+# own number formats; every match is pseudonymized by support-default.
+patterns:
+  - name: order_number
+    pattern: '\b\d{4}-\d{4}\b'
+    context_words: ['bestell', 'auftrag', 'order']
+    ignore_case: true
+    confidence: 0.85
+  - name: customer_number
+    pattern: '\bKD-\d{6}\b'
+    confidence: 0.95
+  - name: ticket_number
+    pattern: '\bTCK-\d{5}\b'
+    confidence: 0.95
