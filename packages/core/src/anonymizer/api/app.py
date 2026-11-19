@@ -96,7 +96,7 @@ class State:
         self.vault = (FileVault(settings.vault_path, VaultKey.from_b64(settings.vault_key))
                       if settings.vault_key else None)
         self.policies = FilePolicyStore(settings.policy_dir)
-        for builtin in ("legal-default", "support-default"):
+        for builtin in ("banking-default", "support-default"):
             if builtin not in self.policies.names():
                 self.policies.save(builtin_policy(builtin))
         self.gateway = Gateway(

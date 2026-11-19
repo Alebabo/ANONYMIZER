@@ -5,7 +5,7 @@
 ## Format
 
 ```yaml
-name: legal-default          # lowercase, a-z0-9_.-
+name: banking-default          # lowercase, a-z0-9_.-
 version: 1                   # immutable; changes = new version
 extends: null                # optional parent policy
 scope: {tenant: null, team: null}
@@ -111,14 +111,16 @@ anonymizer protect brief.txt --policy firm.yaml --dry-run
 - `resolve_for(tenant, team)` picks the most specific policy: team, then tenant, then global.
 - `extends` adds the parent's rules (parent rules first). Reusing a rule ID (including auto-generated ones such as `rule_1`) or a circular chain is rejected when the policy is saved.
 
-## Built-in policy `legal-default`
+## Built-in policy `banking-default`
 
 `anonymizer.policy.builtin_policy()` is a conservative starting point:
-- Pseudonymize parties and contact data.
-- Redact identifiers.
+- Pseudonymize customers, counterparties and contact data.
+- Pseudonymize account references (IBAN, customer, account, contract, loan and invoice numbers) so the same account stays recognisable.
+- Redact card and government identifiers.
 - Generalize the date of birth.
+- BIC, amounts and dates stay readable.
 - Special categories: `local_only` for external destinations.
-- Critical documents in criminal matters: `review` for external destinations.
+- Critical documents about customers in financial distress: `review` for external destinations.
 - `default_action: redact`.
 
 Copy it, adapt it and version it as your own policy.

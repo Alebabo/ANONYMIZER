@@ -49,7 +49,7 @@ def make_trace(rng: random.Random, created_at: float) -> Trace:
     steps = [TraceStep(name="Request received", detail=route),
              TraceStep(name="Privacy detection", detail=f"{sum(counts.values())} entities detected"),
              TraceStep(name="Classification", detail=f"{crit} critical · {sens} sensitive · risk {risk}"),
-             TraceStep(name="Policy evaluation", detail=f"legal-default@v1 → {outcome}",
+             TraceStep(name="Policy evaluation", detail=f"banking-default@v1 → {outcome}",
                        status="ok" if outcome == "allow" else "blocked")]
     status, latency = 200, round(rng.lognormvariate(4.3, 0.5), 1)
     if outcome == "allow":
@@ -67,7 +67,7 @@ def make_trace(rng: random.Random, created_at: float) -> Trace:
     elif route == "/v1/chat/completions":
         status = 403
     return Trace(created_at=created_at, route=route, outcome=outcome, allowed=outcome == "allow", risk=risk,
-                 needs_review=outcome == "review", policy="legal-default@v1", policy_hash="sha256:demo",
+                 needs_review=outcome == "review", policy="banking-default@v1", policy_hash="sha256:demo",
                  destination="external", provider=provider, model=model, language="de" if rng.random() < 0.8 else "en",
                  latency_ms=latency, status=status, error="upstream error" if status == 502 else None,
                  entity_counts=counts, risk_counts={k: v for k, v in (("critical", crit), ("sensitive", sens)) if v},

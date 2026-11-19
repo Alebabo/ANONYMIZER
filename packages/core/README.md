@@ -11,7 +11,7 @@ pytest
 anonymizer scan document.txt           # detections as JSON, no raw values
 anonymizer classify document.txt       # risk per entity and document
 anonymizer anonymize document.txt      # transformed text (add --vault/--namespace for reversible)
-anonymizer protect document.txt        # full pipeline with the built-in legal-default policy
+anonymizer protect document.txt        # full pipeline with the built-in banking-default policy
 ANONYMIZER_API_KEYS=... anonymizer-api       # REST API on 127.0.0.1:8080 (see docs/API.md)
 ANONYMIZER_MCP_ROOT=./akte anonymizer-mcp    # MCP server over stdio (see docs/mcp.md)
 anonymizer eval tests/corpus           # recall / false positives on the corpus

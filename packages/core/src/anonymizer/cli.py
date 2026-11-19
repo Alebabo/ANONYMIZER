@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     rs.add_argument("--namespace", required=True)
     pr = sub.add_parser("protect", help="full pipeline: detect, classify, apply policy, anonymize")
     pr.add_argument("path", help="file path or '-' for stdin")
-    pr.add_argument("--policy", help="policy YAML (default: built-in legal-default)")
+    pr.add_argument("--policy", help="policy YAML (default: built-in banking-default)")
     pr.add_argument("--destination", choices=["external", "local"], default="external")
     pr.add_argument("--language", choices=["de", "en"])
     pr.add_argument("--dry-run", action="store_true", help="evaluate and report without returning text")

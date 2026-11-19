@@ -35,7 +35,7 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | Variable | Meaning |
 |---|---|
 | `ANONYMIZER_MCP_DESTINATION` | `external` (default) or `local`. Use `local` only if the client runs exclusively on a local model |
-| `ANONYMIZER_MCP_POLICY` | Path to a policy YAML. Default: `legal-default` |
+| `ANONYMIZER_MCP_POLICY` | Path to a policy YAML. Default: `banking-default` |
 | `ANONYMIZER_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
 | `ANONYMIZER_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
 | `ANONYMIZER_VAULT_KEY`, `ANONYMIZER_VAULT_PATH`, `ANONYMIZER_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |

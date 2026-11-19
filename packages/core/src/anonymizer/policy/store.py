@@ -139,6 +139,6 @@ def _num(path: Path) -> int:
     return int(m.group(1)) if m else 0
 
 
-def builtin_policy(name: str = "legal-default") -> Policy:
+def builtin_policy(name: str = "banking-default") -> Policy:
     text = resources.files("anonymizer.policy").joinpath(f"builtin/{name}.yaml").read_text(encoding="utf-8")
     return Policy.from_yaml(text)

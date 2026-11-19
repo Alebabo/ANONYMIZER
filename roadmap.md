@@ -9,7 +9,7 @@ Basis: [docs/positioning.md](docs/positioning.md). Wedge: production MCPs. Verti
 | MCP server | `anonymizer-mcp` (stdio) and `/mcp` (HTTP, bearer key). Tools: scan, classify, anonymize, policy check, report, protected documents, conversations, prompts |
 | Guarantees | No restore over MCP; no policy, destination or namespace arguments; read-only annotations; generic tool errors; content marked as data |
 | Sources | `jsonl`, `http` (two-endpoint contract), `langfuse` |
-| Protection | Detection DE/EN (rules + spaCy), deterministic YAML policies (`legal-default`, `support-default`), vault, quotas, k-anonymity, opaque ids |
+| Protection | Detection DE/EN (rules + spaCy), deterministic YAML policies (`banking-default`, `support-default`), vault, quotas, k-anonymity, opaque ids |
 | Operations | Hash-chained audit log, traces, dashboard, OpenAI-compatible gateway, Python SDK, Docker |
 | MCP proxy | **Phase A MVP implemented** (`anonymizer-proxy`, `/proxy/mcp`, dashboard `/proxy`): A1–A3, A5–A7. Open: A4 placeholder resolution in arguments. See [docs/proxy.md](docs/proxy.md) |
 | Gaps | no SQL source; dry run only in the CLI; no OAuth; scan/anonymize calls not audited; only plain text in `read_document_protected`; recall on real data unmeasured |

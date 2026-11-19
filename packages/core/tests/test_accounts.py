@@ -200,7 +200,7 @@ def test_vault_namespaces_are_isolated_per_org(client, two_orgs):
 
 def test_only_default_org_writes_policies(client, two_orgs):
     _, b = two_orgs
-    r = client.post("/v1/policies", headers=b, json={"yaml": "name: legal-default\nversion: 2\nrules: []\n"})
+    r = client.post("/v1/policies", headers=b, json={"yaml": "name: banking-default\nversion: 2\nrules: []\n"})
     assert r.status_code == 403
 
 

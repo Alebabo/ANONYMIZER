@@ -29,7 +29,7 @@ def test_protect_and_attribute_access(app):
     anonymizer = client(app)
     r = anonymizer.protect("Unser Mandant Herr Max Mustermann bittet um Rückruf.", namespace="m1")
     assert r.allowed and r.text == "Unser Mandant Herr PERSON_001 bittet um Rückruf."
-    assert r.decision.policy == "legal-default@v1"
+    assert r.decision.policy == "banking-default@v1"
     blocked = anonymizer.protect("Herr Max Mustermann leidet an einer Depression.")
     assert not blocked.allowed and blocked.text is None
     with pytest.raises(PolicyViolation):
@@ -65,7 +65,7 @@ def test_restore_requires_admin(app):
 def test_policies_traces_metrics(app):
     anonymizer = client(app)
     anonymizer.protect("Herr Max Mustermann bittet um Rückruf.")
-    assert anonymizer.policies()[0].name == "legal-default"
+    assert anonymizer.policies()[0].name == "banking-default"
     traces = anonymizer.traces()
     assert traces and anonymizer.trace(traces[0].id).route == "/v1/protect"
     assert anonymizer.metrics().requests == 1

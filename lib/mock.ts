@@ -35,7 +35,7 @@ export const exampleMetrics: Metrics = {
   by_risk: { low: 18012, sensitive: 4410, critical: 2469 },
   by_route: { "/v1/chat/completions": 19870, "/v1/protect": 4120, "/mcp/proxy": 901 },
   by_provider: { openai: 17210, azure: 2420, local: 240 },
-  by_policy: { "legal-default@v1": 21890, "firm-a@v3": 3001 },
+  by_policy: { "banking-default@v1": 21890, "firm-a@v3": 3001 },
   by_operation: [
     { name: "/v1/chat/completions", calls: 19870, entities: 6120, not_allowed: 71, errors: 12, observe: 0, p95_ms: 431 },
     { name: "/v1/protect", calls: 4120, entities: 1980, not_allowed: 22, errors: 0, observe: 0, p95_ms: 96 },
@@ -55,7 +55,7 @@ export const exampleMetrics: Metrics = {
 };
 
 export const exampleInfo: Info = {
-  version: "0.1.0", ner: "available", vault: true, admin_endpoints: true, default_policy: "legal-default",
+  version: "0.1.0", ner: "available", vault: true, admin_endpoints: true, default_policy: "banking-default",
   trace_content: false, trace_retention_days: 30,
 };
 
@@ -96,7 +96,7 @@ export const exampleTraces: Trace[] = [
   },
   {
     id: "req_8f29a1c0d2e4", created_at: base - 120, route: "/v1/chat/completions", outcome: "allow", allowed: true,
-    risk: "critical", needs_review: false, policy: "legal-default@v1", policy_hash: "sha256:c9218375…",
+    risk: "critical", needs_review: false, policy: "banking-default@v1", policy_hash: "sha256:c9218375…",
     destination: "external", provider: "openai", model: "gpt-4o", language: "de", latency_ms: 182.3, status: 200,
     error: null, entity_counts: { person: 2, iban: 1, case_number: 1 }, risk_counts: { critical: 2, sensitive: 2 },
     actions: { "person:pseudonymize": 2, "iban:redact": 1, "case_number:pseudonymize": 1 }, transformations: 4,
@@ -105,7 +105,7 @@ export const exampleTraces: Trace[] = [
       { name: "Request received", detail: "POST /v1/chat/completions · 2 text part(s)", status: "ok" },
       { name: "Privacy detection", detail: "4 entities detected", status: "ok" },
       { name: "Classification", detail: "risk critical", status: "ok" },
-      { name: "Policy evaluation", detail: "legal-default@v1 → allow", status: "ok" },
+      { name: "Policy evaluation", detail: "banking-default@v1 → allow", status: "ok" },
       { name: "Anonymization", detail: "4 transformations applied", status: "ok" },
       { name: "Provider request", detail: "openai · gpt-4o · HTTP 200", status: "ok" },
       { name: "Response restore", detail: "2 placeholder(s) restored, 0 unknown", status: "ok" },
@@ -113,7 +113,7 @@ export const exampleTraces: Trace[] = [
   },
   {
     id: "req_41c07e9b11aa", created_at: base - 300, route: "/v1/chat/completions", outcome: "local_only", allowed: false,
-    risk: "critical", needs_review: false, policy: "legal-default@v1", policy_hash: "sha256:c9218375…",
+    risk: "critical", needs_review: false, policy: "banking-default@v1", policy_hash: "sha256:c9218375…",
     destination: "external", provider: "openai", model: "gpt-4o", language: "de", latency_ms: 64.1, status: 403,
     error: null, entity_counts: { person: 1, health_data: 1 }, risk_counts: { critical: 2 },
     actions: { "person:pseudonymize": 1, "health_data:local_only": 1 }, transformations: 0, signals: [], warnings: [],
@@ -121,12 +121,12 @@ export const exampleTraces: Trace[] = [
       { name: "Request received", detail: "POST /v1/chat/completions · 1 text part(s)", status: "ok" },
       { name: "Privacy detection", detail: "2 entities detected", status: "ok" },
       { name: "Classification", detail: "risk critical", status: "ok" },
-      { name: "Policy evaluation", detail: "legal-default@v1 → local_only", status: "blocked" },
+      { name: "Policy evaluation", detail: "banking-default@v1 → local_only", status: "blocked" },
     ],
   },
   {
     id: "req_b92d10f7a6c3", created_at: base - 900, route: "/v1/documents/protect", outcome: "review", allowed: false,
-    risk: "sensitive", needs_review: true, policy: "legal-default@v1", policy_hash: "sha256:c9218375…",
+    risk: "sensitive", needs_review: true, policy: "banking-default@v1", policy_hash: "sha256:c9218375…",
     destination: "external", provider: null, model: null, language: "de", latency_ms: 95.0, status: 200, error: null,
     entity_counts: { person: 4, address: 1 }, risk_counts: { sensitive: 5 }, actions: { "person:pseudonymize": 4, "address:pseudonymize": 1 },
     transformations: 0, signals: ["litigation"], warnings: ["document contains comments (not anonymized)"],
@@ -135,24 +135,27 @@ export const exampleTraces: Trace[] = [
       { name: "Document parsed", detail: "docx · 1 warning(s)", status: "warning" },
       { name: "Privacy detection", detail: "5 entities detected", status: "warning" },
       { name: "Classification", detail: "0 critical · 5 sensitive · risk sensitive", status: "warning" },
-      { name: "Policy evaluation", detail: "legal-default@v1 → review", status: "blocked" },
+      { name: "Policy evaluation", detail: "banking-default@v1 → review", status: "blocked" },
     ],
   },
 ];
 
 export const examplePolicies: PolicySummary[] = [
-  { name: "legal-default", version: 1, hash: "sha256:c9218375cb8d…", scope: { tenant: null, team: null } },
+  { name: "banking-default", version: 1, hash: "sha256:c9218375cb8d…", scope: { tenant: null, team: null } },
   { name: "firm-a", version: 3, hash: "sha256:7a0e51f2c4b9…", scope: { tenant: "firm-a", team: null } },
 ];
 
-export const examplePolicyYaml = `name: legal-default
+export const examplePolicyYaml = `name: banking-default
 version: 1
 rules:
-  - id: parties
+  - id: customers
     entity: [person, organization, location]
     action: pseudonymize
+  - id: accounts
+    entity: [iban, customer_number, account_number]
+    action: pseudonymize
   - id: identifiers
-    entity: [iban, credit_card, tax_id, social_security_number]
+    entity: [credit_card, tax_id, social_security_number]
     action: redact
   - id: special_categories_external
     category: special_category
@@ -160,9 +163,9 @@ rules:
     action: local_only
     priority: 10
 document_rules:
-  - id: criminal_privileged_review
+  - id: financial_distress_review
     min_risk: critical
-    signals: [criminal_proceeding]
+    signals: [financial_distress]
     destinations: [external]
     action: review
 default_action: redact`;
@@ -195,7 +198,7 @@ export const exampleGateway: GatewayStatus = {
   external: { host: "https://api.openai.com", provider: "openai", model: null, authenticated: true },
   local: { host: "http://ollama:11434", provider: "local", model: "llama3.1", authenticated: false },
   restore_responses: true, timeout_s: 120, streaming: false, endpoint: "/v1/chat/completions",
-  default_policy: "legal-default",
+  default_policy: "banking-default",
 };
 
 const admin = { actor_type: "user" as const, actor_id: "usr_3f1a9c0b7d2e", actor_label: "admin@kanzlei.example" };

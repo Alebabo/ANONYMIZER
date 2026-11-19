@@ -2,7 +2,7 @@
 
 Example::
 
-    name: legal-default
+    name: banking-default
     version: 1
     rules:
       - entity: person

@@ -13,7 +13,7 @@ from anonymizer.policy import (
 )
 
 SPEC_POLICY = """
-name: legal-default
+name: banking-default
 version: 1
 rules:
   - entity: person
@@ -128,9 +128,9 @@ def test_critical_floor_explicit_opt_out_and_local_destination():
 
 # --- document rules ----------------------------------------------------------------
 
-def test_document_rule_review_for_critical_criminal_matter():
-    d, _ = evaluate(builtin_policy(), "Herr Max Mustermann ist unser Mandant im Strafverfahren 123 Js 4567/24.")
-    assert d.outcome == Outcome.REVIEW and "criminal_privileged_review" in d.document_rules
+def test_document_rule_review_for_customer_in_financial_distress():
+    d, _ = evaluate(builtin_policy(), "Herr Max Mustermann hat Privatinsolvenz beantragt, Pfändung über 4.300 EUR.")
+    assert d.outcome == Outcome.REVIEW and "financial_distress_review" in d.document_rules
 
 
 def test_document_rule_block_on_critical():
@@ -168,7 +168,7 @@ def test_decision_is_deterministic_and_references_version():
     a, _ = evaluate(builtin_policy(), text)
     b, _ = evaluate(builtin_policy(), text)
     assert a.model_dump() == b.model_dump()
-    assert a.policy == "legal-default@v1" and a.policy_hash.startswith("sha256:")
+    assert a.policy == "banking-default@v1" and a.policy_hash.startswith("sha256:")
 
 
 def test_decision_contains_no_raw_values():
@@ -207,10 +207,10 @@ def test_versions_are_immutable(tmp_path):
         store.save(p1.model_copy(update={"version": 3}))  # gap
     p2 = store.save(p1.model_copy(update={"version": 2, "default_action": Action.REDACT}))
     reloaded = FilePolicyStore(tmp_path)
-    assert reloaded.get("legal-default").version == 2
-    assert reloaded.get("legal-default", 1).default_action == Action.ALLOW
-    assert [h.version for h in reloaded.history("legal-default")] == [1, 2]
-    assert reloaded.history("legal-default")[1].hash == p2.content_hash
+    assert reloaded.get("banking-default").version == 2
+    assert reloaded.get("banking-default", 1).default_action == Action.ALLOW
+    assert [h.version for h in reloaded.history("banking-default")] == [1, 2]
+    assert reloaded.history("banking-default")[1].hash == p2.content_hash
 
 
 def test_extends_and_scope_resolution():
@@ -219,7 +219,7 @@ def test_extends_and_scope_resolution():
     store.save(Policy.from_yaml("""
 name: firm-a
 scope: {tenant: firm-a}
-extends: legal-default
+extends: banking-default
 rules:
   - {id: firm_a_emails, entity: email, action: redact, priority: 5}
 default_action: redact
@@ -232,10 +232,10 @@ document_rules:
   - {id: all_critical_block, min_risk: critical, action: block}
 default_action: redact
 """))
-    assert store.resolve_for().name == "legal-default"
-    assert store.resolve_for(tenant="other").name == "legal-default"
+    assert store.resolve_for().name == "banking-default"
+    assert store.resolve_for(tenant="other").name == "banking-default"
     firm = store.resolve_for(tenant="firm-a")
-    assert firm.name == "firm-a" and {"parties", "firm_a_emails"} <= {r.id for r in firm.rules}
+    assert firm.name == "firm-a" and {"customers", "firm_a_emails"} <= {r.id for r in firm.rules}
     team = store.resolve_for(tenant="firm-a", team="criminal")
     assert team.name == "firm-a-criminal" and "firm_a_emails" in {r.id for r in team.rules}
     assert store.resolve_for(tenant="firm-a", team="corporate").name == "firm-a"
@@ -248,8 +248,8 @@ def test_extends_rejects_unknown_parent_and_id_clash():
     store.save(builtin_policy())
     # Rejected at save time: a stored version is immutable and would stay unusable.
     with pytest.raises(PolicyError):
-        store.save(Policy.from_yaml("name: child\nextends: legal-default\nrules:\n  - {id: parties, entity: x, action: allow}\n"))
-    assert store.names() == ["legal-default"]
+        store.save(Policy.from_yaml("name: child\nextends: banking-default\nrules:\n  - {id: customers, entity: x, action: allow}\n"))
+    assert store.names() == ["banking-default"]
 
 
 def test_circular_extends_is_rejected_on_save():

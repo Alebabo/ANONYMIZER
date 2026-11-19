@@ -64,7 +64,7 @@ class Settings:
     vault_key: str | None = None
     vault_path: Path = Path("data/vault.json")
     policy_dir: Path = Path("data/policies")
-    default_policy: str = "legal-default"
+    default_policy: str = "banking-default"
     max_chars: int = 200_000
     max_upload_bytes: int = 25 * 1024 * 1024
     enable_ner: bool = True
@@ -97,7 +97,7 @@ class Settings:
             vault_key=env.get("ANONYMIZER_VAULT_KEY") or None,
             vault_path=Path(env.get("ANONYMIZER_VAULT_PATH", "data/vault.json")),
             policy_dir=Path(env.get("ANONYMIZER_POLICY_DIR", "data/policies")),
-            default_policy=env.get("ANONYMIZER_DEFAULT_POLICY", "legal-default"),
+            default_policy=env.get("ANONYMIZER_DEFAULT_POLICY", "banking-default"),
             max_chars=int(env.get("ANONYMIZER_MAX_CHARS", "200000")),
             max_upload_bytes=int(env.get("ANONYMIZER_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024))),
             enable_ner=env.get("ANONYMIZER_ENABLE_NER", "1") != "0",

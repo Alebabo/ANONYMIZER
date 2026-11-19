@@ -20,7 +20,7 @@ Threat model: an MCP client is usually driven by a cloud LLM, so every tool
 Configuration (environment, set by the operator in the MCP client config):
 
     ANONYMIZER_MCP_DESTINATION  external | local     (default external)
-    ANONYMIZER_MCP_POLICY       path to a policy YAML (default: built-in legal-default)
+    ANONYMIZER_MCP_POLICY       path to a policy YAML (default: built-in banking-default)
     ANONYMIZER_MCP_ROOT         directory readable by read_document_protected (unset = tool disabled)
     ANONYMIZER_MCP_MAX_CHARS    max characters per text/file (default 200000)
     ANONYMIZER_VAULT_KEY, ANONYMIZER_VAULT_PATH, ANONYMIZER_MCP_NAMESPACE

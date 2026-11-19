@@ -81,7 +81,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $KEY" -H 'Content-Ty
   "allowed": true,
   "text": "Unser Mandant Herr PERSON_001 bittet um Rückruf.",
   "risk": "critical",
-  "decision": { "policy": "legal-default@v1", "policy_hash": "sha256:…", "entities": [ … ] },
+  "decision": { "policy": "banking-default@v1", "policy_hash": "sha256:…", "entities": [ … ] },
   "classification": { … }
 }
 ```
