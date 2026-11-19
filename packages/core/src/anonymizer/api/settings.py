@@ -53,6 +53,8 @@ class Settings:
     ANONYMIZER_LOCAL_UPSTREAM_URL / _KEY / ANONYMIZER_LOCAL_MODEL  optional local model for local_only content
     ANONYMIZER_GATEWAY_RESTORE "0" to return placeholders instead of restored values
     ANONYMIZER_KEEP_TERMS      comma-separated own brands/products kept unchanged by NER (e.g. "ACME")
+    ANONYMIZER_NER_MODEL_DE    German spaCy model; "de_core_news_lg+models/de_custom_ner/ner" uses the fine-tuned
+                               support NER (base model plus NER weights)
     ANONYMIZER_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
     ANONYMIZER_SOURCE / ANONYMIZER_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
     ANONYMIZER_CONVERSATIONS_*                policy, quota, k, database, label allow-list for conversation access

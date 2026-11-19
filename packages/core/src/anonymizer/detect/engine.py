@@ -38,6 +38,10 @@ NER_STOPWORDS = {
     "Thank", "Hello", "Cheers",
     # Short answers from chat buttons ("Ja", "Nein") that NER labels as places or organisations.
     "Ja", "Nein", "Yes", "No", "Ok", "Okay", "Jein",
+    # Mail headers ("Subject: ...", "Body: ...") and sign-off words before a name ("Freundliche Grüße Anna X").
+    "Subject", "Body", "Betreff", "Freundliche", "Freundlichen", "Beste", "Liebe", "Herzliche", "Viele",
+    # Names of the bank's own chatbots.
+    "Babo", "Mabo",
 }
 
 # Entity types whose text is a value (name, address, ...). Context words
