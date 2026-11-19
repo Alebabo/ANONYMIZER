@@ -1,0 +1,56 @@
+# Synthetic. All names, numbers and parties are fictitious.
+id: de_strafverfahren
+language: de
+text: |
+  Streng vertraulich – Mandatsgeheimnis
+
+  Sehr geehrte Damen und Herren,
+
+  in dem Ermittlungsverfahren gegen unseren Mandanten, Herrn Max Mustermann, geb. 15.03.1985,
+  wohnhaft Lindenstraße 12, 10115 Berlin, Az. 123 Js 4567/24, zeigen wir die Verteidigung an.
+
+  Herr Mustermann ist nicht vorbestraft. Er befindet sich seit Januar wegen einer Depression in
+  psychotherapeutischer Behandlung. Mustermann war am 02.02.2024 arbeitsunfähig.
+
+  Die Zeugin Erika Musterfrau (Tel. 030 12345678, erika.musterfrau@example.org) hat bei der
+  Polizei ausgesagt. Die Nordlicht Logistik GmbH hat Herrn Mustermann ein Bruttogehalt von 4.850,00 EUR
+  gezahlt. Bankverbindung: IBAN DE89 3704 0044 0532 0130 00, BIC COBADEFFXXX.
+  Steuer-ID: 86095742719.
+
+  Wir verweisen auf § 136 Abs. 1 StPO und Art. 6 EMRK sowie das Verfahren beim Landgericht Berlin, 2 O 123/24.
+
+  Mit freundlichen Grüßen
+  Rechtsanwältin Dr. Anna Schmidt
+expected_risk: critical
+expected_signals: [client_relationship, criminal_proceeding, confidential]
+absent_signals: [example_context]
+expected:
+  - {type: privilege_marker, text: Streng vertraulich}
+  - {type: privilege_marker, text: Mandatsgeheimnis}
+  - {type: person, text: Max Mustermann, role: client, risk: critical}
+  - {type: person, text: Mustermann, role: client}
+  - {type: date_of_birth, text: 15.03.1985}
+  - {type: address, text: "Lindenstraße 12, 10115 Berlin", risk: critical}
+  - {type: case_number, text: 123 Js 4567/24}
+  - {type: criminal_record, text: vorbestraft}
+  - {type: health_data, text: Depression}
+  - {type: health_data, text: psychotherapeutischer}
+  - {type: health_data, text: arbeitsunfähig}
+  - {type: date, text: 02.02.2024}
+  - {type: person, text: Erika Musterfrau, role: witness, risk: sensitive}
+  - {type: phone, text: 030 12345678}
+  - {type: email, text: erika.musterfrau@example.org}
+  - {type: organization, text: Nordlicht Logistik GmbH}
+  - {type: money, text: "4.850,00 EUR"}
+  - {type: iban, text: DE89 3704 0044 0532 0130 00}
+  - {type: bic, text: COBADEFFXXX}
+  - {type: tax_id, text: "86095742719"}
+  - {type: legal_citation, text: § 136 Abs. 1 StPO}
+  - {type: legal_citation, text: Art. 6 EMRK}
+  - {type: court, text: Landgericht Berlin, risk: low}
+  - {type: case_number, text: 2 O 123/24}
+  - {type: person, text: Anna Schmidt, role: counsel}
+must_not_detect:
+  - {text: Polizei}
+  - {text: Damen und Herren}
+  - {type: phone, text: 0044 0532 0130 00}

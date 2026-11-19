@@ -1,0 +1,52 @@
+# OpenAnonymizer default policy for customer support chats read by an external model.
+# Strict starting point: copy, adapt and version it with your data-protection contact.
+name: support-default
+version: 1
+description: Pseudonymize customers and their contact data, redact payment and government identifiers, coarsen dates, keep special categories away from external models.
+
+rules:
+  # Customers, places and contact data: pseudonymize so the model can still follow who said what.
+  - id: people_and_places
+    entity: [person, organization, location]
+    action: pseudonymize
+  - id: contact
+    entity: [email, phone, address]
+    action: pseudonymize
+
+  # Business references from custom patterns (ANONYMIZER_CUSTOM_PATTERNS). Pseudonymized, not redacted,
+  # so "the same order" stays recognisable across messages.
+  - id: business_references
+    entity: [customer_number, order_number, ticket_number, contract_number, invoice_number, tracking_number]
+    action: pseudonymize
+
+  # Payment and government identifiers carry no analytical value.
+  - id: identifiers
+    entity: [iban, credit_card, bic, tax_id, tax_number, social_security_number, vat_id]
+    action: redact
+  - id: date_of_birth
+    entity: date_of_birth
+    action: generalize
+  - id: dates
+    entity: date
+    action: generalize
+
+  # Special categories (Art. 9/10 GDPR): the whole message is withheld from external models.
+  # Change to `redact` only after checking recall on real data; keyword detection misses synonyms.
+  - id: special_categories_external
+    category: special_category
+    destinations: [external]
+    action: local_only
+    priority: 10
+  - id: special_categories_local
+    category: special_category
+    destinations: [local]
+    action: allow
+
+  - id: amounts
+    entity: money
+    action: allow
+
+default_action: redact
+critical_floor: true
+critical_floor_action: pseudonymize
+review_uncertain: true

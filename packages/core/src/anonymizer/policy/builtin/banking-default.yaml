@@ -1,0 +1,62 @@
+# OpenAnonymizer default policy for banks and financial services using external LLM providers.
+# Conservative starting point; copy, adapt and version it with your data-protection and compliance contacts.
+name: banking-default
+version: 1
+description: Pseudonymize customers and account references, redact card and government identifiers, keep special categories and distressed-customer cases away from external models.
+
+rules:
+  # Customers, counterparties and contact data: pseudonymize so the model can follow who is who.
+  - id: customers
+    entity: [person, organization, location]
+    action: pseudonymize
+  - id: contact
+    entity: [email, phone, address]
+    action: pseudonymize
+
+  # Account references: pseudonymized, not redacted, so "the same account" stays recognisable
+  # across transactions. Custom numbers come from ANONYMIZER_CUSTOM_PATTERNS.
+  - id: accounts
+    entity: [iban, customer_number, account_number, contract_number, loan_number, invoice_number]
+    action: pseudonymize
+
+  # Card and government identifiers carry no analytical value.
+  - id: identifiers
+    entity: [credit_card, tax_id, tax_number, social_security_number]
+    action: redact
+  - id: date_of_birth
+    entity: date_of_birth
+    action: generalize
+
+  # Special categories (Art. 9/10 GDPR) must never go to an external model.
+  - id: special_categories_external
+    category: special_category
+    destinations: [external]
+    action: local_only
+    priority: 10
+  - id: special_categories_local
+    category: special_category
+    destinations: [local]
+    action: allow
+
+  # Bank identifiers, amounts, dates and public business identifiers stay readable.
+  - id: public_references
+    entity: [bic, money, date, vat_id]
+    action: allow
+  - id: confidentiality_markers
+    entity: [business_secret_marker]
+    action: allow
+
+document_rules:
+  # Critical documents about customers in financial distress need a human decision
+  # before anything is sent to an external provider.
+  - id: financial_distress_review
+    description: Critical document about a customer in financial distress
+    min_risk: critical
+    signals: [financial_distress]
+    destinations: [external]
+    action: review
+
+default_action: redact
+critical_floor: true
+critical_floor_action: pseudonymize
+review_uncertain: true

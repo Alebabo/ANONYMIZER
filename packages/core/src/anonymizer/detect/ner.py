@@ -1,0 +1,155 @@
+"""spaCy NER recognizer (enabled by default).
+
+Models are loaded lazily and must be installed separately
+(``python -m spacy download de_core_news_lg en_core_web_lg``; the Docker
+image ships them). If spaCy or a model is missing, the engine records a
+warning and continues with rule-based detection only.
+
+NER results never override rule-based detections (see ``engine._rank``).
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Iterable
+from typing import Any
+
+from anonymizer.models import Category, Detection, EntityType as E, make_detection
+
+DEFAULT_MODELS = {"de": "de_core_news_lg", "en": "en_core_web_lg"}
+
+_LABELS = {
+    "PER": (E.PERSON, Category.PERSONAL_DATA, 0.8),
+    "PERSON": (E.PERSON, Category.PERSONAL_DATA, 0.8),
+    "ORG": (E.ORGANIZATION, Category.PERSONAL_DATA, 0.6),
+    "LOC": (E.LOCATION, Category.PERSONAL_DATA, 0.45),
+    "GPE": (E.LOCATION, Category.PERSONAL_DATA, 0.45),
+}
+
+_LEADING_HONORIFIC = re.compile(r"^(?:(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+)+")
+_CODE_LIKE = re.compile(r"^[A-Z]{1,4}\d*$|\d")
+# Reference numbers such as "K-1001", "AB12345", "INC-42/7": letters, optional separator, digits.
+ID_LIKE = re.compile(r"[A-Za-z]{1,4}[-_./ ]?\d[\d\-_./]*")
+_HONORIFICS = {"Herr", "Herrn", "Frau", "Hr.", "Fr.", "Hr", "Fr", "Mr.", "Mrs.", "Ms.", "Mr", "Mrs", "Ms", "Dr.",
+               "Prof.", "Dr", "Prof"}
+# Statistical NER readily labels capitalised common nouns ("Dispolimit", "Karte") as names or organisations.
+# A person/organisation span from NER alone is kept only if the model's own tagger sees a proper noun in it
+# or a title stands right before it. Real names in hinted columns or with rule cues do not depend on this.
+_PROPER = {"PROPN", "X"}
+_NAME_PARTICLES = {"von", "van", "vom", "zu", "zum", "zur", "de", "da", "di", "du", "del", "della", "der", "den",
+                   "ten", "ter", "le", "la", "al", "el", "bin", "ibn", "y", "und", "and", "of", "&"}
+
+
+def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -> tuple[int, str] | None:
+    """Normalise or reject a raw NER span. Returns (start, text) or None.
+
+    Statistical NER is noisy on legal text: it marks role words
+    ("Beklagte"), headings spanning line breaks, abbreviations ("Az", "NDA")
+    and code fragments ("DE00") as entities.
+    """
+    if "\n" in text or "@" in text or "/" in text:
+        return None
+    m = _LEADING_HONORIFIC.match(text)
+    if m:
+        start += m.end()
+        text = text[m.end():]
+    stripped = text.lstrip(" ,.;:()")
+    start += len(text) - len(stripped)
+    text = stripped.rstrip(" ,.;:()")
+    tokens = text.split(" ")
+    while len(tokens) > 1 and tokens[0] in stopwords:  # "Akte Mustermann" -> "Mustermann"
+        start += len(tokens[0]) + 1
+        tokens = tokens[1:]
+    text = " ".join(tokens)
+    if len(text) < 3 or not tokens or all(t in stopwords for t in tokens):
+        return None
+    if entity_type == E.PERSON and any(ch.isdigit() for ch in text):
+        return None
+    # "sein Dispolimit", "nach Urlaub": a plain lower-case word is not part of a name (particles are).
+    lower = [t for t in tokens if t.isalpha() and t.islower() and t not in _NAME_PARTICLES]
+    if lower and (entity_type == E.PERSON or (entity_type == E.ORGANIZATION and tokens[0] in lower)):
+        return None
+    if entity_type != E.LOCATION and (_CODE_LIKE.fullmatch(text) or ID_LIKE.fullmatch(text)):
+        return None
+    if entity_type == E.LOCATION and re.fullmatch(r"[A-Z]{2}\d+|[A-Z][a-z]?", text):
+        return None
+    return start, text
+
+
+def _name_like(doc: Any, start: int, end: int) -> bool:
+    """A proper noun inside the span, or a title right before it. Without a tagger: keep the span."""
+    span = doc.char_span(start, end, alignment_mode="expand")
+    if span is None or not len(span):
+        return True
+    if not any(t.pos_ for t in span):
+        return True
+    if any(t.pos_ in _PROPER for t in span):
+        return True
+    return span.start > 0 and doc[span.start - 1].text in _HONORIFICS
+
+
+class NERUnavailable(RuntimeError):
+    pass
+
+
+# Process-wide model cache: loading a large model takes seconds.
+_MODEL_CACHE: dict[str, Any] = {}
+# Documents prepared by prefetch() and not yet analysed; bounded so a huge result cannot pile them up.
+_DOC_CACHE_MAX = 5000
+
+
+class SpacyRecognizer:
+    name = "spacy_ner"
+
+    def __init__(self, models: dict[str, str] | None = None, stopwords: set[str] | None = None) -> None:
+        self.models = models or DEFAULT_MODELS
+        self.stopwords = stopwords or set()
+        self.languages = frozenset(self.models)
+        self._docs: dict[tuple[str, str], Any] = {}
+
+    def _nlp(self, language: str) -> Any:
+        model = self.models[language]
+        if model not in _MODEL_CACHE:
+            try:
+                import spacy  # noqa: PLC0415
+            except ImportError as exc:  # pragma: no cover - depends on environment
+                raise NERUnavailable("spaCy is not installed") from exc
+            try:
+                _MODEL_CACHE[model] = spacy.load(model, disable=["parser", "lemmatizer"])
+            except OSError as exc:
+                raise NERUnavailable(f"spaCy model '{model}' is not installed") from exc
+        return _MODEL_CACHE[model]
+
+    def prefetch(self, texts: Iterable[str], language: str) -> None:
+        """Run the model over many texts in one batch (much faster than one call per text); analyze()
+        then takes the prepared document instead of running the model again. Results are identical."""
+        texts = list(dict.fromkeys(texts))
+        for lang in [language] if language in self.models else list(self.models):
+            model = self.models[lang]
+            todo = [t for t in texts if (model, t) not in self._docs]
+            if not todo:
+                continue
+            if len(self._docs) + len(todo) > _DOC_CACHE_MAX:
+                self._docs.clear()
+            for t, doc in zip(todo[:_DOC_CACHE_MAX], self._nlp(lang).pipe(todo[:_DOC_CACHE_MAX], batch_size=64)):
+                self._docs[(model, t)] = doc
+
+    def analyze(self, text: str, language: str) -> Iterable[Detection]:
+        languages = [language] if language in self.models else list(self.models)
+        for lang in languages:
+            doc = self._docs.pop((self.models[lang], text), None)
+            if doc is None:
+                doc = self._nlp(lang)(text)
+            for ent in doc.ents:
+                mapped = _LABELS.get(ent.label_)
+                if mapped is None:
+                    continue
+                entity_type, category, confidence = mapped
+                cleaned = clean_entity(ent.text, ent.start_char, entity_type, self.stopwords)
+                if cleaned is None:
+                    continue
+                start, value = cleaned
+                if entity_type in (E.PERSON, E.ORGANIZATION) and not _name_like(doc, start, start + len(value)):
+                    continue
+                yield make_detection(entity_type, category, start, start + len(value), value,
+                                     confidence, self.name)

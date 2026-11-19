@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+.env*
+!.env.example
+.DS_Store
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
+packages/core/data/
+*.tsbuildinfo
+
+# Company-specific files (real samples, secrets lists, own patterns/policies): never commit
+local/
+*.secrets.txt
+/data/

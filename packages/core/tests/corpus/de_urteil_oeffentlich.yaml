@@ -1,0 +1,21 @@
+# Public case law: references must be found and categorised as public,
+# but no persons should be invented.
+id: de_urteil_oeffentlich
+language: de
+text: |
+  Der Bundesgerichtshof hat mit Urteil vom 12.05.2021 – VI ZR 12/20 – entschieden, dass ein Anspruch
+  aus § 823 Abs. 1 BGB i. V. m. Art. 2 Abs. 1 GG bestehen kann. Das OLG Hamm hatte die Berufung
+  zuvor zurückgewiesen. Die Entscheidung ist in der Fachliteratur auf Zustimmung gestoßen.
+# Conservative: case numbers are sensitive by default, even when public.
+expected_risk: sensitive
+expected_signals: [litigation]
+expected:
+  - {type: court, text: Bundesgerichtshof}
+  - {type: date, text: 12.05.2021}
+  - {type: case_number, text: VI ZR 12/20}
+  - {type: legal_citation, text: § 823 Abs. 1 BGB, risk: low}
+  - {type: legal_citation, text: Art. 2 Abs. 1 GG}
+  - {type: court, text: OLG Hamm}
+must_not_detect:
+  - {type: person}
+  - {type: organization}
