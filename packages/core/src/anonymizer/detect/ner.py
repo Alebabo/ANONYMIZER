@@ -10,13 +10,16 @@ NER results never override rule-based detections (see ``engine._rank``).
 
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable
 from typing import Any
 
 from anonymizer.models import Category, Detection, EntityType as E, make_detection
 
-DEFAULT_MODELS = {"de": "de_core_news_lg", "en": "en_core_web_lg"}
+# ANONYMIZER_NER_MODEL_DE selects another German model, e.g. the fine-tuned support NER:
+# "de_core_news_lg+models/de_c24_ner/ner" (base model plus NER weights, see models/de_c24_ner/README.md).
+DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or "de_core_news_lg", "en": "en_core_web_lg"}
 
 _LABELS = {
     "PER": (E.PERSON, Category.PERSONAL_DATA, 0.8),
@@ -44,6 +47,20 @@ _PROPER = {"PROPN", "X"}
 _TAGGED = (E.PERSON, E.ORGANIZATION, E.LOCATION)
 _NAME_PARTICLES = {"von", "van", "vom", "zu", "zum", "zur", "de", "da", "di", "du", "del", "della", "der", "den",
                    "ten", "ter", "le", "la", "al", "el", "bin", "ibn", "y", "und", "and", "of", "&"}
+
+
+# Courts and authorities are organisations even when NER calls "Amtsgericht Frankfurt" a place. A register
+# abbreviation glued to the end ("Amtsgericht Frankfurt HRB: 114 517") is not part of the name.
+_AUTHORITY = re.compile(r"^(?:Amts|Land|Oberlandes|Arbeits|Sozial|Finanz|Verwaltungs)gerichts?\b|^Staatsanwaltschaft\b"
+                        r"|^Finanzamt(?:es|s)?\b|^Jobcenter\b|^Polizeipräsidium\b|^Bundesanstalt\b|^Bundesamt\b")
+_REGISTER_TAIL = re.compile(r"(?:\s+(?:HRB|HRA|GnR|PR|VR|UST))+$")
+
+
+def authority_type(text: str, entity_type: str) -> tuple[str, str]:
+    """(entity_type, text) with courts and authorities typed as organisations, register suffix removed."""
+    if entity_type in (E.LOCATION, E.ORGANIZATION, E.PERSON) and _AUTHORITY.match(text):
+        return E.ORGANIZATION, _REGISTER_TAIL.sub("", text)
+    return entity_type, text
 
 
 def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -> tuple[int, str] | None:
@@ -173,10 +190,19 @@ class SpacyRecognizer:
                 import spacy  # noqa: PLC0415
             except ImportError as exc:  # pragma: no cover - depends on environment
                 raise NERUnavailable("spaCy is not installed") from exc
+            # "de_core_news_lg+models/de_c24_ner/ner": base model with fine-tuned NER weights. Only the NER
+            # component is shipped; vectors, tagger etc. come from the base model.
+            base, _, ner_dir = model.partition("+")
             try:
-                _MODEL_CACHE[model] = spacy.load(model, disable=["parser", "lemmatizer"])
+                nlp = spacy.load(base, disable=["parser", "lemmatizer"])
             except OSError as exc:
-                raise NERUnavailable(f"spaCy model '{model}' is not installed") from exc
+                raise NERUnavailable(f"spaCy model '{base}' is not installed") from exc
+            if ner_dir:
+                try:
+                    nlp.get_pipe("ner").from_disk(ner_dir, exclude=["vocab"])
+                except (OSError, ValueError) as exc:
+                    raise NERUnavailable(f"NER weights '{ner_dir}' could not be loaded: {exc}") from exc
+            _MODEL_CACHE[model] = nlp
         return _MODEL_CACHE[model]
 
     def prefetch(self, texts: Iterable[str], language: str) -> None:
@@ -209,7 +235,10 @@ class SpacyRecognizer:
                 if mapped is None:
                     continue
                 entity_type, category, confidence = mapped
-                cleaned = clean_entity(ent.text, ent.start_char, entity_type, self.stopwords)
+                entity_type, ent_text = authority_type(ent.text, entity_type)
+                if entity_type == E.ORGANIZATION and mapped[0] != E.ORGANIZATION:
+                    category, confidence = _LABELS["ORG"][1], _LABELS["ORG"][2]
+                cleaned = clean_entity(ent_text, ent.start_char, entity_type, self.stopwords)
                 if cleaned is not None and not (self._keep and self._keep.match(cleaned[1])):
                     found.append((entity_type, category, confidence, *cleaned))
             pos = None
