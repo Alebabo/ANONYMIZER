@@ -72,6 +72,10 @@ class InMemoryPolicyStore:
         """Policy with ``extends`` resolved."""
         return self._resolve(self.get(name, version), seen=set())
 
+    def resolve(self, policy: Policy) -> Policy:
+        """``extends`` resolved for a policy that is not (necessarily) stored, e.g. an unsaved candidate."""
+        return self._resolve(policy, seen=set())
+
     def _resolve(self, policy: Policy, seen: set[str], pending: Policy | None = None) -> Policy:
         """``pending`` is a version about to be saved; it counts as the latest of its name."""
         if not policy.extends:

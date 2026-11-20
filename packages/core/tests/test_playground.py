@@ -106,3 +106,33 @@ def test_store_search_counts_and_pages_in_sqlite(tmp_path):
     total, page = store.search(ds["id"], "s1", ["Session ID"], 0, 100)  # s1, s10..s19 minus missing
     assert total == sum(1 for r in rows if "s1" in r["Session ID"]) and all("s1" in r["Session ID"] for r in page)
     assert store.search(ds["id"], "hallo", ["Session ID"], 0, 10) == (0, [])
+
+
+def test_hidden_columns_are_never_searched_shown_or_sent(tmp_path):
+    _, c, s = _app(tmp_path)
+    key = {"Authorization": f"Bearer {KEY}"}
+    ds = c.post("/v1/playground/datasets", headers=s, json={"name": "kunden.csv", "csv": CSV}).json()
+    url = f"/v1/playground/datasets/{ds['id']}"
+    r = c.put(f"{url}/columns", headers=s, json={"hidden": ["notiz", "email"]})
+    assert r.status_code == 200 and r.json()["hidden"] == ["email", "notiz"]  # upload order
+
+    dash = c.post(f"{url}/query", headers=s, json={}).json()
+    assert dash["columns"] == ["vorname", "nachname"]
+    assert "notiz" not in dash["original"][0] and "max@example.org" not in str(dash)
+    # Search does not look into hidden columns either (would reveal what they contain).
+    assert c.post(f"{url}/query", headers=s, json={"query": "rückruf"}).json()["matched"] == 0
+    # Asking for a hidden column explicitly does not bring it back.
+    assert c.post(f"{url}/query", headers=key, json={"columns": ["email"]}).json()["columns"] == ["vorname", "nachname"]
+
+    listed = c.get("/v1/playground/datasets", headers=key).json()[0]
+    assert listed["columns"] == ["vorname", "nachname"] and "hidden" not in listed and "all_columns" not in listed
+    mine = c.get("/v1/playground/datasets", headers=s).json()[0]
+    assert mine["hidden"] == ["email", "notiz"] and mine["all_columns"] == ds["columns"]
+
+    # Show again, and the guard rails
+    assert c.put(f"{url}/columns", headers=s, json={"hidden": []}).json()["columns"] == ds["columns"]
+    assert c.put(f"{url}/columns", headers=s, json={"hidden": ds["columns"]}).status_code == 400
+    assert c.put(f"{url}/columns", headers=s, json={"hidden": ["nope"]}).status_code == 400
+    assert c.put(f"{url}/columns", headers=key, json={"hidden": ["email"]}).status_code in (401, 403)
+    entries = c.get("/v1/audit-logs?resource_type=playground_dataset&action=update", headers=s).json()["data"]
+    assert len(entries) == 2  # hide and show again; refused calls write nothing

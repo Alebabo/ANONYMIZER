@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Collapsible } from "@/components/widgets";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Notice, SourceBanner, Stat, fmt } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -78,10 +79,12 @@ export default async function Conversations({ searchParams }: { searchParams: Pr
               </div>
             )}
           </CardContent></Card>
+        <Collapsible title="Privacy details">
         <p className="text-muted-foreground text-xs">
           Source ids never leave OpenAnonymizer; the ids shown here are opaque. Tags or prompt names that contain detectable data are dropped.
           {sources.mcp_http ? " Agents use the same data through the MCP endpoint /mcp with their own API key and quota." : ""}
         </p>
+        </Collapsible>
       </div>
     </>
   );

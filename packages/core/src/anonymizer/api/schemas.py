@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from anonymizer.anonymize import Method
 from anonymizer.classify import DocumentClassification, RiskLevel
 from anonymizer.models import Signal
-from anonymizer.policy import DecisionDiff, Outcome, PolicyDecision
+from anonymizer.policy import Action, DecisionDiff, Outcome, PolicyDecision
 
 Language = Literal["de", "en"]
 Destination = Literal["external", "local"]
@@ -105,6 +105,20 @@ class DryRunResult(DecisionDiff):
     reasons_after: list[str] = []
 
 
+class PolicyTestRequest(TextRequest):
+    changes: dict[str, Action | None] = Field(
+        default_factory=dict, max_length=200,
+        description="unsaved change per entity type, e.g. {\"email\": \"allow\"}; null = follow default_action")
+    default_action: Action | None = Field(None, description="unsaved default for types without their own action")
+    destination: Destination = "external"
+
+
+class PolicyTestResult(DryRunResult):
+    """Test of a stored policy on a sample text. Without changes, before and after are the same."""
+    policy: str
+    entities: dict[str, int] = {}
+
+
 # -- accounts ----------------------------------------------------------------------
 
 class LoginRequest(_Strict):
@@ -164,6 +178,10 @@ class PromptLabelSet(_Strict):
 class PlaygroundUpload(_Strict):
     name: str = Field(min_length=1, max_length=120)
     csv: str = Field(min_length=1, max_length=100 * 1024 * 1024)  # playground.MAX_BYTES
+
+
+class PlaygroundColumns(_Strict):
+    hidden: list[str] = Field(default_factory=list, max_length=200)
 
 
 class PlaygroundQuery(_Strict):

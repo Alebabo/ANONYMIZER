@@ -48,9 +48,9 @@ import anonymizer
 from anonymizer.anonymize import OpenAnonymizer, AnonymizerConfig, LeakError, restore
 from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from anonymizer.api.schemas import (
-    AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, DryRunResult, LoginRequest, MemberCreate,
+    AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, DryRunResult, LoginRequest, PolicyTestRequest, PolicyTestResult, MemberCreate,
     MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
-    PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, ProxyUpstreamToggle, RestoreRequest, ScanResponse, TextRequest,
+    PlaygroundColumns, PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, ProxyUpstreamToggle, RestoreRequest, ScanResponse, TextRequest,
 )
 from anonymizer.audit import AuditLog
 from anonymizer.api.settings import Settings
@@ -59,6 +59,7 @@ from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
 from anonymizer.pipeline import Pipeline, ProtectResult
+from anonymizer.policy.edit import apply_changes
 from anonymizer.playground import MAX_BYTES as PLAYGROUND_MAX_BYTES
 from anonymizer.playground import PlaygroundError, PlaygroundService, PlaygroundStore
 from anonymizer.policy import (
@@ -567,19 +568,37 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             raise HTTPException(status_code=422, detail=[
                 {"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()])
         active = state.policies.effective(req.against or settings.default_policy)
-        r = state.detector.scan(req.text, req.language)
-        c = state.classifier.classify_text(req.text, r)
-        live = PolicyEngine(active).evaluate(r.detections, c, req.destination)
-        cand = PolicyEngine(candidate).evaluate(r.detections, c, req.destination, dry_run=True)
+        return DryRunResult(**compare(active, candidate, req.text, req.language, req.destination)[0])
+
+    def compare(active: Policy, candidate: Policy, text: str, language, destination: str) -> tuple[dict, dict[str, int]]:
+        """Decision diff and protected preview of ``text`` under both policies, plus entity counts."""
+        r = state.detector.scan(text, language)
+        c = state.classifier.classify_text(text, r)
+        live = PolicyEngine(active).evaluate(r.detections, c, destination)
+        cand = PolicyEngine(candidate).evaluate(r.detections, c, destination, dry_run=True)
 
         def preview(policy: Policy) -> ProtectResult:
             # Throwaway vault: the sample shows real placeholders, the persistent vault stays untouched.
             return Pipeline(policy, detector=state.detector, classifier=state.classifier,
-                            vault=InMemoryVault(VaultKey.generate())).protect_scan(req.text, r, req.destination, "dry-run")
+                            vault=InMemoryVault(VaultKey.generate())).protect_scan(text, r, destination, "dry-run")
 
         before, after = preview(active), preview(candidate)
-        return DryRunResult(**diff_decisions(live, cand).model_dump(), text_before=before.text, text_after=after.text,
-                            reasons_before=before.decision.reasons, reasons_after=after.decision.reasons)
+        counts: dict[str, int] = defaultdict(int)
+        for d in r.detections:
+            counts[d.entity_type] += 1
+        return {**diff_decisions(live, cand).model_dump(), "text_before": before.text, "text_after": after.text,
+                "reasons_before": before.decision.reasons, "reasons_after": after.decision.reasons}, dict(counts)
+
+    @app.post("/v1/policies/{name}/test", response_model=PolicyTestResult, tags=["policies"])
+    def test_policy(name: str, req: PolicyTestRequest, _: User) -> PolicyTestResult:
+        """Run a stored policy on a sample text, optionally with unsaved changes per entity type.
+        Nothing is saved, traced or written to the vault; any API key may call it."""
+        check_size(req.text)
+        stored = state.policies.get(name)
+        candidate = apply_changes(stored, req.changes, req.default_action) if req.changes or req.default_action else stored
+        diff, counts = compare(state.policies.resolve(stored), state.policies.resolve(candidate),
+                               req.text, req.language, req.destination)
+        return PolicyTestResult(**diff, policy=stored.ref, entities=counts)
 
     # -- auth & accounts -----------------------------------------------------------
     def me_body(p: Principal) -> dict:
@@ -781,6 +800,12 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     @app.delete("/v1/playground/datasets/{dataset_id}", status_code=204, tags=["playground"])
     def delete_dataset(dataset_id: str, p: SessionUser) -> None:
         state.playground.delete(p, dataset_id)
+
+    @app.put("/v1/playground/datasets/{dataset_id}/columns", tags=["playground"])
+    def set_dataset_columns(dataset_id: str, req: PlaygroundColumns, p: SessionUser) -> dict:
+        """Hide columns of an upload. Hidden columns stay stored but are never searched, shown or sent,
+        neither in the dashboard nor over MCP. Dashboard sessions only."""
+        return state.playground.set_hidden(p, dataset_id, req.hidden)
 
     @app.post("/v1/playground/datasets/{dataset_id}/query", tags=["playground"])
     def query_dataset(dataset_id: str, req: PlaygroundQuery, p: User) -> dict:

@@ -105,6 +105,24 @@ anonymizer protect brief.txt --policy firm.yaml --dry-run
 - **Audit:** each decision carries `policy` (`name@vN`) and `policy_hash` (SHA-256 of the canonical content). This lets you prove later which rules applied.
 - **Dry run:** evaluate a candidate policy with `dry_run=True`. `diff_decisions(live, candidate)` shows which entities and which outcome would change.
 
+### Test a policy over the API
+
+`POST /v1/policies/{name}/test` runs a stored policy on a sample text, the same test as in the dashboard.
+Any API key may call it; nothing is saved and the persistent vault is not touched.
+
+```bash
+curl -X POST $ANONYMIZER_URL/v1/policies/support-default/test \
+  -H "Authorization: Bearer $ANONYMIZER_API_KEY" -H "Content-Type: application/json" \
+  -d '{"text": "Herr Max Mustermann, max@example.org", "changes": {"email": "allow"}}'
+```
+
+- `changes` (optional): action per entity type that is not saved yet; `null` = follow `default_action`.
+  Unknown actions are rejected with 422.
+- `default_action`, `destination` (`external` | `local`), `language`: optional.
+- Response: `policy` (`name@vN`), `text_before` / `text_after` (stored policy / with changes; `null` = not
+  sent), `outcome_before` / `outcome_after`, `reasons_*`, `changes` (entities whose action changes) and
+  `entities` (count per detected type). Without `changes`, before and after are the same.
+
 ## Clients and teams
 
 `scope` and `extends`:

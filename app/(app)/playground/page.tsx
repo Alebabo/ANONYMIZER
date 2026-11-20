@@ -3,14 +3,14 @@ import Link from "next/link";
 import { Play } from "lucide-react";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { SourceBanner, ago, fmt } from "@/components/dashboard";
-import { Chip, Widget, stamp } from "@/components/widgets";
+import { Chip, Collapsible, Widget, stamp } from "@/components/widgets";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getDatasets, queryDataset, type Dataset, type PlaygroundResult } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
 import { InlineDiff } from "@/components/inline-diff";
 import { Process } from "./process";
-import { DeleteDataset, UploadForm } from "./upload-form";
+import { ColumnPicker, DeleteDataset, UploadForm } from "./upload-form";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,6 @@ type Params = { ds?: string; q?: string; limit?: string; offset?: string; view?:
 const VIEWS = [
   { key: "compare", label: "Compare" },
   { key: "claude", label: "What Claude gets" },
-  { key: "json", label: "Raw JSON" },
 ] as const;
 
 const cell = (v: unknown) => (v == null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -62,12 +61,12 @@ export default async function Playground({ searchParams }: { searchParams: Promi
             <UploadForm />
           </Widget>
           {active && (
-            <Widget title="Ask Claude" description="Claude reads the same data through MCP">
-              <p className="text-muted-foreground mb-2 text-xs">In Claude Code (MCP server <code>anonymizer</code> connected), e.g.:</p>
+            <Collapsible title="Ask Claude" summary="via MCP">
+              <p className="text-muted-foreground text-xs">In Claude Code (MCP server <code>anonymizer</code> connected), e.g.:</p>
               <pre className="bg-surface-code rounded-md p-2 text-2xs whitespace-pre-wrap">
 {`Nutze anonymizer query_dataset mit dataset_id "${active.id}" und sag mir, welche Anliegen am häufigsten sind.`}</pre>
-              <p className="text-muted-foreground mt-2 text-2xs">Each call shows up under <Link className="text-link" href="/traces?route=%2Fv1%2Fplayground">Traces</Link> with input and output.</p>
-            </Widget>
+              <p className="text-muted-foreground text-2xs">Each call shows up under <Link className="text-link" href="/traces?route=%2Fv1%2Fplayground">Traces</Link> with input and output.</p>
+            </Collapsible>
           )}
         </div>
 
@@ -79,10 +78,11 @@ export default async function Playground({ searchParams }: { searchParams: Promi
           )}
           {active && (
             <>
-              <form method="get" action="/playground" className="bg-card flex flex-wrap items-center gap-2 rounded-lg border p-2">
+              <div className="bg-card flex flex-wrap items-center gap-2 rounded-lg border p-2">
+              <form method="get" action="/playground" className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                 <input type="hidden" name="ds" value={active.id} />
                 <input type="hidden" name="view" value={view} />
-                <Input name="q" defaultValue={p.q ?? ""} placeholder={`Search ${active.name} (all columns)`} className="h-8 min-w-48 flex-1" />
+                <Input name="q" defaultValue={p.q ?? ""} placeholder={`Search ${active.name} (visible columns)`} className="h-8 min-w-48 flex-1" />
                 <select name="limit" defaultValue={String(limit)} aria-label="Rows"
                         className="border-input bg-background h-8 rounded-md border px-2 text-sm">
                   {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} rows</option>)}
@@ -91,6 +91,8 @@ export default async function Playground({ searchParams }: { searchParams: Promi
                   <Play className="h-3.5 w-3.5" />Run
                 </button>
               </form>
+              <ColumnPicker id={active.id} columns={active.all_columns ?? active.columns} hidden={active.hidden ?? []} />
+              </div>
               <Suspense key={`${active.id}|${p.q ?? ""}|${limit}|${offset}`} fallback={<ResultSkeleton />}>
                 <ResultLoader ds={active} q={p.q} view={view} link={link} offset={offset} limit={limit} />
               </Suspense>
@@ -135,11 +137,9 @@ function Result({ ds, r, view, link, offset, limit }: {
         <Chip label="Shown">{r.matched ? `${offset + 1}–${Math.min(offset + limit, r.matched)}` : "0"}</Chip>
         {Object.entries(r.entities ?? {}).filter(([, n]) => n).sort((a, b) => b[1] - a[1]).map(([k, n]) => <Chip key={k}>{k} {n}</Chip>)}
         {!!r.withheld && <Chip className="bg-light-red text-dark-red">{r.withheld} withheld</Chip>}
-        <Link href={`/traces/${r.trace_id}`} className="text-link hover:text-link-hover ml-auto">Trace {r.trace_id} →</Link>
-        <DeleteDataset id={ds.id} />
+        <span className="ml-auto"><DeleteDataset id={ds.id} /></span>
       </div>
 
-      <Process ds={ds} r={r} />
 
       <div className="bg-muted inline-flex rounded-md p-0.5 text-xs" role="tablist">
         {VIEWS.map(v => (
@@ -150,7 +150,7 @@ function Result({ ds, r, view, link, offset, limit }: {
         ))}
       </div>
 
-      {view === "json" || !sent ? (
+      {!sent ? (
         <pre className="bg-surface-code max-h-[32rem] overflow-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">{r.sent ?? cell(r.rows)}</pre>
       ) : (
         <div className="rounded-lg border">
@@ -190,8 +190,12 @@ function Result({ ds, r, view, link, offset, limit }: {
         </div>
       )}
 
+      <Collapsible title="How it was anonymized" summary="steps and result per column">
+        <Process ds={ds} r={r} />
+      </Collapsible>
+
       {!!r.replacements?.length && (
-        <Widget title="Replacements" description="Original value and what Claude got instead (this page only, never sent to Claude)">
+        <Collapsible title="Replacements" summary={`${r.replacements.length} value(s) · originals stay here`}>
           <TableScroll minWidth={560}>
             <Table>
               <TableHeader><TableRow>
@@ -211,9 +215,19 @@ function Result({ ds, r, view, link, offset, limit }: {
               </TableBody>
             </Table>
           </TableScroll>
-        </Widget>
+        </Collapsible>
       )}
-      <p className="text-muted-foreground text-2xs">Queried {stamp(Date.now() / 1000)} · every query is traced and audited.</p>
+      <Collapsible title="Raw JSON" summary={`exactly what Claude receives · ${(r.sent ?? cell(r.rows)).length} chars`}>
+        <pre className="bg-surface-code max-h-[32rem] overflow-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">{r.sent ?? cell(r.rows)}</pre>
+      </Collapsible>
+
+      <Collapsible title="Trace and audit">
+        <p className="text-muted-foreground text-xs">
+          Queried {stamp(Date.now() / 1000)}. Every query is traced and audited:{" "}
+          <Link href={`/traces/${r.trace_id}`} className="text-link hover:text-link-hover">Trace {r.trace_id} →</Link>
+          {" · "}<Link href="/settings/audit-logs" className="text-link hover:text-link-hover">Audit log →</Link>
+        </p>
+      </Collapsible>
     </>
   );
 }

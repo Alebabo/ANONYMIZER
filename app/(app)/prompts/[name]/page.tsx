@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Collapsible } from "@/components/widgets";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Notice, Pill, SourceBanner, dateTime } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -45,14 +46,13 @@ export default async function PromptDetail({ params, searchParams }: {
                 <pre className="bg-surface-code overflow-auto rounded-md p-3 font-mono text-xs">{JSON.stringify(current.config, null, 2)}</pre>}
             </CardContent></Card>
           {diff && (
-            <Card><CardHeader><CardDescription>Changes from v{diff.from}{diff.config_changed ? " · config changed" : ""}</CardDescription></CardHeader>
-              <CardContent>
+            <Collapsible title={`Changes from v${diff.from}`} summary={diff.config_changed ? "config changed" : undefined}>
                 <pre className="bg-surface-code overflow-auto rounded-md p-4 font-mono text-xs">
                   {diff.diff.split("\n").map((line, i) => (
                     <div key={i} className={cn(line.startsWith("+") && !line.startsWith("+++") && "text-dark-green",
                       line.startsWith("-") && !line.startsWith("---") && "text-dark-red")}>{line || " "}</div>))}
                 </pre>
-              </CardContent></Card>
+            </Collapsible>
           )}
         </div>
         <div className="space-y-4">
@@ -60,11 +60,9 @@ export default async function PromptDetail({ params, searchParams }: {
             <CardContent className="space-y-3">
               {!admin && <Notice>{source.live ? "Only admins can move labels." : "Demo mode: changes are disabled."}</Notice>}
               <PromoteForm name={name} version={current.version} disabled={!admin} />
-              <p className="text-muted-foreground text-2xs">Moving a label is recorded in the audit log with the previous version.
-                Agents cannot do this over MCP.</p>
+              <p className="text-muted-foreground text-2xs">Agents cannot do this over MCP.</p>
             </CardContent></Card>
-          <Card><CardHeader><CardDescription>History</CardDescription></CardHeader>
-            <CardContent>
+          <Collapsible title="History and audit" summary={`${history.length} version(s)`}>
               <TableScroll minWidth={300}><Table><TableHeader><TableRow>
                 <TableHead>Version</TableHead><TableHead>Labels</TableHead><TableHead>By</TableHead>
               </TableRow></TableHeader>
@@ -76,7 +74,8 @@ export default async function PromptDetail({ params, searchParams }: {
                     <TableCell className="max-w-32 truncate text-xs" title={h.note ?? ""}>{h.created_by ?? "–"}</TableCell>
                   </TableRow>))}
                 </TableBody></Table></TableScroll>
-            </CardContent></Card>
+            <p className="text-muted-foreground text-2xs">Moving a label is recorded in the audit log with the previous version.</p>
+          </Collapsible>
         </div>
       </div>
     </>

@@ -1,4 +1,5 @@
 import { revokeApiKey } from "@/app/actions";
+import { Collapsible } from "@/components/widgets";
 import { CreateKeyForm } from "@/app/(app)/api-keys/create-form";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Notice, Pill, SourceBanner, ago, dateTime } from "@/components/dashboard";
@@ -47,10 +48,12 @@ export default async function ApiKeys() {
                 {!keys.length && <TableRow><TableCell colSpan={7} className="text-muted-foreground py-6 text-center">No keys yet</TableCell></TableRow>}
               </TableBody></Table></TableScroll>
           </CardContent></Card>
+        <Collapsible title="How keys are stored">
         <p className="text-muted-foreground text-xs">
           Keys are shown once and stored as SHA-256 hashes. Keys from <code>ANONYMIZER_API_KEYS</code> / <code>ANONYMIZER_ADMIN_KEYS</code> keep
           working and are not listed here. Creating and revoking keys is recorded in the audit log.
         </p>
+        </Collapsible>
       </div>
     </>
   );

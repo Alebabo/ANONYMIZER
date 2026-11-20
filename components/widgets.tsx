@@ -226,3 +226,22 @@ export function Chip({ label, children, className }: { label?: string; children:
     </span>
   );
 }
+
+/**
+ * Collapsed by default: details, audit and trace information that most people do not need every time.
+ * Native <details>, so it works without client JS and is keyboard accessible.
+ */
+export function Collapsible({ title, summary, defaultOpen, className, children }: {
+  title: string; summary?: React.ReactNode; defaultOpen?: boolean; className?: string; children: React.ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className={cn("group bg-card min-w-0 rounded-lg border", className)}>
+      <summary className="hover:bg-muted/50 flex cursor-pointer list-none items-center gap-2 rounded-lg px-4 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="text-muted-foreground inline-block w-3 transition-transform group-open:rotate-90">›</span>
+        <span className="font-medium">{title}</span>
+        {summary && <span className="text-muted-foreground ml-auto truncate text-xs">{summary}</span>}
+      </summary>
+      <div className="min-w-0 space-y-3 px-4 pb-4">{children}</div>
+    </details>
+  );
+}

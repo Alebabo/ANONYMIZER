@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SourceBanner } from "@/components/dashboard";
-import { Chip } from "@/components/widgets";
+import { Chip, Collapsible } from "@/components/widgets";
 import { getInfo, getMe, getPolicies, getPolicy, getSources } from "@/lib/anonymizer-api";
 import { examplePolicyYaml } from "@/lib/mock";
 import type { PolicyJson } from "@/lib/policy-edit";
@@ -8,6 +8,14 @@ import { cn } from "@/lib/utils";
 import { PolicyEditor } from "./editor";
 
 export const dynamic = "force-dynamic";
+
+const apiUrl = () =>
+  (process.env.ANONYMIZER_PUBLIC_API_URL || process.env.ANONYMIZER_API_URL || "https://anonymizer-api.example.com").replace(/\/$/, "");
+
+const curl = (name: string) => `curl -X POST ${apiUrl()}/v1/policies/${encodeURIComponent(name)}/test \\
+  -H "Authorization: Bearer $ANONYMIZER_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"text": "Herr Max Mustermann, max@example.org", "changes": {"email": "allow"}}'`;
 
 export default async function Policies({ searchParams }: { searchParams: Promise<{ name?: string }> }) {
   const [{ data: policies, source }, { data: info }, { data: sources }, { data: me }] =
@@ -46,10 +54,26 @@ export default async function Policies({ searchParams }: { searchParams: Promise
         ) : (
           <pre className="bg-surface-code overflow-auto rounded-md p-4 font-mono text-xs">{examplePolicyYaml}</pre>
         )}
-        <p className="text-muted-foreground text-xs">
-          Every save creates a new version; older versions stay stored and every change is in the audit log.
-          Text tools of the MCP server (anonymize_content …) use their own built-in policy unless ANONYMIZER_MCP_POLICY is set.
-        </p>
+        {active && (
+          <Collapsible title="Test via API" summary={`POST /v1/policies/${active.name}/test`}>
+            <p className="text-muted-foreground text-xs">
+              Same test as above, with any API key. Nothing is saved; <code>changes</code> is optional
+              (action per data type, <code>null</code> = default).
+            </p>
+            <pre className="bg-surface-code overflow-auto rounded-md p-3 font-mono text-xs">{curl(active.name)}</pre>
+            <p className="text-muted-foreground text-2xs">
+              Response: <code>text_before</code>/<code>text_after</code> (null = not sent), <code>outcome_*</code>,
+              {" "}<code>changes</code>, <code>entities</code>. See docs/policies.md.
+            </p>
+          </Collapsible>
+        )}
+        <Collapsible title="Versions and audit">
+          <p className="text-muted-foreground text-xs">
+            Every save creates a new version; older versions stay stored and every change is in the
+            {" "}<Link className="text-link" href="/settings/audit-logs">audit log</Link>.
+            Text tools of the MCP server (anonymize_content …) use their own built-in policy unless ANONYMIZER_MCP_POLICY is set.
+          </p>
+        </Collapsible>
       </div>
     </>
   );

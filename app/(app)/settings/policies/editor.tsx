@@ -3,7 +3,7 @@ import { Fragment, useState } from "react";
 import { FlaskConical, Save } from "lucide-react";
 import { editPolicy, type ActionState } from "@/app/actions";
 import { ActionForm, Submit } from "@/components/forms";
-import { Chip } from "@/components/widgets";
+import { Chip, Collapsible } from "@/components/widgets";
 import { ACTIONS, actionLabel, describeRule, editorTypes, entityActions, isSimple, type PolicyJson } from "@/lib/policy-edit";
 import { cn } from "@/lib/utils";
 
@@ -99,23 +99,6 @@ export function PolicyEditor({ policy, canEdit }: { policy: PolicyJson; canEdit:
           </section>
         </div>
 
-        <details className="text-xs">
-          <summary className="text-muted-foreground cursor-pointer">What the options do</summary>
-          <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[8rem_1fr]">
-            {ACTIONS.map(a => <Fragment key={a.value}><dt className="font-medium">{a.label}</dt><dd className="text-muted-foreground">{a.example}</dd></Fragment>)}
-          </dl>
-        </details>
-
-        {advanced.length > 0 && (
-          <section className="rounded-lg border p-3 text-xs">
-            <h3 className="font-medium">Always applied (not changed here)</h3>
-            <ul className="text-muted-foreground mt-1.5 list-disc space-y-0.5 pl-4">
-              {advanced.map((r, i) => <li key={r.id ?? i}>{describeRule(r)}</li>)}
-              {policy.critical_floor && <li>Highly sensitive values never leave unchanged, even if set to Keep → {actionLabel(policy.critical_floor_action ?? "pseudonymize")}</li>}
-            </ul>
-          </section>
-        )}
-
         <section className="bg-card rounded-lg border p-3">
           <label className="block space-y-1">
             <span className="text-xs font-medium">Try it before saving</span>
@@ -134,6 +117,21 @@ export function PolicyEditor({ policy, canEdit }: { policy: PolicyJson; canEdit:
             </span>
           </div>
         </section>
+
+        {advanced.length > 0 && (
+          <Collapsible title="Always applied" summary={`${advanced.length + (policy.critical_floor ? 1 : 0)} rule(s), not changed here`}>
+            <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
+              {advanced.map((r, i) => <li key={r.id ?? i}>{describeRule(r)}</li>)}
+              {policy.critical_floor && <li>Highly sensitive values never leave unchanged, even if set to Keep → {actionLabel(policy.critical_floor_action ?? "pseudonymize")}</li>}
+            </ul>
+          </Collapsible>
+        )}
+
+        <Collapsible title="What the options do">
+          <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[8rem_1fr]">
+            {ACTIONS.map(a => <Fragment key={a.value}><dt className="font-medium">{a.label}</dt><dd className="text-muted-foreground">{a.example}</dd></Fragment>)}
+          </dl>
+        </Collapsible>
       </fieldset>
     </ActionForm>
   );

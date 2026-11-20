@@ -1,7 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { TableScroll } from "@/components/app-shell";
 import { ago, chars, fmt } from "@/components/dashboard";
-import { Chip, Widget } from "@/components/widgets";
+import { Chip } from "@/components/widgets";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Dataset, PlaygroundResult } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
@@ -82,7 +82,8 @@ export function Process({ ds, r }: { ds: Dataset; r: PlaygroundResult }) {
         </Step>
       </ol>
 
-      <Widget title="Per column" description="What happened to each column of the upload (rows on this page)">
+      <div>
+        <h3 className="mb-1 text-xs font-medium">Per column <span className="text-muted-foreground font-normal">(rows on this page)</span></h3>
         <TableScroll minWidth={640}>
           <Table>
             <TableHeader><TableRow>
@@ -115,7 +116,7 @@ export function Process({ ds, r }: { ds: Dataset; r: PlaygroundResult }) {
             </TableBody>
           </Table>
         </TableScroll>
-      </Widget>
+      </div>
     </div>
   );
 }
