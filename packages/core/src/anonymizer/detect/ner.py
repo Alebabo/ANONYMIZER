@@ -63,7 +63,13 @@ def authority_type(text: str, entity_type: str) -> tuple[str, str]:
     return entity_type, text
 
 
-def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -> tuple[int, str] | None:
+def is_casual(text: str) -> bool:
+    """A span of plain lower-case words, as typed in chat."""
+    return text.islower() and all(t.isalpha() for t in text.split(" "))
+
+
+def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str],
+                 allow_casual: bool = False) -> tuple[int, str] | None:
     """Normalise or reject a raw NER span. Returns (start, text) or None.
 
     Statistical NER is noisy on legal text: it marks role words
@@ -86,7 +92,12 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str]) -
     text = " ".join(tokens)
     if len(text) < 3 or not tokens or all(t in stopwords for t in tokens):
         return None
-    # Names start with a capital letter; "drawable-xxxhdpi", "counterpart-logos" are code, not names.
+    # Chat is often written in lower case ("überweisung an schepers", "bei der volksbank"). With a model trained
+    # on such chat (allow_casual), plain lower-case words are kept; the stock model is too noisy on them.
+    # Lower-case spans with digits, hyphens or dots are code ("drawable-xxxhdpi"), never names.
+    if allow_casual and is_casual(text):
+        lowered = {w.lower() for w in stopwords}
+        return None if all(t in lowered for t in tokens) else (start, text)
     if not any(ch.isupper() for ch in text):
         return None
     # camelCase identifiers ("cardSettings", "creditComparison") start lower-case; name particles may.
@@ -181,6 +192,8 @@ class SpacyRecognizer:
         terms = [re.escape(t.strip()) for t in keep or [] if t.strip()]
         self._keep = re.compile(rf"^(?:{'|'.join(terms)})(?![^\W_])", re.IGNORECASE) if terms else None
         self.languages = frozenset(self.models)
+        # Fine-tuned support models ("base+ner_dir") were trained on lower-case chat; their lower-case spans are kept.
+        self._casual = {lang for lang, model in self.models.items() if "+" in model}
         self._docs: dict[tuple[str, str], Any] = {}
 
     def _nlp(self, language: str) -> Any:
@@ -238,7 +251,7 @@ class SpacyRecognizer:
                 entity_type, ent_text = authority_type(ent.text, entity_type)
                 if entity_type == E.ORGANIZATION and mapped[0] != E.ORGANIZATION:
                     category, confidence = _LABELS["ORG"][1], _LABELS["ORG"][2]
-                cleaned = clean_entity(ent_text, ent.start_char, entity_type, self.stopwords)
+                cleaned = clean_entity(ent_text, ent.start_char, entity_type, self.stopwords, lang in self._casual)
                 if cleaned is not None and not (self._keep and self._keep.match(cleaned[1])):
                     found.append((entity_type, category, confidence, *cleaned))
             pos = None
@@ -250,7 +263,9 @@ class SpacyRecognizer:
                         spans.append((max(0, span.start - 1), span.end))  # the title before it counts too
                 pos = _window_pos(nlp, doc, spans) if spans else {}
             for entity_type, category, confidence, start, value in found:
-                if entity_type in _TAGGED and not _name_like(doc, start, start + len(value), pos):
+                # The tagger reads lower-case chat words as common nouns, so the proper-noun check does not apply.
+                casual = lang in self._casual and is_casual(value)
+                if entity_type in _TAGGED and not casual and not _name_like(doc, start, start + len(value), pos):
                     continue
                 yield make_detection(entity_type, category, start, start + len(value), value,
                                      confidence, self.name)

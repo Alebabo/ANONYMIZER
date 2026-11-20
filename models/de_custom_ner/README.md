@@ -1,11 +1,10 @@
-# de_custom_ner: fine-tuned German NER for support mails and chats
+# de_custom_ner: fine-tuned German NER for support mails, chats and letters
 
 NER weights for spaCy `de_core_news_lg` (3.8), fine-tuned on bank support text. Only the `ner` component is
 stored here (about 6 MB). Word vectors, tagger and the other components come from the base model, which must be
 installed (`python -m spacy download de_core_news_lg`).
 
-**Status: work in progress.** This is the checkpoint after epoch 1 of a running training (19.11.2026). It
-will be replaced by the best epoch once training has finished.
+Version: v4 (20.11.2026), best of 6 epochs on the dev split.
 
 ## Use
 
@@ -14,33 +13,44 @@ ANONYMIZER_NER_MODEL_DE="de_core_news_lg+models/de_custom_ner/ner"
 ```
 
 The path is relative to the working directory of the process. Without the variable the anonymizer uses the
-plain `de_core_news_lg`.
+plain `de_core_news_lg`. With this model the pipeline also keeps lower-case chat entities ("schepers", "axa"),
+which the stock model gets wrong too often.
 
-## Training data
+## Training
 
-- GermEval 2014 NER (public, CC BY 4.0), 6,000 sentences, so the model keeps its general German NER.
-- 4,000 synthetic support texts from templates (signatures, greetings, mail headers, payees, courts,
-  lower-case chat). The names, organisations and places used never occur in the dev or test split.
-- 222 annotated mails and chats from the sbx and int test stages (train split, repeated 3 times).
+Only the `ner` component is trained; it has its own tok2vec, so tagger and parser stay as shipped. Training
+continues from the original weights (Adam, dropout 0.25, batch size 8 to 32, seed 24). Per epoch:
 
-Training and evaluation scripts: `packages/core/scripts/ner_train.py` and `packages/core/scripts/ner_gold.py`.
-The annotated data is not part of this repository.
+| Source | Examples | Labels |
+| --- | --- | --- |
+| GermEval 2014 NER (public, CC BY 4.0) | 6,000 sentences | complete; OTH as MISC |
+| Synthetic support texts from templates | 4,000 (one in five without entities) | complete |
+| Gold train split: sbx/int mails, chats and test runs | 393, repeated 3 times | complete, reviewed |
+| OCR letters from the service tool (sbx/int) | 340, repeated 2 times | partial: confirmed entities and confirmed non-entities only |
+
+Names, organisations and places used in the synthetic texts never occur in the dev or test split. Address spans,
+and entities that do not line up with spaCy tokens, are left out of the loss.
+
+Scripts: `packages/core/scripts/ner_train.py` (training) and `packages/core/scripts/ner_gold.py` (gold set and
+evaluation). The annotated data is not part of this repository.
 
 ## Results
 
-Held-out test split: 494 sbx/int documents, 239 scored entities (PER, ORG, LOC). Scores are from the
-anonymizer pipeline (NER plus clean-up rules), with an exact match of start, end and label required.
+Held-out test split: 776 documents, 315 scored entities (PER, ORG, LOC), never used for training or for tuning
+the rules. Scores are from the anonymizer pipeline (NER plus clean-up rules), with an exact match of start, end
+and label required.
 
-| Model | Precision | Recall | F1 |
-| --- | --- | --- | --- |
-| `de_core_news_lg`, old rules | 0.723 | 0.569 | 0.637 |
-| `de_core_news_lg`, new rules | 0.848 | 0.632 | 0.724 |
-| this checkpoint, new rules | 0.898 | 0.812 | 0.853 |
+| Model | Precision | Recall | F1 | Recall on unseen names | F1 on new test customers |
+| --- | --- | --- | --- | --- | --- |
+| `de_core_news_lg` | 0.821 | 0.597 | 0.691 | 0.46 | 0.58 |
+| previous version (epoch 1, 19.11.) | 0.873 | 0.765 | 0.816 | 0.54 | 0.66 |
+| v4 | 0.838 | 0.790 | 0.814 | 0.59 | 0.75 |
 
-On test entities whose text never occurs in the train split, recall rises from 0.453 to 0.523. Part of the gain
-comes from names that recur in the test stages, for example employee signatures.
+Per label (v4): PER F1 0.88, ORG F1 0.76 (recall 0.66), LOC F1 0.64 (precision 0.50 on 19 places).
+"Unseen names" are test entities whose text never occurs in the train split.
 
 ## Note on privacy
 
-The train split contains texts from internal test stages. They include names of employees and test customers.
-A NER model does not store its training texts, but it can be biased towards names it has seen.
+The training data includes texts and scanned letters from internal test stages. They contain names of employees
+and test customers, and some letters may be copies of real mail with names of third parties. A NER model does not
+store its training texts, but it can be biased towards names it has seen.
