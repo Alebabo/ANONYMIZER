@@ -13,8 +13,10 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
+from anonymizer.detect.orgs import headed_orgs, known_orgs, legal_entities
 from anonymizer.models import Category, Detection, EntityType as E, make_detection
 
 # ANONYMIZER_NER_MODEL_DE selects another German model, e.g. the fine-tuned support NER:
@@ -29,7 +31,12 @@ _LABELS = {
     "GPE": (E.LOCATION, Category.PERSONAL_DATA, 0.45),
 }
 
-_LEADING_HONORIFIC = re.compile(r"^(?:(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+)+")
+# Case-insensitive: chat writes "herr magerramow".
+_LEADING_HONORIFIC = re.compile(r"^(?:(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.)\s+)+", re.IGNORECASE)
+# Quotes around a name ("‚Maria Schmidt‘", "»Rewe«") are not part of it.
+_EDGE = " ,.;:()\"'‚‘’„“”»«"
+# Account models of the bank: a one-word "Max" or "Smart" is the product, not a person.
+_PRODUCT_WORDS = {"Max", "Smart", "Plus", "Basic", "Pro"}
 # JSON, markup or escapes inside a span: serialised data, never a name ("angezeigt.\",\"links\":[").
 # Bullets join list items ("Kongo⦁ Laos⦁") into one span that is never a single name.
 _CODE_CHARS = re.compile(r'["{}\[\]\\<>=|_•⦁·▪●◦]')
@@ -56,6 +63,64 @@ _AUTHORITY = re.compile(r"^(?:Amts|Land|Oberlandes|Arbeits|Sozial|Finanz|Verwalt
 _REGISTER_TAIL = re.compile(r"(?:\s+(?:HRB|HRA|GnR|PR|VR|UST))+$")
 
 
+# Markup around names in bot answers and JSON ("<strong>Hausverwaltung Schmidt</strong>", "\\n\\n⦁ Rewe",
+# "\"counterpartyName\":\"Max\"") glues to the words, so the tokenizer never sees the name as its own token.
+# It is blanked out with spaces of the same length before NER; offsets stay those of the original text.
+# JSON quotes stay: values such as chart labels ("Weitere Ausgaben") would otherwise read like a list of names.
+_MARKUP = re.compile(r"</?[A-Za-z][^<>\n]{0,40}>|\\[nrt]|[⦁•▪●◦]")
+
+
+def mask_markup(text: str) -> str:
+    return _MARKUP.sub(lambda m: " " * len(m.group()), text)
+
+
+# Words that start an organisation name and belong to it ("Kanzlei Becker & Partner", "Staatsanwaltschaft Köln").
+ORG_HEADS = {"Kanzlei", "Staatsanwaltschaft", "Amtsgericht", "Landgericht", "Finanzamt", "Jobcenter", "Notariat",
+             "Hausverwaltung", "Autohaus", "Stadtwerke", "Sparkasse", "Volksbank", "Polizeipräsidium",
+             # Trades before an owner's name or a made-up name ("Möbelhaus Müller", "Pizzeria Da Mario").
+             "Möbelhaus", "Bäckerei", "Metzgerei", "Zahnarztpraxis", "Arztpraxis", "Tierarztpraxis", "Physiotherapie",
+             "Friseursalon", "Blumenhaus", "Getränkemarkt", "Fahrschule", "Malerbetrieb", "Reisebüro",
+             "Steuerberatung", "Schreinerei", "Fitnessstudio", "Pizzeria", "Ristorante", "Trattoria", "Osteria",
+             "Restaurant", "Café", "Bistro", "Imbiss", "Gasthaus", "Hotel", "Apotheke", "Optik"}
+# File names ("Meldebestaetigung.pdf") are attachments, not organisations.
+_FILE_NAME = re.compile(r"\.(?:pdf|jpe?g|png|gif|heic|docx?|xlsx?|txt|zip)$", re.IGNORECASE)
+# Endings of German common nouns from banking ("Kartensperrung", "Dispokredit", "Überweisungslimit").
+_COMMON_TAIL = re.compile(r"(?:ung|ungen|kredit|konto|konten|karte|karten|limit|zahlung|gebühr|gebühren|zinsen"
+                          r"|nummer|auftrag|antrag|vertrag|überweisung|buchung|sperre|status|daten)$")
+# "Google Pay", "Apple Wallet": a wallet product, not the company.
+_PRODUCT_TAIL = re.compile(r"\s(?:Pay|Wallet)\b")
+
+
+def _lowered(words: set[str]) -> set[str]:
+    return {w.lower() for w in words}
+
+
+_NOUNS: frozenset[str] | None = None
+
+
+def common_nouns() -> frozenset[str]:
+    """German common nouns ("Geld", "Dank", "Betrag"); built by scripts/build_common_nouns.py from GermEval 2014."""
+    global _NOUNS
+    if _NOUNS is None:
+        path = Path(__file__).parent / "data" / "common_nouns_de.txt"
+        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        _NOUNS = frozenset(w for w in lines if w and not w.startswith("#"))
+    return _NOUNS
+
+
+_WORDS: frozenset[str] | None = None
+
+
+def common_words() -> frozenset[str]:
+    """Lower-case German words ("wechseln", "gefällt", "bitte"); same source as ``common_nouns``."""
+    global _WORDS
+    if _WORDS is None:
+        path = Path(__file__).parent / "data" / "common_words_de.txt"
+        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        _WORDS = frozenset(w for w in lines if w and not w.startswith("#"))
+    return _WORDS
+
+
 def authority_type(text: str, entity_type: str) -> tuple[str, str]:
     """(entity_type, text) with courts and authorities typed as organisations, register suffix removed."""
     if entity_type in (E.LOCATION, E.ORGANIZATION, E.PERSON) and _AUTHORITY.match(text):
@@ -76,28 +141,44 @@ def clean_entity(text: str, start: int, entity_type: str, stopwords: set[str],
     ("Beklagte"), headings spanning line breaks, abbreviations ("Az", "NDA")
     and code fragments ("DE00") as entities.
     """
-    if "\n" in text or "@" in text or "/" in text or _CODE_CHARS.search(text):
+    if "\n" in text or "@" in text or "/" in text or _CODE_CHARS.search(text) or _FILE_NAME.search(text):
         return None
     m = _LEADING_HONORIFIC.match(text)
     if m:
         start += m.end()
         text = text[m.end():]
-    stripped = text.lstrip(" ,.;:()")
+    stripped = text.lstrip(_EDGE)
     start += len(text) - len(stripped)
-    text = stripped.rstrip(" ,.;:()")
+    text = stripped.rstrip(_EDGE)
+    if text in _PRODUCT_WORDS:
+        return None
     tokens = text.split(" ")
-    while len(tokens) > 1 and tokens[0] in stopwords:  # "Akte Mustermann" -> "Mustermann"
+    while len(tokens) > 1 and tokens[0] in stopwords and not (  # "Akte Mustermann" -> "Mustermann"
+            entity_type == E.ORGANIZATION and tokens[0] in ORG_HEADS):  # "Kanzlei Becker & Partner" stays whole
         start += len(tokens[0]) + 1
         tokens = tokens[1:]
     text = " ".join(tokens)
-    if len(text) < 3 or not tokens or all(t in stopwords for t in tokens):
+    lowered = _lowered(stopwords)
+    if len(text) < 3 or not tokens or all(t.lower() in lowered or t in _NAME_PARTICLES for t in tokens):
+        return None
+    # Single German compounds of banking vocabulary ("Kartensperrung", "Überweisungslimit") are no names.
+    if len(tokens) == 1 and len(text) > 7 and _COMMON_TAIL.search(text):
         return None
     # Chat is often written in lower case ("überweisung an schepers", "bei der volksbank"). With a model trained
     # on such chat (allow_casual), plain lower-case words are kept; the stock model is too noisy on them.
     # Lower-case spans with digits, hyphens or dots are code ("drawable-xxxhdpi"), never names.
     if allow_casual and is_casual(text):
-        lowered = {w.lower() for w in stopwords}
-        return None if all(t in lowered for t in tokens) else (start, text)
+        # Ordinary words at either end are not part of the name ("überweisung an schepers bitte"); a span made
+        # only of ordinary words ("kontomodell wechseln", "werd delulu") is no name at all.
+        plain = lowered | common_words()
+        while tokens and (tokens[0] in plain or tokens[0].capitalize() in common_nouns()):
+            start += len(tokens[0]) + 1
+            tokens = tokens[1:]
+        # An organisation keeps its institution word at the end ("lea bank", "würzburger versicherung").
+        while entity_type != E.ORGANIZATION and tokens and (
+                tokens[-1] in plain or tokens[-1].capitalize() in common_nouns()):
+            tokens = tokens[:-1]
+        return (start, " ".join(tokens)) if tokens and len(" ".join(tokens)) >= 3 else None
     if not any(ch.isupper() for ch in text):
         return None
     # camelCase identifiers ("cardSettings", "creditComparison") start lower-case; name particles may.
@@ -221,7 +302,7 @@ class SpacyRecognizer:
     def prefetch(self, texts: Iterable[str], language: str) -> None:
         """Run the model over many texts in one batch (much faster than one call per text); analyze()
         then takes the prepared document instead of running the model again. Results are identical."""
-        texts = list(dict.fromkeys(texts))
+        texts = list(dict.fromkeys(mask_markup(t) for t in texts))
         for lang in [language] if language in self.models else list(self.models):
             model = self.models[lang]
             todo = [t for t in texts if (model, t) not in self._docs]
@@ -236,36 +317,105 @@ class SpacyRecognizer:
 
     def analyze(self, text: str, language: str) -> Iterable[Detection]:
         languages = [language] if language in self.models else list(self.models)
+        masked = mask_markup(text)
         for lang in languages:
             nlp = self._nlp(lang)
             skipped = _ner_only(nlp)
-            doc = self._docs.pop((self.models[lang], text), None)
+            doc = self._docs.pop((self.models[lang], masked), None)
             if doc is None:
-                doc = nlp(text, disable=skipped)
-            found = []
-            for ent in doc.ents:
-                mapped = _LABELS.get(ent.label_)
-                if mapped is None:
-                    continue
-                entity_type, category, confidence = mapped
-                entity_type, ent_text = authority_type(ent.text, entity_type)
-                if entity_type == E.ORGANIZATION and mapped[0] != E.ORGANIZATION:
-                    category, confidence = _LABELS["ORG"][1], _LABELS["ORG"][2]
-                cleaned = clean_entity(ent_text, ent.start_char, entity_type, self.stopwords, lang in self._casual)
-                if cleaned is not None and not (self._keep and self._keep.match(cleaned[1])):
-                    found.append((entity_type, category, confidence, *cleaned))
-            pos = None
-            if skipped:
-                spans = []
-                for entity_type, _, _, start, value in found:
-                    span = doc.char_span(start, start + len(value), alignment_mode="expand")
-                    if entity_type in _TAGGED and span is not None and len(span):
-                        spans.append((max(0, span.start - 1), span.end))  # the title before it counts too
-                pos = _window_pos(nlp, doc, spans) if spans else {}
-            for entity_type, category, confidence, start, value in found:
-                # The tagger reads lower-case chat words as common nouns, so the proper-noun check does not apply.
-                casual = lang in self._casual and is_casual(value)
-                if entity_type in _TAGGED and not casual and not _name_like(doc, start, start + len(value), pos):
-                    continue
-                yield make_detection(entity_type, category, start, start + len(value), value,
-                                     confidence, self.name)
+                doc = nlp(masked, disable=skipped)
+            yield from self._detections(nlp, doc, text, lang, skipped)
+
+    def _detections(self, nlp: Any, doc: Any, text: str, lang: str, skipped: list[str]) -> Iterable[Detection]:
+        found = []
+        for ent in doc.ents:
+            mapped = _LABELS.get(ent.label_)
+            if mapped is None:
+                continue
+            entity_type, category, confidence = mapped
+            entity_type, ent_text = authority_type(ent.text, entity_type)
+            if entity_type == E.ORGANIZATION and mapped[0] != E.ORGANIZATION:
+                category, confidence = _LABELS["ORG"][1], _LABELS["ORG"][2]
+            cleaned = clean_entity(ent_text, ent.start_char, entity_type, self.stopwords, lang in self._casual)
+            # A span that reached into blanked-out markup is not the original text: drop it.
+            if cleaned is None or text[cleaned[0]:cleaned[0] + len(cleaned[1])] != cleaned[1]:
+                continue
+            if not (self._keep and self._keep.match(cleaned[1])):
+                found.append((entity_type, category, confidence, *cleaned))
+        pos = None
+        if skipped:
+            spans = []
+            for entity_type, _, _, start, value in found:
+                span = doc.char_span(start, start + len(value), alignment_mode="expand")
+                if entity_type in _TAGGED and span is not None and len(span):
+                    # The title before it and the word after it (a surname, see _with_surname) count too.
+                    spans.append((max(0, span.start - 1), min(len(doc), span.end + 1)))
+            pos = _window_pos(nlp, doc, spans) if spans else {}
+        # A longer organisation from NER ("McFIT Global Group", "Telekom Deutschland") wins over the known name
+        # inside it; otherwise the known name wins ("Hilton" as a person, "Schufa-Daten" as a whole).
+        # Company names with a legal form ("ACME Software GmbH") come first, then known organisations outside them.
+        legal = legal_entities(text, _lowered(self.stopwords))
+        # Bank-group words are no reliable head ("Sparkasse Kontostand"); NER decides there.
+        legal += [(s, e) for s, e in headed_orgs(text, ORG_HEADS - {"Sparkasse", "Volksbank"}, common_nouns())
+                  if not any(ls < e and s < le for ls, le in legal)]
+        ner_orgs = [(s, s + len(v)) for t, _, _, s, v in found if t == E.ORGANIZATION]
+        known = legal + [(s, e) for s, e in known_orgs(text)
+                         if not any(ls <= s and e <= le for ls, le in legal)
+                         and not any(ns <= s and e <= ne and (ns, ne) != (s, e) for ns, ne in ner_orgs)]
+        taken = list(known)
+        out = []
+        for entity_type, category, confidence, start, value in found:
+            # The tagger reads lower-case chat words as common nouns, so the proper-noun check does not apply.
+            casual = lang in self._casual and is_casual(value)
+            if entity_type in _TAGGED and not casual and not _name_like(doc, start, start + len(value), pos):
+                continue
+            if _PRODUCT_TAIL.match(text, start + len(value)):
+                continue
+            # One German common noun ("Geld", "Dank", "geld") is no name, unless a title stands before it.
+            if " " not in value and value[:1].upper() + value[1:] in common_nouns() \
+                    and not re.search(r"(?:Herrn?|Frau|Dr\.|Familie) $", text[max(0, start - 8):start]):
+                continue
+            named = self._with_surname(doc, text, entity_type, start, value, pos)
+            if named:
+                entity_type, category, confidence, value = E.PERSON, *_LABELS["PER"][1:], named
+            head = re.search(r"(\w+) $", text[max(0, start - 30):start])
+            if head and head.group(1) in ORG_HEADS and entity_type in _TAGGED:
+                # "Staatsanwaltschaft" + "Köln", "Kanzlei" + "Becker & Partner": the head belongs to the name.
+                start -= len(head.group(0))
+                value = text[start:start + len(head.group(0)) + len(value)]
+                entity_type, category, confidence = E.ORGANIZATION, *_LABELS["ORG"][1:]
+            end = start + len(value)
+            if any(s < end and start < e for s, e in taken):
+                continue
+            taken.append((start, end))
+            out.append(make_detection(entity_type, category, start, end, value, confidence, self.name))
+        category, confidence = _LABELS["ORG"][1], _LABELS["ORG"][2]
+        for s, e in known:
+            if not (self._keep and self._keep.match(text[s:e])):
+                out.append(make_detection(E.ORGANIZATION, category, s, e, text[s:e], confidence, self.name))
+        yield from sorted(out, key=lambda d: d.start)
+
+    def _with_surname(self, doc: Any, text: str, entity_type: str, start: int, value: str,
+                      pos: dict[int, str] | None) -> str | None:
+        """"Jonas" + "Becker", "Sydney" + "Decher": a one-word person, or a one-word place at the start of a line
+        (a signature), followed by a capitalised proper noun on the same line is a full name. Returns the name."""
+        if " " in value or entity_type not in (E.PERSON, E.LOCATION):
+            return None
+        if entity_type == E.LOCATION and start > 0 and text[start - 1] != "\n":
+            return None
+        span = doc.char_span(start, start + len(value), alignment_mode="expand")
+        if span is None or span.end >= len(doc):
+            return None
+        nxt = doc[span.end]
+        tag = pos.get(nxt.i, "") if pos is not None else nxt.pos_
+        gap = text[start + len(value):nxt.idx]
+        # A line with just two words ("Sydney Decher" above a signature): the tagger often calls the rare surname
+        # a noun, so a noun counts there too.
+        after = text[nxt.idx + len(nxt.text):nxt.idx + len(nxt.text) + 1]
+        line_start = start == 0 or text[start - 1] == "\n"
+        if tag == "NOUN" and line_start and after in ("", "\n", "\r"):
+            tag = "PROPN"
+        if (gap != " " or tag != "PROPN" or not nxt.text.isalpha() or len(nxt.text) < 2 or not nxt.text[0].isupper()
+                or nxt.text.isupper() or nxt.text in self.stopwords or nxt.text in _HONORIFICS):
+            return None
+        return text[start:nxt.idx + len(nxt.text)]

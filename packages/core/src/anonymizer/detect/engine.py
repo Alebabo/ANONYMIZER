@@ -40,8 +40,14 @@ NER_STOPWORDS = {
     "Ja", "Nein", "Yes", "No", "Ok", "Okay", "Jein",
     # Mail headers ("Subject: ...", "Body: ...") and sign-off words before a name ("Freundliche Grüße Anna X").
     "Subject", "Body", "Betreff", "Freundliche", "Freundlichen", "Beste", "Liebe", "Herzliche", "Viele",
-    # Names of the bank's own chatbots.
-    "Babo", "Mabo",
+    # Names of the bank's own chatbots and chat personas.
+    "Babo", "Mabo", "Sophie",
+    # Banking terms and product names that NER reads as names in short chat messages.
+    "Karte", "Virtuelle", "Team", "Smartkonto", "Maxkonto", "Pluskonto", "Girokonto", "Dispokredit", "BLZ",
+    "Kundenberatung", "Kundenservice", "Servicebank", "Regression", "Referenz", "Umgezogen", "Dann",
+    # Products and mail client footers ("Gesendet von Outlook für Mac").
+    "Mastercard", "MasterCard", "Girocard", "girocard", "Visa", "iPhone", "iPad", "Android", "Outlook", "Mac",
+    "Gesendet",
 }
 
 # Entity types whose text is a value (name, address, ...). Context words

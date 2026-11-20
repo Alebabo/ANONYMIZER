@@ -28,7 +28,10 @@ DEFAULT_KEEP = ("C24", "CHECK24")
 # Raw files and the document source they hold. Chat samples share one table, so the same message can be in
 # both chat subsets; it is kept once.
 RAW_FILES = {"mail": "mail", "chat_cand": "chat", "chat_random": "chat", "assistant": "assistant",
-             "int_mail": "intmail", "int_chat": "intchat", "testrun": "run"}
+             "int_mail": "intmail", "int_chat": "intchat", "testrun": "run",
+             "mail_more": "mail", "chat_more": "chat", "int_chat_more": "intchat", "handmade": "hand"}
+# Sources written as a clean holdout: always in the test split, never used for training or tuning.
+TEST_ONLY = {"hand"}
 
 
 class AnnotationError(ValueError):
@@ -144,7 +147,8 @@ def build(raw_dir: Path, annotation_file: Path) -> list[GoldDoc]:
         glob = resolve(doc["text"], ann.get("global", []), required=False, key=key)
         spans = own + [g for g in glob if not any(g.overlaps(o) for o in own)]
         gold.append(GoldDoc(key, doc["text"], sorted(spans, key=lambda s: s.start), doc["subsets"],
-                            ann.get("review", {}).get(key), split_of(doc["text"])))
+                            ann.get("review", {}).get(key),
+                            "test" if key.split(":")[0] in TEST_ONLY else split_of(doc["text"])))
     return gold
 
 
