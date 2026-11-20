@@ -28,7 +28,7 @@ DEFAULT_KEEP = ("C24", "CHECK24")
 # Raw files and the document source they hold. Chat samples share one table, so the same message can be in
 # both chat subsets; it is kept once.
 RAW_FILES = {"mail": "mail", "chat_cand": "chat", "chat_random": "chat", "assistant": "assistant",
-             "int_mail": "intmail", "int_chat": "intchat"}
+             "int_mail": "intmail", "int_chat": "intchat", "testrun": "run"}
 
 
 class AnnotationError(ValueError):

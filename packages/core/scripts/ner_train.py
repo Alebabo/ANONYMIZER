@@ -30,7 +30,9 @@ from spacy.util import compounding, minibatch
 from anonymizer.detect.engine import NER_STOPWORDS
 from anonymizer.detect.ner import SpacyRecognizer
 from anonymizer.detect.recognizers import NAME_STOPWORDS
-from anonymizer.ner_dataset import DEFAULT_KEEP, keep_pattern, read_gold, relevant, score_doc, summarize
+from anonymizer.ner_dataset import (
+    DEFAULT_KEEP, Span, _occurrences, keep_pattern, read_gold, relevant, resolve, score_doc, summarize,
+)
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ner_gold import predict_pipeline  # noqa: E402
@@ -115,7 +117,24 @@ TEMPLATES = [
     "**From:** C24 GmbH INT <support@example.zendesk.com>\n**To:** {P} <{e}@example.com>\n**Subject:** Unsere Antwort auf Ihre Anfrage\n\nHallo {P}, unser Kundenservice hat sich Ihr Anliegen angesehen.",
     "Presseanfrage: Die Redaktion von {O} bittet um Stellungnahme. Viele Grüße {P}",
     "Hey liebes C24 Team! Ich bin {F} von {O} und würde eure Bank gerne vorstellen. LG {F}",
+    # Bot answers listing transactions: payees mixed with own pockets and generic entries that are not entities.
+    "{\"answer\":\"Das sind Ihre <strong>letzten Buchungen</strong> seit <strong>{D}</strong>:\\n\\n⦁ {d} — {B}: -{M} EUR - SEPA-Überweisung\\n\\n⦁ {d} — Notgroschen: -{M} EUR - SEPA-Überweisung\\n\\n⦁ {d} — {O}: -{M} EUR - Kartenzahlung\\n\\n⦁ {d} — Geldautomat: -{M} EUR - Bargeldabhebung\\n\\n⦁ {d} — {P}: {M} EUR - SEPA-Gutschrift\"}",
+    "{\"answer\":\"Im <strong>Oktober 2026</strong> haben Sie an diese Empfänger überwiesen:\\n\\n⦁ <strong>{B}</strong>: {M} EUR\\n\\n⦁ <strong>{O}</strong>: {M} EUR\\n\\n⦁ <strong>Sparkonto</strong>: {M} EUR\\n\\n⦁ <strong>{P}</strong>: {M} EUR\"}",
+    "{\"answer\":\"Ihr größter Geldeingang im Oktober 2026 war <strong>{M} EUR</strong> von <strong>{O}</strong> (Gehalt).\"}",
+    "{\"answer\":\"Die größte Abbuchung ging an <strong>{B}</strong> über {M} EUR am {d}.\"}",
+    "{\"answer\":\"Sie haben am häufigsten bei {O}, {B} und {O2} eingekauft.\"}",
+    "⦁ <strong>{O}</strong>, {B}, Sparkonto, {O2}, Tagesgeld und {P}",
+    "Zuletzt hat Ihnen {P} am {d} {M} EUR überwiesen.",
+    "{\"type\":\"TRANSACTION_LIST\",\"data\":{\"transactions\":[{\"counterpartyName\":\"{B}\",\"amount\":-{M}},{\"counterpartyName\":\"{P}\",\"amount\":{M}}]}}",
 ]
+# Business names as they appear as payees: trade plus surname or a made-up name.
+TRADES = ["Bäckerei", "Möbelhaus", "Hausverwaltung", "Autohaus", "Zahnarztpraxis", "Physiotherapie", "Elektro",
+          "Friseursalon", "Blumenhaus", "Getränkemarkt", "Fahrschule", "Malerbetrieb", "Sanitär", "Optik", "Reisebüro",
+          "Metzgerei", "Steuerberatung", "Immobilien", "Schreinerei", "Fitnessstudio", "Tierarztpraxis"]
+DINING = ["Pizzeria", "Ristorante", "Osteria", "Taverna", "Restaurant", "Café", "Bistro", "Imbiss", "Gasthaus"]
+DINING_NAMES = ["Da Mario", "Roma", "Venezia", "La Piazza", "Akropolis", "Sonnenhof", "Zum Goldenen Hirsch",
+                "Mamma Mia", "Il Gabbiano", "Zur Linde", "Olympia", "Sakura", "Anatolia"]
+SUFFIXES = ["GmbH", "GmbH & Co. KG", "AG", "e.K.", "& Söhne", "KG", "UG"]
 # Texts without entities: domain words and mail headers that NER must leave alone.
 NEGATIVES = [
     "Subject: {S}\n\nBody: {Q}", "Betreff: {S}\n\n{Q}", "{Q}", "{q}", "Subject: Chatbot Bewertung vom {D} um {T} Uhr\n\nBody: {A}",
@@ -204,6 +223,24 @@ class Filler:
     def __init__(self, rng: random.Random, names: list[str], orgs: list[str], locs: list[str]) -> None:
         self.rng, self.names, self.orgs, self.locs = rng, names, orgs, locs
 
+    held_out: set[str] = set()
+
+    def business(self) -> str:
+        """A payee business name that does not occur in the dev or test split."""
+        r = self.rng
+        while True:
+            last = r.choice(self.names).split()[-1]
+            kind = r.random()
+            if kind < 0.4:
+                name = f"{r.choice(TRADES)} {last}"
+            elif kind < 0.7:
+                name = f"{r.choice(DINING)} {r.choice(DINING_NAMES)}"
+            else:
+                name = f"{last} {r.choice(['Software', 'Bau', 'Logistik', 'Handel', 'Consulting', 'Energie'])} " \
+                       f"{r.choice(SUFFIXES)}"
+            if name.lower() not in self.held_out:
+                return name
+
     def fill(self, template: str) -> tuple[str, list[tuple[int, int, str]]]:
         r = self.rng
         full = r.choice(self.names)
@@ -218,6 +255,7 @@ class Filler:
             "S": (r.choice(SUBJECTS), None), "Q": (r.choice(QUESTIONS), None), "q": (r.choice(Q_LOWER), None),
             "A": (r.choice(ANSWERS), None), "M": (f"{r.randint(5, 2000)},{r.randint(0, 99):02d}", None),
             "D": (f"{r.randint(1, 28):02d}.{r.randint(1, 12):02d}.2026", None),
+            "d": (f"{r.randint(1, 28):02d}.{r.randint(1, 12):02d}.", None), "B": (self.business(), "ORG"),
             "T": (f"{r.randint(8, 20):02d}:{r.randint(0, 59):02d}", None), "N": (str(r.randint(1000000, 9999999)), None),
             "e": (f"{first.lower()}.{last.lower()}", None),
         }
@@ -249,13 +287,58 @@ def to_example(nlp, text: str, spans: list[tuple[int, int, str]], missing: list[
     return Example.from_dict(doc, {"entities": tags})
 
 
+PARTIAL_RAW = {"ocr": "ocr_sbx.jsonl", "ocrint": "ocr_int.jsonl"}
+
+
+def partial_examples(nlp, base: Path, files: list[Path]) -> list[Example]:
+    """Partially annotated letters: accepted entities, rejected strings taught as O, every other token missing."""
+    texts = {}
+    for prefix, name in PARTIAL_RAW.items():
+        path = base / "raw" / name
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                row = json.loads(line)
+                texts[f"{prefix}:{row['db_id']}"] = row["text"]
+    out = []
+    for f in files:
+        for key, ann in json.loads(f.read_text(encoding="utf-8"))["docs"].items():
+            text = texts[key]
+            spans = resolve(text, ann.get("accept", []), required=True, key=key)
+            doc = nlp.make_doc(text)
+            tags = ["-"] * len(doc)
+            for s in spans:
+                span = doc.char_span(s.start, s.end)
+                if span is None:
+                    continue
+                if len(span) == 1:
+                    tags[span.start] = f"U-{s.label}"
+                else:
+                    tags[span.start] = f"B-{s.label}"
+                    for i in range(span.start + 1, span.end - 1):
+                        tags[i] = f"I-{s.label}"
+                    tags[span.end - 1] = f"L-{s.label}"
+            for surface in ann.get("reject", []):
+                for start in _occurrences(text, surface):
+                    neg = Span(start, start + len(surface), "O")
+                    if any(neg.overlaps(s) for s in spans):
+                        continue
+                    for t in doc:
+                        if t.idx < neg.end and neg.start < t.idx + len(t.text) and tags[t.i] == "-":
+                            tags[t.i] = "O"
+            if any(t != "-" for t in tags):
+                out.append(Example.from_dict(doc, {"entities": tags}))
+    return out
+
+
 def evaluate(nlp_path_or_obj, docs) -> dict:
     rec = SpacyRecognizer({"de": "de_core_news_lg", "en": "en_core_web_lg"}, NAME_STOPWORDS | NER_STOPWORDS,
                           keep=list(DEFAULT_KEEP))
     if not isinstance(nlp_path_or_obj, str):
         from anonymizer.detect import ner as ner_mod  # noqa: PLC0415
-        ner_mod._MODEL_CACHE["__candidate__"] = nlp_path_or_obj
-        rec.models = {"de": "__candidate__", "en": "en_core_web_lg"}
+        # A "+" name, like a shipped fine-tuned model, so the pipeline applies the same rules (lower-case chat).
+        ner_mod._MODEL_CACHE["de_core_news_lg+__candidate__"] = nlp_path_or_obj
+        rec = SpacyRecognizer({"de": "de_core_news_lg+__candidate__", "en": "en_core_web_lg"},
+                              NAME_STOPWORDS | NER_STOPWORDS, keep=list(DEFAULT_KEEP))
     keep = keep_pattern(DEFAULT_KEEP)
     per_doc = []
     for d in docs:
@@ -272,6 +355,11 @@ def main() -> None:
     ap.add_argument("--germeval", type=int, default=6000, help="GermEval sentences for rehearsal")
     ap.add_argument("--synthetic", type=int, default=4000)
     ap.add_argument("--gold-repeat", type=int, default=3, help="how often the gold train split is repeated")
+    ap.add_argument("--partial", type=Path, nargs="*", default=[],
+                    help="partial annotation files for OCR letters (accept/reject lists), training only")
+    ap.add_argument("--partial-repeat", type=int, default=2)
+    ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
+                    "epochs that beat its dev score are saved")
     args = ap.parse_args()
     rng = random.Random(SEED)
 
@@ -291,13 +379,14 @@ def main() -> None:
     orgs, locs = unseen(ORGS), unseen(LOCS)
     print(f"gazetteers after removing dev/test strings: {len(names)} names, {len(orgs)} orgs, {len(locs)} places")
 
-    nlp = spacy.load("de_core_news_lg")
+    nlp = spacy.load(args.init or "de_core_news_lg")
     examples: list[Example] = []
     for text, spans in load_germeval(ge_path, args.germeval, rng):
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
     n_ge = len(examples)
     filler = Filler(rng, names, orgs, locs)
+    filler.held_out = held_out
     for i in range(args.synthetic):
         template = rng.choice(NEGATIVES) if i % 5 == 0 else rng.choice(TEMPLATES)
         text, spans = filler.fill(template)
@@ -317,11 +406,16 @@ def main() -> None:
         if (ex := to_example(nlp, d.text, spans, missing)) is not None:
             gold_examples.append(ex)
     examples += gold_examples * args.gold_repeat
-    print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}")
+    partial = partial_examples(nlp, args.dir, args.partial)
+    examples += partial * args.partial_repeat
+    print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
+          f"partial {len(partial)} x{args.partial_repeat}")
 
-    base = evaluate("de_core_news_lg", dev_docs)
-    print(f"dev baseline micro F1={base['micro']['f1']} P={base['micro']['precision']} R={base['micro']['recall']}")
-    best, best_f1, history = None, -1.0, []
+    # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
+    base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
+    print(f"dev start micro F1={base['micro']['f1']} P={base['micro']['precision']} R={base['micro']['recall']}",
+          flush=True)
+    best, best_f1, history = 0, (base["micro"]["f1"] or 0.0) if args.init else -1.0, []
     # Only the NER is trained (it has its own tok2vec); tagger etc. stay as shipped because the pipeline uses
     # their POS tags. Evaluation runs the full pipeline, so no select_pipes() around it.
     others = [n for n in nlp.pipe_names if n != "ner"]
@@ -334,7 +428,7 @@ def main() -> None:
         with nlp.use_params(optimizer.averages):
             score = evaluate(nlp, dev_docs)
             f1 = score["micro"]["f1"] or 0.0
-            history.append({"epoch": epoch + 1, "loss": round(losses.get("ner", 0.0), 1), "dev": score["micro"]})
+            history.append({"epoch": epoch + 1, "loss": round(float(losses.get("ner", 0.0)), 1), "dev": score["micro"]})
             print(f"epoch {epoch + 1}: loss {losses.get('ner', 0.0):.1f} dev F1={f1} "
                   f"P={score['micro']['precision']} R={score['micro']['recall']}", flush=True)
             if f1 > best_f1:
@@ -345,7 +439,7 @@ def main() -> None:
     (args.out / "training.json").write_text(json.dumps({
         "seed": SEED, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
         "data": {"germeval": n_ge, "synthetic": n_syn, "gold_train": len(gold_examples),
-                 "gold_repeat": args.gold_repeat},
+                 "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
 
