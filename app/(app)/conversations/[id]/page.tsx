@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Collapsible } from "@/components/widgets";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/app-shell";
 import { Notice, Pill, SourceBanner } from "@/components/dashboard";
@@ -52,15 +53,20 @@ export default async function ConversationDetail({ params }: { params: Promise<{
             <div className="flex justify-between"><span className="text-muted-foreground">Outcome</span><Pill value={c.outcome} /></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Risk</span><Pill value={c.risk} /></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Withheld</span><span>{c.withheld}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Tags</span><span>{c.tags.join(", ") || "–"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Your reads today</span><span>{c.quota.used} / {c.quota.limit}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Trace</span>
-              <Link className="font-mono underline-offset-2 hover:underline" href={`/traces/${c.trace_id}`}>{c.trace_id}</Link></div>
-            <p className="text-muted-foreground pt-2 text-xs">
-              {c.stable_placeholders
-                ? "Placeholders are stable for this conversation; an admin can restore them with the vault (POST /v1/restore, namespace conversation:<id>)."
-                : "No vault configured: placeholders are generated per read and cannot be restored."}
-            </p>
+            <Collapsible title="Details and audit" className="mt-3">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Tags</span><span>{c.tags.join(", ") || "–"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Your reads today</span><span>{c.quota.used} / {c.quota.limit}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Trace</span>
+                  <Link className="font-mono underline-offset-2 hover:underline" href={`/traces/${c.trace_id}`}>{c.trace_id}</Link></div>
+                <p className="text-muted-foreground pt-1 text-xs">
+                  {c.stable_placeholders
+                    ? "Placeholders are stable for this conversation; an admin can restore them with the vault (POST /v1/restore, namespace conversation:<id>)."
+                    : "No vault configured: placeholders are generated per read and cannot be restored."}
+                  {" "}Every read is audited.
+                </p>
+              </div>
+            </Collapsible>
           </CardContent></Card>
       </div>
     </>

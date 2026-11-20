@@ -164,6 +164,19 @@ export async function deleteDataset(_: ActionState, form: FormData): Promise<Act
   redirect("/playground");
 }
 
+/** Hidden columns stay stored but are never searched, shown or sent (dashboard and MCP). */
+export async function setHiddenColumns(_: ActionState, form: FormData): Promise<ActionState> {
+  if (isDemo()) return DEMO;
+  const shown = new Set(form.getAll("show").map(String));
+  const hidden = form.getAll("column").map(String).filter(c => !shown.has(c));
+  return run(async () => {
+    await api(`/v1/playground/datasets/${encodeURIComponent(str(form, "id"))}/columns`, {
+      method: "PUT", body: JSON.stringify({ hidden }),
+    });
+    return { message: hidden.length ? `${hidden.length} column(s) hidden, also for Claude.` : "All columns visible." };
+  }, "/playground");
+}
+
 // -- policies --------------------------------------------------------------------------------
 /** Simple editor: "test" compares the edited policy with the saved one on a sample text, "save" stores it as the next version. */
 export async function editPolicy(_: ActionState, form: FormData): Promise<ActionState> {
@@ -174,17 +187,19 @@ export async function editPolicy(_: ActionState, form: FormData): Promise<Action
       return { error: `${name} was changed meanwhile (now v${current.version}). Reload the page.` };
     const wanted: Record<string, string> = {};
     for (const [k, v] of form.entries()) if (k.startsWith("entity:")) wanted[k.slice(7)] = String(v);
-    const next = applyChanges(current, wanted, str(form, "default_action") || current.default_action);
-    // JSON is valid YAML, so the API parses it like a policy file.
-    const yaml = JSON.stringify(next);
+    const defaultAction = str(form, "default_action") || current.default_action;
     if (str(form, "intent") === "test") {
       const text = str(form, "sample");
       if (!text) return { error: "Enter a sample text to test with." };
-      const diff = await api<ActionState["diff"]>("/v1/policies/dry-run", {
-        method: "POST", body: JSON.stringify({ text, candidate_yaml: yaml, against: name, destination: "external" }),
+      // Same endpoint API clients use: POST /v1/policies/{name}/test ("" = follow the default → null).
+      const changes = Object.fromEntries(Object.entries(wanted).map(([t, a]) => [t, a || null]));
+      const diff = await api<ActionState["diff"]>(`/v1/policies/${encodeURIComponent(name)}/test`, {
+        method: "POST", body: JSON.stringify({ text, changes, default_action: defaultAction, destination: "external" }),
       });
       return { diff, message: diff!.changes.length ? undefined : "No difference on this text." };
     }
+    // JSON is valid YAML, so the API parses it like a policy file.
+    const yaml = JSON.stringify(applyChanges(current, wanted, defaultAction));
     if (yaml === JSON.stringify({ ...current, version: current.version + 1 })) return { message: "Nothing changed." };
     const saved = await api<{ version: number }>("/v1/policies", { method: "POST", body: JSON.stringify({ yaml }) });
     return { message: `Saved as ${name} v${saved.version}. Applies to new requests right away.` };

@@ -56,7 +56,11 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 | GET | `/v1/policies/{name}` | API | Policy (`?version=`, `?effective=true` resolves `extends`) |
 | GET | `/v1/policies/{name}/history` | API | Versions with hashes |
 | POST | `/v1/policies` | Admin | Save a new version (`version` = latest + 1) |
-| POST | `/v1/policies/dry-run` | API | Compare a candidate policy against an active one |
+| POST | `/v1/policies/{name}/test` | API | Test a stored policy on a sample text, optionally with unsaved `changes` per entity type (nothing saved, no vault writes) |
+| POST | `/v1/policies/dry-run` | API | Compare a full candidate policy (YAML) against an active one |
+| GET | `/v1/playground/datasets` | API | Playground uploads; `columns` lists visible columns only |
+| PUT | `/v1/playground/datasets/{id}/columns` | Dashboard session | Hide columns (`{"hidden": [...]}`): never searched, shown or sent, also not over MCP (audited) |
+| POST | `/v1/playground/datasets/{id}/query` | API | Protected rows of an upload |
 | GET | `/v1/sources` | API | Connected conversation source and prompt store (type and host only) |
 | GET | `/v1/conversations`, `/v1/conversations/{id}`, `/v1/conversations/stats`, `/v1/conversations/quota` | API | Protected customer conversations, see [conversations.md](conversations.md) |
 | GET/POST | `/v1/prompts`, `/v1/prompts/{name}`, `.../history`, `.../diff` | API | Prompt versions and drafts, see [prompts.md](prompts.md) |

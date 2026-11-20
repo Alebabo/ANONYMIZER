@@ -172,6 +172,42 @@ def test_policy_dry_run_preview_leaves_the_vault_alone(client):
     assert restored["restored"] == 0
 
 
+# Own policy without review_uncertain, so the result does not depend on whether the spaCy model is installed.
+SAMPLE = "Bitte IBAN DE89 3704 0044 0532 0130 00 prüfen, Rückfragen an max@example.org."
+TEST_POLICY = ("name: sample-test\nrules:\n  - {id: contact, entity: [email], action: pseudonymize}\n"
+               "  - {id: accounts, entity: [iban], action: redact}\ndefault_action: redact\nreview_uncertain: false\n")
+
+
+@pytest.fixture
+def sample_policy(client):
+    assert client.post("/v1/policies", json={"yaml": TEST_POLICY}, headers=ADMIN).status_code == 201
+    return "/v1/policies/sample-test/test"
+
+
+def test_policy_test_endpoint_without_changes(client, sample_policy):
+    body = client.post(sample_policy, json={"text": SAMPLE}, headers=USER).json()
+    assert body["policy"] == "sample-test@v1"
+    assert body["text_before"] == body["text_after"] and body["changes"] == []
+    assert "DE89 3704" not in body["text_after"] and "max@example.org" not in body["text_after"]
+    assert body["entities"].get("iban") == 1
+
+
+def test_policy_test_endpoint_with_unsaved_changes(client, sample_policy):
+    before = client.get("/v1/policies/sample-test", headers=USER).json()["version"]
+    body = client.post(sample_policy,
+                       json={"text": SAMPLE, "changes": {"email": "allow", "iban": "block"}}, headers=USER).json()
+    assert body["outcome_after"] == "block" and body["text_after"] is None
+    assert any(c["entity_type"] == "iban" and c["after"] == "block" for c in body["changes"])
+    assert client.get("/v1/policies/sample-test", headers=USER).json()["version"] == before  # nothing saved
+
+
+def test_policy_test_endpoint_rejects_bad_input(client, sample_policy):
+    assert client.post(sample_policy, json={"text": SAMPLE, "changes": {"email": "nope"}},
+                       headers=USER).status_code == 422
+    assert client.post("/v1/policies/missing/test", json={"text": SAMPLE}, headers=USER).status_code == 400
+    assert client.post(sample_policy, json={"text": SAMPLE}).status_code == 401
+
+
 # --- leak protection -------------------------------------------------------------------------
 
 def test_validation_errors_do_not_echo_input(client):

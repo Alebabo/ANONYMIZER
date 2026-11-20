@@ -141,7 +141,10 @@ export type PromptHistoryItem = {
 };
 export type PromptDiff = { name: string; from: number; to: number; diff: string; config_changed: boolean; protected: boolean };
 
-export type Dataset = { id: string; name: string; columns: string[]; rows: number; created_at: number; created_by: string | null };
+export type Dataset = {
+  id: string; name: string; /** Visible columns only. */ columns: string[]; rows: number; created_at: number; created_by: string | null;
+  /** Dashboard sessions only: every column in upload order and the hidden ones. */ all_columns?: string[]; hidden?: string[];
+};
 export type PlaygroundResult = {
   dataset: { id: string; name: string; rows: number }; columns: string[]; matched: number; offset: number; limit: number;
   rows: Record<string, unknown>[] | string; trace_id: string;

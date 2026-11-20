@@ -289,3 +289,16 @@ def test_pipeline_returns_text_only_when_allowed():
     assert held.decision.outcome == Outcome.LOCAL_ONLY
     local = pipe.protect("Herr Max Mustermann leidet an einer Depression.", destination="local")
     assert local.allowed
+
+
+def test_apply_changes_moves_types_like_the_dashboard_editor():
+    from anonymizer.policy.edit import apply_changes, entity_actions
+    p = Policy.from_yaml("name: x\nrules:\n  - {id: contact, entity: [email, phone], action: pseudonymize}\n"
+                         "  - {id: special, category: special_category, action: block}\ndefault_action: redact\n")
+    nxt = apply_changes(p, {"email": Action.ALLOW, "phone": None, "iban": Action.REDACT})
+    assert nxt.version == 2 and p.version == 1 and entity_actions(p)["email"] == Action.PSEUDONYMIZE  # input untouched
+    acts = entity_actions(nxt)
+    assert acts == {"email": Action.ALLOW, "iban": Action.REDACT}            # phone now follows the default
+    ids = [r.id for r in nxt.rules]
+    assert "contact" not in ids and "special" in ids                         # emptied simple rule dropped, others kept
+    assert {"editor_allow", "editor_redact"} <= set(ids)

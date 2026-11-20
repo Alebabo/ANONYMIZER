@@ -78,6 +78,8 @@ class PlaygroundStore:
             CREATE TABLE IF NOT EXISTS dataset_rows (
                 dataset_id TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (dataset_id, idx));
         """)
+        if "hidden" not in {r[1] for r in self._db.execute("PRAGMA table_info(datasets)")}:
+            self._db.execute("ALTER TABLE datasets ADD COLUMN hidden TEXT NOT NULL DEFAULT '[]'")
         cols = {r[1] for r in self._db.execute("PRAGMA table_info(dataset_rows)")}
         if "search" not in cols:  # stores from before text search ran in SQLite
             self._db.execute("ALTER TABLE dataset_rows ADD COLUMN search TEXT")
@@ -90,9 +92,10 @@ class PlaygroundStore:
 
     def add(self, org_id: str, name: str, columns: list[str], rows: list[dict[str, str]], created_by: str) -> dict:
         ds = {"id": f"ds_{uuid.uuid4().hex[:10]}", "org_id": org_id, "name": name, "columns": columns,
-              "rows": len(rows), "created_at": time.time(), "created_by": created_by}
+              "rows": len(rows), "created_at": time.time(), "created_by": created_by, "hidden": []}
         with self._lock:
-            self._db.execute("INSERT INTO datasets VALUES (?,?,?,?,?,?,?)",
+            self._db.execute("INSERT INTO datasets (id, org_id, name, columns, rows, created_at, created_by, hidden) "
+                             "VALUES (?,?,?,?,?,?,?,'[]')",
                              (ds["id"], org_id, name, json.dumps(columns), len(rows), ds["created_at"], created_by))
             self._db.executemany("INSERT INTO dataset_rows (dataset_id, idx, data, search) VALUES (?,?,?,?)",
                                  ((ds["id"], i, json.dumps(r, ensure_ascii=False), _search_text(r, columns))
@@ -102,15 +105,24 @@ class PlaygroundStore:
 
     def list(self, org_id: str) -> list[dict]:
         with self._lock:
-            rows = self._db.execute("SELECT id, org_id, name, columns, rows, created_at, created_by FROM datasets "
+            rows = self._db.execute("SELECT id, org_id, name, columns, rows, created_at, created_by, hidden FROM datasets "
                                     "WHERE org_id = ? ORDER BY created_at DESC", (org_id,)).fetchall()
         return [self._head(r) for r in rows]
 
     def get(self, org_id: str, dataset_id: str) -> dict | None:
         with self._lock:
-            r = self._db.execute("SELECT id, org_id, name, columns, rows, created_at, created_by FROM datasets "
+            r = self._db.execute("SELECT id, org_id, name, columns, rows, created_at, created_by, hidden FROM datasets "
                                  "WHERE org_id = ? AND id = ?", (org_id, dataset_id)).fetchone()
         return self._head(r) if r else None
+
+    def set_hidden(self, org_id: str, dataset_id: str, hidden: list[str]) -> bool:
+        with self._lock:
+            n = self._db.execute("UPDATE datasets SET hidden = ? WHERE org_id = ? AND id = ?",
+                                 (json.dumps(hidden), org_id, dataset_id)).rowcount
+            if n:
+                self._db.execute("DELETE FROM query_cache WHERE dataset_id = ?", (dataset_id,))
+            self._db.commit()
+        return bool(n)
 
     def rows(self, dataset_id: str) -> list[tuple[int, dict[str, str]]]:
         with self._lock:
@@ -174,7 +186,7 @@ class PlaygroundStore:
     @staticmethod
     def _head(r) -> dict:
         return {"id": r[0], "name": r[2], "columns": json.loads(r[3]), "rows": r[4], "created_at": r[5],
-                "created_by": r[6]}
+                "created_by": r[6], "hidden": json.loads(r[7] or "[]")}
 
 
 def parse_csv(data: bytes | str) -> tuple[list[str], list[dict[str, str]]]:
@@ -242,7 +254,31 @@ class PlaygroundService:
         return ds
 
     def list(self, principal: Principal) -> list[dict]:
-        return self.store.list(principal.org_id)
+        """Hidden columns are left out of ``columns``; dashboard sessions also get ``all_columns`` and ``hidden``."""
+        out = []
+        for ds in self.store.list(principal.org_id):
+            head = {**ds, "columns": _visible(ds)}
+            if principal.kind == "session":
+                head["all_columns"] = ds["columns"]
+            else:
+                head.pop("hidden", None)
+            out.append(head)
+        return out
+
+    def set_hidden(self, principal: Principal, dataset_id: str, hidden: list[str]) -> dict:
+        """Hide columns: they stay stored but are never searched, shown or sent (dashboard and MCP)."""
+        ds = self.store.get(principal.org_id, dataset_id)
+        if ds is None:
+            raise PlaygroundError("dataset not found", 404)
+        unknown = sorted(set(hidden) - set(ds["columns"]))
+        if unknown:
+            raise PlaygroundError(f"unknown column(s): {', '.join(unknown)}")
+        hidden = [c for c in ds["columns"] if c in set(hidden)]  # upload order, no duplicates
+        if len(hidden) == len(ds["columns"]):
+            raise PlaygroundError("at least one column must stay visible")
+        self.store.set_hidden(principal.org_id, dataset_id, hidden)
+        self._audit(principal, "update", dataset_id, {"hidden_columns": hidden})
+        return {"id": dataset_id, "columns": [c for c in ds["columns"] if c not in hidden], "hidden": hidden}
 
     def delete(self, principal: Principal, dataset_id: str) -> None:
         if not self.store.delete(principal.org_id, dataset_id):
@@ -259,7 +295,8 @@ class PlaygroundService:
         ds = self.store.get(principal.org_id, dataset_id)
         if ds is None:
             raise PlaygroundError("dataset not found; list datasets first", 404)
-        cols = [c for c in (columns or ds["columns"]) if c in ds["columns"]] or ds["columns"]
+        visible = _visible(ds)
+        cols = [c for c in (columns or visible) if c in visible] or visible
         limit = max(1, min(int(limit), MAX_LIMIT))
         offset = max(0, int(offset))
         needle = (query or "").strip().lower()
@@ -322,6 +359,11 @@ class PlaygroundService:
     def _audit(self, principal: Principal, action: str, dataset_id: str, after: Any) -> None:
         if self.audit is not None:
             self.audit.record(principal.org_id, action, "playground_dataset", dataset_id, principal, after=after)
+
+
+def _visible(ds: dict) -> list[str]:
+    hidden = set(ds.get("hidden") or [])
+    return [c for c in ds["columns"] if c not in hidden]
 
 
 def _replacements(report) -> list[dict[str, Any]]:

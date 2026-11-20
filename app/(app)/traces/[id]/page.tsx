@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PageHeader, TableScroll } from "@/components/app-shell";
 import { Pill, SourceBanner } from "@/components/dashboard";
 import { InlineDiff, delClass, insClass } from "@/components/inline-diff";
-import { Chip, Dot, ms, stamp, type DotState } from "@/components/widgets";
+import { Chip, Collapsible, Dot, ms, stamp, type DotState } from "@/components/widgets";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getTrace, type TraceContent } from "@/lib/anonymizer-api";
 import { cn } from "@/lib/utils";
@@ -68,11 +68,29 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
         {t.resource && <Chip label="Resource"><span className="font-mono">{t.resource}</span></Chip>}
       </div>
 
-      <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[minmax(260px,340px)_1fr]">
-        {/* Observation tree */}
-        <div className="h-fit rounded-lg border">
-          <div className="bg-surface-section border-b px-3 py-1.5 text-xs font-medium">Steps</div>
-          <ol className="p-2 text-xs">
+      <div className="min-w-0 space-y-4 p-4 md:p-6">
+          {t.warnings.length > 0 && (
+            <div className="bg-light-yellow text-dark-yellow rounded-md px-3 py-2 text-xs">{t.warnings.join(" · ")}</div>
+          )}
+
+          {t.content?.length ? (
+            <Section title="Input → Output">
+              <p className="text-dark-yellow mb-3 text-xs">
+                Content trace: shows original values in clear text. Test data only (ANONYMIZER_TRACE_CONTENT=1).
+              </p>
+              <ContentTable items={t.content} />
+            </Section>
+          ) : (
+            <Section title="Output">
+              <p className="text-muted-foreground text-xs">
+                No content stored for this trace. Content traces are off by default; with ANONYMIZER_TRACE_CONTENT=1
+                admins see what went through and which values were replaced.
+              </p>
+            </Section>
+          )}
+
+          <Collapsible title="Steps" summary={`${t.steps.length} step(s) · ${ms(t.latency_ms)}`}>
+          <ol className="text-xs">
             <li className="flex items-center gap-2 rounded-md px-1.5 py-1">
               <span className="rounded-sm px-1 text-2xs font-medium text-white" style={{ background: "var(--observation-trace-fill)" }}>TRACE</span>
               <span className="min-w-0 flex-1 truncate font-mono font-medium" title={name}>{name}</span>
@@ -95,31 +113,10 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
               );
             })}
           </ol>
-        </div>
+          </Collapsible>
 
-        <div className="min-w-0 space-y-4">
-          {t.warnings.length > 0 && (
-            <div className="bg-light-yellow text-dark-yellow rounded-md px-3 py-2 text-xs">{t.warnings.join(" · ")}</div>
-          )}
-
-          {t.content?.length ? (
-            <Section title="Input → Output">
-              <p className="text-dark-yellow mb-3 text-xs">
-                Content trace: shows original values in clear text. Test data only (ANONYMIZER_TRACE_CONTENT=1).
-              </p>
-              <ContentTable items={t.content} />
-            </Section>
-          ) : (
-            <Section title="Output">
-              <p className="text-muted-foreground text-xs">
-                No content stored for this trace. Content traces are off by default; with ANONYMIZER_TRACE_CONTENT=1
-                admins see what went through and which values were replaced.
-              </p>
-            </Section>
-          )}
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Section title="Entities & actions">
+          <div className="grid items-start gap-4 xl:grid-cols-2">
+            <Collapsible title="Entities & actions" summary={`${Object.keys(t.actions).length} type/action pair(s)`}>
               <ul className="space-y-1 text-xs">
                 {Object.entries(t.actions).sort((a, b) => b[1] - a[1]).map(([k, n]) => {
                   const [type, action] = k.split(":");
@@ -130,9 +127,9 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                 })}
                 {!Object.keys(t.actions).length && <li className="text-muted-foreground">No entities</li>}
               </ul>
-            </Section>
+            </Collapsible>
             {t.fields && Object.keys(t.fields).length > 0 ? (
-              <Section title="Fields with personal data">
+              <Collapsible title="Fields with personal data" summary={`${Object.keys(t.fields).length} field(s)`}>
                 <ul className="space-y-1.5 text-xs">
                   {Object.entries(t.fields).map(([path, counts]) => (
                     <li key={path} className="flex justify-between gap-3">
@@ -140,11 +137,11 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                       <span className="text-muted-foreground shrink-0">{Object.entries(counts).map(([k, n]) => `${k} ${n}`).join(" · ")}</span>
                     </li>))}
                 </ul>
-              </Section>
+              </Collapsible>
             ) : <div className="hidden xl:block" />}
           </div>
 
-          <Section title="Metadata">
+          <Collapsible title="Metadata">
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-xs">
               {meta.map(([k, v]) => (
                 <div key={k} className="contents">
@@ -152,8 +149,7 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
                 </div>
               ))}
             </dl>
-          </Section>
-        </div>
+          </Collapsible>
       </div>
     </>
   );
