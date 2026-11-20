@@ -272,3 +272,32 @@ def test_malformed_policy_yaml_is_a_client_error(client):
     assert r.status_code == 400 and "oops" not in r.text
     r = client.post("/v1/policies/dry-run", json={"text": LETTER, "candidate_yaml": "name: [\n"}, headers=USER)
     assert r.status_code == 400
+
+
+def test_every_model_call_is_traced_with_channel_and_actor(client):
+    client.post("/v1/scan", json={"text": SAMPLE}, headers=USER)
+    client.post("/v1/anonymize", json={"text": SAMPLE}, headers=USER)
+    r = client.post("/v1/protect", json={"text": SAMPLE}, headers=USER).json()
+    assert r["trace_id"]
+    traces = client.get("/v1/traces?client=api", headers=USER).json()
+    assert {t["route"] for t in traces} >= {"/v1/scan", "/v1/anonymize", "/v1/protect"}
+    assert all(t["client"] == "api" and t["actor"] for t in traces)
+    scan = next(t for t in traces if t["route"] == "/v1/scan")
+    assert scan["entity_counts"] == {"iban": 1, "email": 1}
+    assert client.get("/v1/traces?client=mcp", headers=USER).json() == []
+
+
+def test_mcp_anonymize_uses_the_saved_policy_and_writes_a_full_trace(tmp_path):
+    from anonymizer.mcp import AnonymizerTools, MCPConfig
+    from anonymizer.policy import Policy
+    from anonymizer.tracing import TraceStore
+
+    traces = TraceStore(tmp_path / "t.db")
+    current = {"p": Policy.from_yaml(TEST_POLICY)}
+    tools = AnonymizerTools(MCPConfig(), traces=traces, policy_provider=lambda: current["p"])
+    out = tools.anonymize_content(SAMPLE)
+    assert "max@example.org" not in out["text"] and "EMAIL_" in out["text"]
+    current["p"] = Policy.from_yaml(TEST_POLICY.replace("action: pseudonymize", "action: allow"))
+    assert "max@example.org" in tools.anonymize_content(SAMPLE)["text"]  # policy change applies right away
+    t = traces.list(client="mcp")[0]
+    assert t.tool == "anonymize_content" and t.policy == "sample-test@v1" and t.entity_counts == {"iban": 1, "email": 1}

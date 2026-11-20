@@ -122,16 +122,6 @@ export async function changePassword(_: ActionState, form: FormData): Promise<Ac
   }, "/settings");
 }
 
-export async function setPromptLabel(_: ActionState, form: FormData): Promise<ActionState> {
-  const name = str(form, "name");
-  return run(async () => {
-    const out = await api<{ version: number; previous_version: number | null; label: string }>(
-      `/v1/prompts/${encodeURIComponent(name)}/labels`,
-      { method: "POST", body: JSON.stringify({ version: Number(str(form, "version")), label: str(form, "label") }) });
-    return { message: `${out.label} → v${out.version}` + (out.previous_version ? ` (was v${out.previous_version})` : "") };
-  }, `/prompts/${encodeURIComponent(name)}`);
-}
-
 // -- playground ------------------------------------------------------------------------------
 export async function uploadDataset(_: ActionState, form: FormData): Promise<ActionState> {
   if (isDemo()) return DEMO;
@@ -206,12 +196,31 @@ export async function editPolicy(_: ActionState, form: FormData): Promise<Action
   }, "/settings/policies");
 }
 
-export async function setProxyUpstream(_: ActionState, form: FormData): Promise<ActionState> {
-  return run(async () => {
-    const enabled = str(form, "enabled") === "true";
-    await api(`/v1/proxy/upstreams/${encodeURIComponent(str(form, "name"))}`, {
-      method: "PUT", body: JSON.stringify({ enabled }),
+// -- chat ----------------------------------------------------------------------------------
+export type ChatResult = {
+  text: string | null; outcome: string; allowed: boolean; reasons: string[]; policy: string;
+  entities: Record<string, number>; trace_id: string | null;
+} | { error: string };
+
+type ProtectBody = {
+  text: string | null; outcome: string; allowed: boolean; trace_id: string | null;
+  decision: { policy: string; reasons: string[]; entities: { entity_type: string }[] };
+};
+
+/** Chat tab: one message through the model with the chosen policy (POST /v1/protect, traced as "dashboard"). */
+export async function protectText(text: string, policy: string): Promise<ChatResult> {
+  if (isDemo()) return { error: DEMO.error! };
+  if (!text.trim()) return { error: "Enter a text." };
+  try {
+    const r = await api<ProtectBody>("/v1/protect", {
+      method: "POST", body: JSON.stringify({ text, policy: policy || null, destination: "external" }),
     });
-    return { message: enabled ? "Logging on." : "Logging off." };
-  }, "/proxy");
+    const entities: Record<string, number> = {};
+    for (const e of r.decision.entities) entities[e.entity_type] = (entities[e.entity_type] ?? 0) + 1;
+    return { text: r.text, outcome: r.outcome, allowed: r.allowed, reasons: r.decision.reasons, policy: r.decision.policy,
+             entities, trace_id: r.trace_id };
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    throw e;
+  }
 }

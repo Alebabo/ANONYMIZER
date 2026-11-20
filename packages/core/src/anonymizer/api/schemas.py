@@ -73,6 +73,7 @@ class ProtectResponse(BaseModel):
     risk: RiskLevel
     decision: PolicyDecision
     classification: DocumentClassification
+    trace_id: str | None = None
 
 
 class RestoreRequest(_Strict):

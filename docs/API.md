@@ -48,7 +48,7 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 | POST | `/v1/protect` | API | Full pipeline with policy; returns `text` only when allowed |
 | POST | `/v1/documents/protect` | API | Upload PDF/DOCX/TXT (multipart); DOCX comes back anonymized in place |
 | POST | `/v1/chat/completions` | API | OpenAI-compatible gateway (see [gateway.md](gateway.md)) |
-| GET | `/v1/traces`, `/v1/traces/{id}` | API | Metadata-only traces with decision history |
+| GET | `/v1/traces`, `/v1/traces/{id}` | API | Metadata-only traces with decision history; every model call (scan, classify, anonymize, protect, MCP) is one, with `client` (api / mcp / dashboard) and `actor`. Filter: `?client=`, `?route=` |
 | GET | `/v1/metrics` | API | Aggregated privacy metrics |
 | GET | `/v1/gateway` | API | Gateway configuration without credentials |
 | POST | `/v1/restore` | Admin key | Resolve placeholders via the vault (audited) |
