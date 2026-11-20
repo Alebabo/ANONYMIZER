@@ -326,6 +326,7 @@ class PlaygroundService:
                              mode="enforce", provider="playground", model=ds["name"], latency_ms=latency)
         trace.route = "/v1/playground"
         trace.resource = dataset_id
+        trace.client, trace.actor = client, principal.label
         trace.steps = [
             TraceStep(name="Tool call", detail=f"playground · {client} · {ds['name']}"),
             TraceStep(name="Query", detail=f"{n_matched} matching row(s) of {ds['rows']}"

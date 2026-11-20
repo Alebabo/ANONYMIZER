@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  Activity, ChevronRight, FileText, FlaskConical, Home, Info, LogOut, Menu, MessagesSquare, PanelLeft, Plug, Settings, X,
+  Activity, ChevronRight, Info, LogOut, Menu, MessageSquare, PanelLeft, Settings, Table2, X,
 } from "lucide-react";
 import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
@@ -13,35 +13,27 @@ type Tab = { href: string; label: string };
 
 // Pages that belong together share one nav entry and switch via tabs in the page header.
 const sections = {
-  setup: {
-    label: "Setup",
-    tabs: [
-      { href: "/proxy", label: "MCP Proxy" }, { href: "/api-keys", label: "API Keys" },
-    ],
-  },
   settings: {
     label: "Settings",
     tabs: [
-      { href: "/settings", label: "General" }, { href: "/settings/members", label: "Members" },
-      { href: "/settings/policies", label: "Policies" }, { href: "/settings/audit-logs", label: "Audit Logs" },
+      { href: "/settings", label: "General" }, { href: "/settings/policies", label: "Policies" },
+      { href: "/api-keys", label: "API Keys" }, { href: "/settings/members", label: "Members" },
+      { href: "/settings/audit-logs", label: "Audit Logs" },
     ],
   },
 } satisfies Record<string, { label: string; tabs: Tab[] }>;
 type Section = keyof typeof sections;
 
 const main: NavItem[] = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/", label: "Chat", icon: MessageSquare },
   { href: "/traces", label: "Traces", icon: Activity },
-  { href: "/conversations", label: "Conversations", icon: MessagesSquare },
-  { href: "/prompts", label: "Prompts", icon: FileText },
-  { href: "/playground", label: "Playground", icon: FlaskConical },
+  { href: "/playground", label: "CSV", icon: Table2 },
 ];
 const bottom: NavItem[] = [
-  { href: "/proxy", label: "Setup", icon: Plug, section: "setup" },
   { href: "/settings", label: "Settings", icon: Settings, section: "settings" },
 ];
 
-type NavItem = { href: string; label: string; icon: typeof Home; section?: Section };
+type NavItem = { href: string; label: string; icon: typeof Activity; section?: Section };
 
 const under = (path: string, href: string) => path === href || path.startsWith(href + "/");
 

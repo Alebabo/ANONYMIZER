@@ -69,7 +69,7 @@ from anonymizer.documents import DocumentError, protect_document
 from anonymizer.gateway import Gateway, GatewayConfig, GatewayError
 from anonymizer.prompts import PromptError, PromptService, backend_from_env
 from anonymizer.sources import source_from_env
-from anonymizer.tracing import Trace, TraceStep, TraceStore, trace_from_protect
+from anonymizer.tracing import Trace, TraceStep, TraceStore, trace_from_protect, trace_from_scan
 from anonymizer.vault import FileVault, InMemoryVault, VaultError, VaultKey
 
 log = logging.getLogger("anonymizer.api")
@@ -370,10 +370,20 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         }
 
     # -- core ------------------------------------------------------------------
+    def usage(p: Principal) -> dict:
+        """Who used the model and through which channel; stored on every trace."""
+        return {"client": "dashboard" if p.kind == "session" else "api", "actor": p.label}
+
+    def trace_scan(route: str, r, t0: float, p: Principal, **extra) -> None:
+        state.traces.add(trace_from_scan(route, r, round((time.perf_counter() - t0) * 1000, 1), **usage(p), **extra),
+                         p.org_id)
+
     @app.post("/v1/scan", response_model=ScanResponse, tags=["privacy"])
-    def scan(req: TextRequest, _: User) -> ScanResponse:
+    def scan(req: TextRequest, p: User) -> ScanResponse:
         check_size(req.text)
+        t0 = time.perf_counter()
         r = state.detector.scan(req.text, req.language)
+        trace_scan("/v1/scan", r, t0, p)
         return ScanResponse(
             language=r.language, signals=r.signals, warnings=r.warnings,
             detections=[DetectionOut(**{**d.redacted(), "category": d.category.value, "signals": list(d.signals)})
@@ -381,20 +391,26 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         )
 
     @app.post("/v1/classify", response_model=DocumentClassification, tags=["privacy"])
-    def classify(req: ClassifyRequest, _: User) -> DocumentClassification:
+    def classify(req: ClassifyRequest, p: User) -> DocumentClassification:
         check_size(req.text)
+        t0 = time.perf_counter()
         r = state.detector.scan(req.text, req.language)
-        return state.classifier.classify_text(req.text, r, corrections=req.corrections)
+        c = state.classifier.classify_text(req.text, r, corrections=req.corrections)
+        trace_scan("/v1/classify", r, t0, p, risk=c.risk.value, needs_review=c.needs_review)
+        return c
 
     @app.post("/v1/anonymize", response_model=AnonymizationResult, tags=["privacy"])
     def anonymize(req: AnonymizeRequest, p: User) -> AnonymizationResult:
         check_size(req.text)
         if req.namespace and state.vault is None:
             raise HTTPException(status_code=400, detail="namespace given but no vault configured (ANONYMIZER_VAULT_KEY)")
+        t0 = time.perf_counter()
         r = state.detector.scan(req.text, req.language)
         cfg = AnonymizerConfig(methods=req.methods, include_role=req.include_role)
-        return OpenAnonymizer(cfg, vault=state.vault if req.namespace else None).anonymize(
+        result = OpenAnonymizer(cfg, vault=state.vault if req.namespace else None).anonymize(
             req.text, r, namespace=scoped(p, req.namespace))
+        trace_scan("/v1/anonymize", r, t0, p, transformations=len(result.transformations))
+        return result
 
     @app.post("/v1/protect", response_model=ProtectResponse, tags=["privacy"])
     def protect(req: ProtectRequest, p: User) -> ProtectResponse:
@@ -408,11 +424,13 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         t0 = time.perf_counter()
         result = pipeline.protect(req.text, req.destination, namespace=scoped(p, req.namespace),
                                   language=req.language, dry_run=req.dry_run)
+        trace_id = None
         if not req.dry_run:
-            state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1),
-                                                original=req.text), p.org_id)
+            trace = state.traces.add(trace_from_protect("/v1/protect", result, round((time.perf_counter() - t0) * 1000, 1),
+                                                        original=req.text, **usage(p)), p.org_id)
+            trace_id = trace.id
         text = None if req.dry_run else result.text
-        return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text,
+        return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text, trace_id=trace_id,
                                risk=result.classification.risk, decision=result.decision,
                                classification=result.classification)
 
@@ -440,7 +458,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         doc = protect_document(pipeline, data, file.filename, destination, scoped(p, namespace), language,
                                max_bytes=settings.max_upload_bytes)
         r = doc.result
-        trace = trace_from_protect("/v1/documents/protect", r, round((time.perf_counter() - t0) * 1000, 1))
+        trace = trace_from_protect("/v1/documents/protect", r, round((time.perf_counter() - t0) * 1000, 1), **usage(p))
         trace.steps.insert(1, TraceStep(name="Document parsed", detail=f"{doc.format}"
                                         + (f" · {doc.pages} pages" if doc.pages else "")
                                         + (f" · {len(doc.warnings)} warning(s)" if doc.warnings else ""),
@@ -483,17 +501,17 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             data, trace = await run_in_threadpool(state.gateway.chat_completions, body)
         except GatewayError as exc:
             if exc.trace is not None:
-                state.traces.add(exc.trace, p.org_id)
+                state.traces.add(exc.trace.model_copy(update=usage(p)), p.org_id)
             headers = {"X-OpenAnonymizer-Trace-Id": exc.trace.id} if exc.trace else {}
             return JSONResponse(status_code=exc.status, content=exc.body(), headers=headers)
-        state.traces.add(trace, p.org_id)
+        state.traces.add(trace.model_copy(update=usage(p)), p.org_id)
         return JSONResponse(content=data, headers={"X-OpenAnonymizer-Trace-Id": trace.id, "X-OpenAnonymizer-Outcome": trace.outcome or ""})
 
     # -- observability ---------------------------------------------------------
     @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
     def list_traces(p: User, limit: int = 50, outcome: str | None = None, route: str | None = None,
-                    since: float | None = None) -> list[Trace]:
-        return [_visible(t, p) for t in state.traces.list(limit, outcome, route, since, org_id=p.org_id)]
+                    since: float | None = None, client: str | None = None) -> list[Trace]:
+        return [_visible(t, p) for t in state.traces.list(limit, outcome, route, since, org_id=p.org_id, client=client)]
 
     @app.get("/v1/traces/{trace_id}", response_model=Trace, tags=["observability"])
     def get_trace(trace_id: str, p: User) -> Trace:
@@ -825,7 +843,7 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             mcp_env |= {"ANONYMIZER_VAULT_KEY": settings.vault_key, "ANONYMIZER_VAULT_PATH": str(settings.vault_path)}
         tools = AnonymizerTools(MCPConfig.from_env(mcp_env), detector=state.detector,
                           conversations=state.conversations, prompts=state.prompts, playground=state.playground,
-                          traces=state.traces)
+                          traces=state.traces, policy_provider=lambda: state.policies.effective(settings.default_policy))
         hosts = [h.strip() for h in settings.env.get("ANONYMIZER_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
         server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
         mcp_holder["server"] = server

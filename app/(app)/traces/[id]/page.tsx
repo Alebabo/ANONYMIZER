@@ -64,6 +64,7 @@ export default async function TraceDetail({ params }: { params: Promise<{ id: st
         <Chip label="Risk">{t.risk ?? "–"}</Chip>
         <Chip label="Entities">{entities}</Chip>
         <Chip label="Replaced">{t.transformations}</Chip>
+        {t.client && <Chip label="Channel">{t.client === "dashboard" ? "Dashboard" : t.client.toUpperCase()}{t.actor ? ` · ${t.actor}` : ""}</Chip>}
         {t.policy && <Chip label="Policy">{t.policy}</Chip>}
         {t.resource && <Chip label="Resource"><span className="font-mono">{t.resource}</span></Chip>}
       </div>

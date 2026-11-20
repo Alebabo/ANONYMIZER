@@ -23,8 +23,8 @@ export default async function Policies({ searchParams }: { searchParams: Promise
   // Which part of OpenAnonymizer uses which policy, so it is clear what a change affects.
   const usedBy: Record<string, string[]> = {};
   const use = (name: string | null | undefined, what: string) => { if (name) (usedBy[name] ??= []).push(what); };
-  use(info.default_policy, "Gateway & API");
-  use(sources.conversation_policy ?? "support-default", "Playground, conversations & MCP datasets");
+  use(info.default_policy, "Chat, API & MCP");
+  use(sources.conversation_policy ?? "support-default", "CSV uploads");
   const { name } = await searchParams;
   const active = policies.find(p => p.name === name) ?? policies.find(p => p.name === "support-default") ?? policies[0];
   const detail = active ? (await getPolicy(active.name)).data as PolicyJson | null : null;
@@ -71,7 +71,7 @@ export default async function Policies({ searchParams }: { searchParams: Promise
           <p className="text-muted-foreground text-xs">
             Every save creates a new version; older versions stay stored and every change is in the
             {" "}<Link className="text-link" href="/settings/audit-logs">audit log</Link>.
-            Text tools of the MCP server (anonymize_content …) use their own built-in policy unless ANONYMIZER_MCP_POLICY is set.
+            A saved version applies right away to Chat, API and MCP (unless ANONYMIZER_MCP_POLICY pins a file for MCP).
           </p>
         </Collapsible>
       </div>

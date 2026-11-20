@@ -88,6 +88,9 @@ class Trace(BaseModel):
     # What was read (e.g. conversation id). Content: only kept when the store allows it (see module doc).
     resource: str | None = None
     content: list[ContentItem] = Field(default_factory=list)
+    # Who used the model and how: api | mcp | dashboard, and the key name or user e-mail (never a secret).
+    client: str | None = None
+    actor: str | None = None
 
 
 def content_item(result: Any, original: str, label: str | None = None) -> ContentItem:
@@ -101,6 +104,18 @@ def content_item(result: Any, original: str, label: str | None = None) -> Conten
                 for e in result.classification.entities]
     return ContentItem(label=label, input=original, output=result.text if result.allowed else None,
                        withheld=not result.allowed, replacements=reps)
+
+
+def trace_from_scan(route: str, scan: Any, latency_ms: float | None = None, **extra: Any) -> Trace:
+    """Trace for calls that only detect (scan, classify, anonymize without policy): counts, no values."""
+    return Trace(
+        route=route, language=scan.language, latency_ms=latency_ms, warnings=list(scan.warnings),
+        entity_counts=dict(Counter(d.entity_type for d in scan.detections)), signals=sorted(scan.document_signals),
+        steps=[TraceStep(name="Request received", detail=route),
+               TraceStep(name="Privacy detection", detail=f"{len(scan.detections)} entities detected",
+                         status="warning" if scan.warnings else "ok")],
+        **extra,
+    )
 
 
 def trace_from_protect(route: str, result: Any, latency_ms: float | None = None, *, original: str | None = None,
@@ -231,8 +246,11 @@ class TraceStore:
         return Trace.model_validate_json(row[0]) if row else None
 
     def list(self, limit: int = 50, outcome: str | None = None, route: str | None = None,
-             since: float | None = None, org_id: str = DEFAULT_ORG) -> list[Trace]:
+             since: float | None = None, org_id: str = DEFAULT_ORG, client: str | None = None) -> list[Trace]:
         sql, args = "SELECT data FROM traces WHERE org_id = ?", [org_id]
+        if client:
+            sql += " AND json_extract(data, '$.client') = ?"
+            args.append(client)
         if outcome:
             sql += " AND outcome = ?"
             args.append(outcome)

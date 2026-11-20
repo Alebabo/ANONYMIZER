@@ -111,19 +111,31 @@ class AnonymizerTools:
 
     def __init__(self, config: MCPConfig | None = None, detector: Detector | None = None,
                  conversations: ConversationService | None = None, prompts: PromptService | None = None,
-                 playground: PlaygroundService | None = None, traces=None) -> None:
+                 playground: PlaygroundService | None = None, traces=None,
+                 policy_provider: Callable[[], Policy] | None = None) -> None:
         self.playground = playground
         # TraceStore for tool calls that do not write their own trace (see TRACED_BY_SERVICE).
         self.traces = traces
         self.config = config or MCPConfig()
         self.conversations = conversations
         self.prompts = prompts
-        self.policy: Policy = Policy.from_file(self.config.policy_path) if self.config.policy_path else builtin_policy()
+        # Fixed policy (ANONYMIZER_MCP_POLICY or built-in) unless the API passes its own: then MCP uses the
+        # same, currently saved policy as the REST API and the dashboard, so all channels behave alike.
+        self._fixed: Policy | None = (Policy.from_file(self.config.policy_path) if self.config.policy_path
+                                      else None if policy_provider else builtin_policy())
+        self._policy_provider = policy_provider
         self.detector = detector or Detector()
         self.classifier = Classifier()
-        vault = (FileVault(self.config.vault_path, VaultKey.from_b64(self.config.vault_key))
-                 if self.config.vault_key and self.config.namespace else None)
-        self.pipeline = Pipeline(self.policy, detector=self.detector, classifier=self.classifier, vault=vault)
+        self._vault = (FileVault(self.config.vault_path, VaultKey.from_b64(self.config.vault_key))
+                       if self.config.vault_key and self.config.namespace else None)
+
+    @property
+    def policy(self) -> Policy:
+        return self._fixed if self._fixed is not None else self._policy_provider()  # type: ignore[misc]
+
+    @property
+    def pipeline(self) -> Pipeline:
+        return Pipeline(self.policy, detector=self.detector, classifier=self.classifier, vault=self._vault)
 
     # -- helpers ---------------------------------------------------------------
     def _check(self, text: str) -> None:
@@ -181,10 +193,22 @@ class AnonymizerTools:
             "actions": dict(Counter(f"{e.entity_type}:{e.action.value}" for e in d.entities)),
         }
 
-    def anonymize_content(self, text: str, language: str | None = None) -> dict[str, Any]:
+    def anonymize_content(self, text: str, language: str | None = None,
+                          principal: Principal | None = None) -> dict[str, Any]:
         self._check(text)
+        start = time.perf_counter()
         result = self.pipeline.protect(text, self.config.destination, namespace=self.config.namespace,
                                        language=language)
+        if self.traces is not None:  # full trace: entities, policy, outcome (content only if the store keeps it)
+            from anonymizer.tracing import DEFAULT_ORG, trace_from_protect
+
+            trace = trace_from_protect("/mcp/tools", result, round((time.perf_counter() - start) * 1000, 1),
+                                       original=text, tool="anonymize_content", client="mcp",
+                                       actor=principal.label if principal is not None else None)
+            try:
+                self.traces.add(trace, principal.org_id if principal is not None else DEFAULT_ORG)
+            except Exception:  # tracing must never break a tool call
+                pass
         return self._protect_payload(result)
 
     def get_privacy_report(self, text: str, language: str | None = None) -> str:
@@ -465,8 +489,8 @@ def build_server(tools: AnonymizerTools | None = None,
     @server.tool(description="Anonymize text according to the configured policy. Returns the safe text only "
                              "if the policy allows sending it to this model; otherwise text is null.",
                  annotations=ro)
-    def anonymize_content(text: str, language: str | None = None) -> dict:
-        return t.anonymize_content(text, language)
+    def anonymize_content(ctx: Context, text: str, language: str | None = None) -> dict:
+        return t.anonymize_content(text, language, principal=who(ctx))
 
     @server.tool(description="Check what the configured policy would do with this text (no text returned).",
                  annotations=ro)
@@ -615,7 +639,7 @@ def _policy(ref: str) -> Policy:
 
 
 # These tools write a detailed trace through their service (conversations, playground).
-TRACED_BY_SERVICE = frozenset({"get_conversation", "query_dataset"})
+TRACED_BY_SERVICE = frozenset({"get_conversation", "query_dataset", "anonymize_content"})
 
 
 def _record_tool_call(traces, tool: str, ctx, who, start: float, status: int, error: str | None) -> None:
@@ -626,7 +650,8 @@ def _record_tool_call(traces, tool: str, ctx, who, start: float, status: int, er
         principal = who(ctx) if ctx is not None else None
     except Exception:
         principal = None
-    trace = Trace(route="/mcp/tools", tool=tool, status=status, error=error,
+    trace = Trace(route="/mcp/tools", tool=tool, status=status, error=error, client="mcp",
+                  actor=principal.label if principal is not None else None,
                   outcome="error" if error else "allow", allowed=error is None,
                   latency_ms=round((time.perf_counter() - start) * 1000, 1))
     try:

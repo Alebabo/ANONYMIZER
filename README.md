@@ -25,7 +25,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $ANONYMIZER_API_KEY"
 |---|---|
 | `packages/core/` | Python package `anonymizer-core`: engine, CLI (`anonymizer`), REST API (`anonymizer-api`), MCP server (`anonymizer-mcp`), MCP proxy (`anonymizer-proxy`), Dockerfile |
 | `sdk/python/` | Python client `anonymizer-sdk` (`from anonymizer_sdk import OpenAnonymizer`) |
-| `app/`, `components/`, `lib/` | Next.js dashboard (Langfuse-derived design, mobile-ready) with login: overview, gateway, privacy, traces, conversations, metrics, policies, prompts, API keys, integrations, settings, members, audit log |
+| `app/`, `components/`, `lib/` | Next.js dashboard with login, three tabs: **Chat** (type a text, see what the model receives), **Traces** (every use via API, MCP, Chat or CSV, with channel and key) and **CSV** (upload a test file, hide columns). Settings: policies (with test, also via API), API keys, members, audit log |
 | `examples/support/` | Synthetic support chats and example detection patterns |
 | `examples/proxy/` | Demo upstream (synthetic customer DB as MCP server) and proxy config |
 | `docs/` | Documentation |
@@ -44,7 +44,17 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $ANONYMIZER_API_KEY"
 - [Conversations](docs/conversations.md): protected access to customer chats (JSONL, HTTP contract, Langfuse) with quota, k-anonymity and audit
 - [Prompts](docs/prompts.md): versions, labels, drafts from agents, promotion by people
 
-## Customer chats and prompts for AI agents
+## One model, three ways to use it
+
+The same model and the same saved policy serve every channel; every call is a trace with channel (`api`, `mcp`, `dashboard`) and key name or user:
+
+- **Chat tab** in the dashboard: paste a text, get what an AI model would receive.
+- **REST:** `POST /v1/protect` (also `/v1/scan`, `/v1/anonymize`; policy test: `POST /v1/policies/{name}/test`).
+- **MCP:** `claude mcp add --transport http anonymizer <url>/mcp --header "Authorization: Bearer <key>"`, tool `anonymize_content`.
+
+Traces can be filtered by channel (`GET /v1/traces?client=mcp`).
+
+## Customer chats and prompts for AI agents (API only)
 
 OpenAnonymizer can run next to production and give Claude Code or Cursor protected access to customer conversations and prompt management, without the agent ever seeing raw customer data:
 

@@ -35,7 +35,7 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | Variable | Meaning |
 |---|---|
 | `ANONYMIZER_MCP_DESTINATION` | `external` (default) or `local`. Use `local` only if the client runs exclusively on a local model |
-| `ANONYMIZER_MCP_POLICY` | Path to a policy YAML. Default: `banking-default` |
+| `ANONYMIZER_MCP_POLICY` | Path to a policy YAML. Default: stdio `banking-default`; over HTTP (`/mcp` of the API) the API's saved default policy, so policy changes in the dashboard apply to MCP right away |
 | `ANONYMIZER_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
 | `ANONYMIZER_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
 | `ANONYMIZER_VAULT_KEY`, `ANONYMIZER_VAULT_PATH`, `ANONYMIZER_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |
@@ -126,3 +126,10 @@ Cursor (`.cursor/mcp.json`):
 - **Only plain text formats** for `read_document_protected`. PDF/DOCX go through `POST /v1/documents/protect`.
 - **No OAuth** for remote MCP (see above).
 - **Audit:** conversation reads and prompt changes are audited; `scan`/`anonymize` calls are not.
+
+## Traces
+
+Over HTTP every tool call is a trace with `client: "mcp"` and the key name as `actor`. `anonymize_content`
+writes a full trace (entities, policy, outcome, latency); other tools record name, latency and status.
+Filter in the dashboard (Traces → MCP) or with `GET /v1/traces?client=mcp`.
+

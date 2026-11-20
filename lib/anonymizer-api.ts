@@ -2,9 +2,8 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  exampleApiKeys, exampleAudit, exampleConversation, exampleConversations, exampleConversationStats, exampleGateway,
-  exampleInfo, exampleDatasets, exampleMe, exampleMembers, examplePlayground, exampleMetrics, examplePolicies, examplePromptHistory, examplePrompts, examplePromptVersion,
-  exampleProxy, exampleSources, exampleTraces,
+  exampleApiKeys, exampleAudit, exampleDatasets, exampleInfo, exampleMe, exampleMembers, examplePlayground, examplePolicies,
+  exampleSources, exampleTraces,
 } from "@/lib/mock";
 
 /**
@@ -34,38 +33,13 @@ export type Trace = {
   resource?: string | null;
   /** Only with ANONYMIZER_TRACE_CONTENT=1 and for admins: protected text and original values. */
   content?: TraceContent[];
+  /** Channel (api | mcp | dashboard) and who called: key name or user e-mail. */
+  client?: string | null; actor?: string | null;
 };
 
 export type TraceContent = {
   label: string | null; input?: string | null; output: string | null; withheld: boolean;
   replacements: { type: string; original: string; replacement: string | null; method: string | null }[];
-};
-
-export type ProxyUpstream = {
-  name: string; enabled: boolean; transport: "stdio" | "http"; mode: "enforce" | "observe" | "log"; policy: string; connected: boolean;
-  error: string | null; tools_upstream: number; tools_exposed: number;
-};
-export type ProxyStatus = { path: string; destination: string; upstreams: ProxyUpstream[]; tools: string[] };
-
-export type SeriesPoint = {
-  t: number; requests: number; clean?: number; anonymized?: number; not_allowed?: number; errors?: number; entities?: number;
-};
-export type Operation = {
-  name: string; calls: number; entities: number; not_allowed: number; errors: number; observe: number; p95_ms: number | null;
-  result_chars?: number;
-};
-export type Metrics = {
-  window_hours: number; bucket_seconds?: number; requests: number; requests_with_detections: number; detection_rate: number;
-  detections: number; entities_per_request?: number; anonymized_entities: number; anonymization_rate: number;
-  not_allowed: number; block_rate: number; needs_review?: number; with_warnings?: number; observe_mode?: number;
-  resources_read?: number; by_outcome: Record<string, number>; by_risk: Record<string, number>;
-  by_route: Record<string, number>; by_provider: Record<string, number>; by_policy: Record<string, number>;
-  by_operation?: Operation[]; top_fields?: Record<string, number>; warnings?: Record<string, number>;
-  entity_distribution: Record<string, number>; actions: Record<string, number>;
-  latency_ms: { avg: number | null; p50?: number | null; p95: number | null; p99?: number | null }; errors: number;
-  previous?: { requests: number; detections: number; not_allowed: number; errors: number };
-  last_trace_at?: number | null;
-  timeseries: SeriesPoint[];
 };
 
 export type Info = {
@@ -98,12 +72,6 @@ export type AuditEntry = {
 export type AuditPage = { data: AuditEntry[]; next_before: number | null; actions: string[]; resource_types: string[] };
 export type AuditVerify = { ok: boolean; entries: number; broken_at: string | null; head?: string };
 
-type Upstream = { host: string; provider: string; model: string | null; authenticated: boolean } | null;
-export type GatewayStatus = {
-  external: Upstream; local: Upstream; restore_responses: boolean; timeout_s: number; streaming: boolean;
-  endpoint: string; default_policy: string;
-};
-
 export type Source = { live: boolean; reason?: string };
 
 export type SourcesInfo = {
@@ -112,34 +80,6 @@ export type SourcesInfo = {
   prompts: { backend: string; location?: string } | null;
   mcp_http: boolean;
 };
-export type ConversationHead = {
-  id: string; day: string; message_count: number | null; language: string | null; channel: string | null;
-  tags: string[]; prompt: string | null; prompt_version: number | null;
-};
-export type ConversationPage = { data: ConversationHead[]; next_cursor: string | null };
-export type ConversationMessage = {
-  role: string; content: string | null; minute?: number; withheld?: boolean; outcome?: string; reason?: string;
-};
-export type Conversation = ConversationHead & {
-  outcome: string; risk: string; withheld: number; truncated: boolean; messages: ConversationMessage[];
-  trace_id: string; stable_placeholders: boolean; quota: { used: number; limit: number; remaining: number };
-};
-export type ConversationStats = {
-  group_by: string; min_group: number; total: number | null; suppressed_groups: number; scanned: number; truncated: boolean;
-  groups: { key: string; conversations: number; messages: number }[];
-};
-export type Quota = { used: number; limit: number; remaining: number };
-export type PromptListItem = { name: string; latest_version: number; versions: number; labels: Record<string, number>; updated_at: number | null };
-export type PromptMessage = { role: string; content: string | null };
-export type PromptVersion = {
-  name: string; version: number; type: "text" | "chat"; prompt: string | PromptMessage[] | null; config: Record<string, unknown>;
-  labels: string[]; note: string | null; created_by: string | null; created_at: number | null; hash: string;
-  protected: boolean; warnings?: string[]; notice?: string;
-};
-export type PromptHistoryItem = {
-  version: number; labels: string[]; note: string | null; created_by: string | null; created_at: number | null; hash: string; type: string;
-};
-export type PromptDiff = { name: string; from: number; to: number; diff: string; config_changed: boolean; protected: boolean };
 
 export type Dataset = {
   id: string; name: string; /** Visible columns only. */ columns: string[]; rows: number; created_at: number; created_by: string | null;
@@ -207,10 +147,13 @@ async function read<T>(path: string, example: () => T): Promise<{ data: T; sourc
 
 export const getMe = () => read<Me>("/v1/auth/me", () => exampleMe);
 export const getInfo = () => read<Info>("/v1/info", () => exampleInfo);
-export const getMetrics = (hours = 24) => read<Metrics>(`/v1/metrics?hours=${hours}`, () => exampleMetrics);
-export const getTraces = (limit = 50, route?: string) =>
-  read<Trace[]>(`/v1/traces?limit=${limit}${route ? `&route=${encodeURIComponent(route)}` : ""}`,
-    () => (route ? exampleTraces.filter(t => t.route === route) : exampleTraces));
+export const getTraces = (limit = 50, f: { route?: string; client?: string } = {}) => {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (f.route) q.set("route", f.route);
+  if (f.client) q.set("client", f.client);
+  return read<Trace[]>(`/v1/traces?${q}`,
+    () => exampleTraces.filter(t => (!f.route || t.route === f.route) && (!f.client || t.client === f.client)));
+};
 export const getTrace = async (id: string) => {
   if (isDemo()) return read<Trace | null>("", () => exampleTraces.find(t => t.id === id) ?? null);
   try {
@@ -225,46 +168,8 @@ export const getPolicy = (name: string) =>
   read<Record<string, unknown> | null>(`/v1/policies/${encodeURIComponent(name)}`, () => null);
 export const getApiKeys = () => read<ApiKey[]>("/v1/api-keys", () => exampleApiKeys);
 export const getMembers = () => read<User[]>("/v1/members", () => exampleMembers);
-export const getGateway = () => read<GatewayStatus>("/v1/gateway", () => exampleGateway);
 
 export const getSources = () => read<SourcesInfo>("/v1/sources", () => exampleSources);
-
-/** Not-configured features answer 404; pages show a setup hint instead of an error. */
-async function optional<T>(path: string, example: () => T): Promise<{ data: T | null; source: Source }> {
-  try {
-    return await read<T | null>(path, example);
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return { data: null, source: { live: true } };
-    throw e;
-  }
-}
-
-export const getProxy = () => optional<ProxyStatus>("/v1/proxy", () => exampleProxy);
-
-export const getConversations = (cursor?: string) =>
-  optional<ConversationPage>(`/v1/conversations?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
-    () => exampleConversations);
-export const getConversationStats = (groupBy: string) =>
-  optional<ConversationStats>(`/v1/conversations/stats?group_by=${encodeURIComponent(groupBy)}`,
-    () => ({ ...exampleConversationStats, group_by: groupBy }));
-export const getQuota = () =>
-  optional<Quota>("/v1/conversations/quota", () => ({ used: 1, limit: 200, remaining: 199 }));
-/** Reading a conversation counts against the viewer's daily quota and is written to the audit log. */
-export const getConversation = (id: string) =>
-  optional<Conversation>(`/v1/conversations/${encodeURIComponent(id)}`,
-    () => (exampleConversations.data.some(c => c.id === id) ? { ...exampleConversation, id } : null) as Conversation);
-
-export const getPrompts = () => optional<PromptListItem[]>("/v1/prompts", () => examplePrompts);
-export const getPrompt = (name: string, version?: number) =>
-  optional<PromptVersion>(`/v1/prompts/${encodeURIComponent(name)}${version ? `?version=${version}` : ""}`,
-    () => (examplePrompts.some(p => p.name === name)
-      ? { ...examplePromptVersion, name, ...(version ? { version } : {}) } : null) as PromptVersion);
-export const getPromptHistory = (name: string) =>
-  optional<PromptHistoryItem[]>(`/v1/prompts/${encodeURIComponent(name)}/history`, () => examplePromptHistory);
-export const getPromptDiff = (name: string, from: number, to: number) =>
-  optional<PromptDiff>(`/v1/prompts/${encodeURIComponent(name)}/diff?from_version=${from}&to_version=${to}`,
-    () => ({ name, from, to, config_changed: false, protected: false,
-             diff: `--- ${name}@v${from}\n+++ ${name}@v${to}\n@@ -1,2 +1,3 @@\n Du bist der Support-Assistent der Beispiel GmbH.\n-Antworte freundlich.\n+Antworte freundlich und kurz.\n+Frage nach der Bestellnummer, bevor du Auskunft gibst.\n` }));
 
 export type AuditQuery = { before?: string; action?: string; resource_type?: string; limit?: number };
 export const getAuditLogs = (q: AuditQuery) => {
