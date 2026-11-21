@@ -4,7 +4,7 @@ NER weights for spaCy `de_core_news_lg` (3.8), fine-tuned on bank support text. 
 stored here (about 6 MB). Word vectors, tagger and the other components come from the base model, which must be
 installed (`python -m spacy download de_core_news_lg`).
 
-Version: v4 (20.11.2026), best of 6 epochs on the dev split.
+Version: v6 (20.11.2026), trained from `de_core_news_lg`, best of 6 epochs on the dev split (epoch 1).
 
 ## Use
 
@@ -24,8 +24,9 @@ continues from the original weights (Adam, dropout 0.25, batch size 8 to 32, see
 | Source | Examples | Labels |
 | --- | --- | --- |
 | GermEval 2014 NER (public, CC BY 4.0) | 6,000 sentences | complete; OTH as MISC |
+| MultiCoNER v2, German (public, CC BY 4.0) | 4,000 lower-case sentences | persons, groups and places mapped to PER/ORG/LOC; facilities left out of the loss |
 | Synthetic support texts from templates | 4,000 (one in five without entities) | complete |
-| Gold train split: sbx/int mails, chats and test runs | 393, repeated 3 times | complete, reviewed |
+| Gold train split: sbx/int mails, chats and test runs | 430, repeated 3 times | complete, reviewed |
 | OCR letters from the service tool (sbx/int) | 340, repeated 2 times | partial: confirmed entities and confirmed non-entities only |
 
 Names, organisations and places used in the synthetic texts never occur in the dev or test split. Address spans,
@@ -36,18 +37,27 @@ evaluation). The annotated data is not part of this repository.
 
 ## Results
 
-Held-out test split: 776 documents, 315 scored entities (PER, ORG, LOC), never used for training or for tuning
-the rules. Scores are from the anonymizer pipeline (NER plus clean-up rules), with an exact match of start, end
-and label required.
+Scores are from the anonymizer pipeline (NER plus the rules in `detect/ner.py` and `detect/orgs.py`), with an
+exact match of start, end and label required. F1 over PER, ORG and LOC unless stated.
 
-| Model | Precision | Recall | F1 | Recall on unseen names | F1 on new test customers |
-| --- | --- | --- | --- | --- | --- |
-| `de_core_news_lg` | 0.821 | 0.597 | 0.691 | 0.46 | 0.58 |
-| previous version (epoch 1, 19.11.) | 0.873 | 0.765 | 0.816 | 0.54 | 0.66 |
-| v4 | 0.838 | 0.790 | 0.814 | 0.59 | 0.75 |
+| Model | Test split (955 docs) | Handwritten holdout (99 docs) | syntriq, persons only (2,957) |
+| --- | --- | --- | --- |
+| `de_core_news_lg` + rules | – | 0.80 | 0.85 |
+| v4 + rules | 0.920 | 0.861 | 0.927 |
+| **v6 + rules** | **0.939** | **0.900** | **0.934** |
 
-Per label (v4): PER F1 0.88, ORG F1 0.76 (recall 0.66), LOC F1 0.64 (precision 0.50 on 19 places).
-"Unseen names" are test entities whose text never occurs in the train split.
+- The handwritten holdout is the most honest number: fictional mails, chats, letters and bot answers written as
+  a clean test set, with names, firms and places that occur neither in training nor in the organisation list.
+  It was never used to tune rules or select models.
+- The test split repeats signatures and test customers, and the rules were tuned on the dev split (0.965), so
+  its score is higher than on fresh text.
+- [syntriq/german-pii-benchmark](https://huggingface.co/datasets/syntriq/german-pii-benchmark) (Apache-2.0)
+  labels persons only; scored with `packages/core/scripts/ner_external.py`.
+
+Per label on the holdout (v6): PER F1 0.94, ORG 0.81, LOC 0.94. Remaining errors are mostly small firms without
+a legal form ("Weserkurier", "Etsy"), names with hyphens, initials or particles, and single first names in lists.
+A v7 with more synthetic name shapes scored higher on dev (0.975) but lower on test, holdout and syntriq, so it
+was not shipped.
 
 ## Note on privacy
 

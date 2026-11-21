@@ -131,6 +131,24 @@ TEMPLATES = [
     "Zuletzt hat Ihnen {P} am {d} {M} EUR überwiesen.",
     "{\"type\":\"TRANSACTION_LIST\",\"data\":{\"transactions\":[{\"counterpartyName\":\"{B}\",\"amount\":-{M}},{\"counterpartyName\":\"{P}\",\"amount\":{M}}]}}",
 ]
+# Made-up brands: syllables plus an optional English or German tail.
+SYLLABLES = ["lu", "mo", "ra", "ve", "xa", "no", "ki", "ta", "zen", "bri", "lo", "fa", "mi", "do", "sol", "vi", "ka",
+             "ne", "ro", "tri", "pa", "lin", "gu", "ber", "ox", "el", "an", "ia"]
+BRAND_TAILS = ["Living", "Shop", "Store", "Media", "Home", "Fashion", "Mobility", "Pay", "Energy", "Markt", "Versand",
+               "Reisen", "Digital", "Food", "Box", "Club"]
+TEMPLATES += [
+    "Wir sind zu dritt ({F}, {F2} und ich) und wollen ein Gemeinschaftskonto. Geht das?",
+    "Bitte {F} und {F2} als Empfänger speichern",
+    "Ich habe bei {X} bestellt, aber nichts bekommen. Kann ich das Geld zurückholen?",
+    "Was ist das für eine Abbuchung von {X} über {M} €?",
+    "Zahlung an {X} abgelehnt, warum?",
+    "{\"answer\":\"Ihre letzten Kartenzahlungen: {X} ({M} EUR), {X2} ({M} EUR) und {O} ({M} EUR).\"}",
+    "Für einen Artikel in der {X} recherchiere ich zu Kontogebühren. Viele Grüße {P}",
+    "Mein Arbeitgeber, die {X}, zahlt das Gehalt immer am 15.",
+    "Subject: {S}\n\nBody: {Q}\n\nMfG {P}",
+    "Kontoinhaber: {P}\nEmpfänger: {X}\nBetrag: {M} EUR",
+]
+
 # Business names as they appear as payees: trade plus surname or a made-up name.
 TRADES = ["Bäckerei", "Möbelhaus", "Hausverwaltung", "Autohaus", "Zahnarztpraxis", "Physiotherapie", "Elektro",
           "Friseursalon", "Blumenhaus", "Getränkemarkt", "Fahrschule", "Malerbetrieb", "Sanitär", "Optik", "Reisebüro",
@@ -203,6 +221,56 @@ def load_germeval(path: Path, limit: int, rng: random.Random) -> list[tuple[str,
     return out
 
 
+# MultiCoNER v2 fine labels -> ours. Facilities ("aussichtsplattform", airports) are left out of the loss: our
+# guidelines label cities, countries and regions, not buildings. Products and creative works are O, as in ours.
+MULTICONER = {
+    **dict.fromkeys(["Artist", "Athlete", "Cleric", "OtherPER", "Politician", "Scientist", "SportsManager"], "PER"),
+    **dict.fromkeys(["AerospaceManufacturer", "CarManufacturer", "MusicalGRP", "ORG", "PrivateCorp", "PublicCorp",
+                     "SportsGRP"], "ORG"),
+    **dict.fromkeys(["HumanSettlement", "OtherLOC", "Station"], "LOC"),
+    "Facility": None,
+}
+
+
+def load_multiconer(path: Path, limit: int, rng: random.Random):
+    """MultiCoNER v2 German (CC BY 4.0): lower-case Wikipedia sentences and search queries.
+    Returns (text, spans, missing) per sentence."""
+    sents, toks = [], []
+    for line in path.read_text(encoding="utf-8").splitlines() + [""]:
+        if not line.strip() or line.startswith("# id"):
+            if toks:
+                sents.append(toks)
+            toks = []
+            continue
+        parts = line.split(" ")
+        toks.append((parts[0], parts[-1]))
+    rng.shuffle(sents)
+    out = []
+    for toks in sents[:limit]:
+        text, spans, missing, cur, pos = "", [], [], None, 0
+        for i, (tok, tag) in enumerate(toks):
+            if i:
+                text += " "
+                pos += 1
+            start, end = pos, pos + len(tok)
+            text += tok
+            pos = end
+            fine = tag[2:] if tag != "O" else ""
+            label = MULTICONER.get(fine, "") if fine else ""
+            if tag.startswith("B-"):
+                cur = [start, end, label] if label != "" else None
+                if cur and label is None:
+                    missing.append(cur)
+                elif cur:
+                    spans.append(cur)
+            elif tag.startswith("I-") and cur:
+                cur[1] = end
+            else:
+                cur = None
+        out.append((text, [tuple(s) for s in spans if s[2]], [(s[0], s[1]) for s in missing]))
+    return out
+
+
 def germeval_names(path: Path) -> list[str]:
     names, cur = set(), []
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -245,12 +313,42 @@ class Filler:
             if name.lower() not in self.held_out:
                 return name
 
+    def shaped(self, full: str) -> str:
+        """Name shapes that plain "First Last" lists lack: double first names and surnames, particles,
+        initials, three parts, all caps."""
+        r = self.rng
+        first, last = full.split()[0], full.split()[-1]
+        other = r.choice(self.names).split()
+        kind = r.random()
+        if kind < 0.2:
+            return f"{first}-{other[0]} {last}"
+        if kind < 0.4:
+            return f"{first} {last}-{other[-1]}"
+        if kind < 0.55:
+            return f"{first} {r.choice(['von', 'van', 'van der', 'de', 'von der', 'zu'])} {last}"
+        if kind < 0.7:
+            return f"{first[0]}. {last}-{other[-1]}" if r.random() < 0.5 else f"{first[0]}. {other[0][0]}. {last}"
+        if kind < 0.85:
+            return f"{first} {other[0]} {last}"
+        return full.upper()
+
+    def brand(self) -> str:
+        """A made-up brand without legal form, as payees and shops appear ("Lumora Living", "Vexano")."""
+        r = self.rng
+        while True:
+            word = "".join(r.choice(SYLLABLES) for _ in range(r.randint(2, 3))).capitalize()
+            name = word if r.random() < 0.5 else f"{word} {r.choice(BRAND_TAILS)}"
+            if name.lower() not in self.held_out:
+                return name
+
     def fill(self, template: str) -> tuple[str, list[tuple[int, int, str]]]:
         r = self.rng
         full = r.choice(self.names)
         first, last = full.split()[0], full.split()[-1]
+        person = self.shaped(full) if r.random() < 0.35 else full
         values = {
-            "P": (full, "PER"), "P2": (r.choice(self.names), "PER"), "P3": (r.choice(self.names), "PER"),
+            "P": (person, "PER"), "P2": (r.choice(self.names), "PER"), "P3": (r.choice(self.names), "PER"),
+            "F2": (r.choice(self.names).split()[0], "PER"), "X": (self.brand(), "ORG"), "X2": (self.brand(), "ORG"),
             "F": (first, "PER"), "L": (last, "PER"), "I": (f"{first[0]}. {last}", "PER"),
             "f": (first.lower(), "PER"), "l": (last.lower(), "PER"),
             "O": (r.choice(self.orgs), "ORG"), "O2": (r.choice(self.orgs), "ORG"),
@@ -518,6 +616,8 @@ def main() -> None:
     ap.add_argument("--courts-repeat", type=int, default=1)
     ap.add_argument("--feedback", type=Path, nargs="*", default=[], help="feedback.jsonl from GET /v1/feedback/export")
     ap.add_argument("--feedback-repeat", type=int, default=3)
+    ap.add_argument("--multiconer", type=Path, help="MultiCoNER v2 German train file (de_train.conll)")
+    ap.add_argument("--multiconer-limit", type=int, default=4000)
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
                     "epochs that beat its dev score are saved")
     args = ap.parse_args()
@@ -560,6 +660,12 @@ def main() -> None:
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
     n_ge = len(examples)
+    n_mc = 0
+    if args.multiconer:
+        for text, spans, missing in load_multiconer(args.multiconer, args.multiconer_limit, rng):
+            if (ex := to_example(nlp, text, spans, missing)) is not None:
+                examples.append(ex)
+                n_mc += 1
     filler = Filler(rng, names, orgs, locs)
     filler.held_out = held_out
     for i in range(args.synthetic):
@@ -567,7 +673,7 @@ def main() -> None:
         text, spans = filler.fill(template)
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
-    n_syn = len(examples) - n_ge
+    n_syn = len(examples) - n_ge - n_mc
     gold_examples = []
     for d in train_docs:
         spans = [(s.start, s.end, s.label) for s in d.spans if s.label != "ADDR"]
@@ -615,7 +721,8 @@ def main() -> None:
             court_ex += [ex for ex in court_examples(nlp, court_aug) if any(
                 t.startswith(("U-ORG", "B-ORG")) for t in ex.to_dict()["doc_annotation"]["entities"])]
     examples += court_ex * args.courts_repeat
-    print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
+    print(f"examples: germeval {n_ge}, multiconer {n_mc}, synthetic {n_syn}, "
+          f"gold train {len(gold_examples)} x{args.gold_repeat}, "
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
           f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}, "
           f"org-augmented ler docs {len(ler_aug)}, ler docs with ORG {len(org_ex)} x{args.org_repeat} extra")
@@ -647,7 +754,7 @@ def main() -> None:
                 best = epoch + 1
     (args.out / "training.json").write_text(json.dumps({
         "seed": SEED, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
-        "data": {"germeval": n_ge, "synthetic": n_syn, "gold_train": len(gold_examples),
+        "data": {"germeval": n_ge, "multiconer": n_mc, "synthetic": n_syn, "gold_train": len(gold_examples),
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,

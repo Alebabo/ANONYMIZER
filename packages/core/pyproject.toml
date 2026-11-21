@@ -38,3 +38,4 @@ testpaths = ["tests"]
 
 [tool.setuptools.package-data]
 "anonymizer.policy" = ["builtin/*.yaml"]
+"anonymizer.detect" = ["data/*.txt"]

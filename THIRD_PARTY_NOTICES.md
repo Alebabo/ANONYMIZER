@@ -69,3 +69,20 @@ it. Changes: HTML converted to text, sections cut, sentences removed, labels add
 Apache License 2.0, each with its license or dataset card next to the data: syntriq/german-pii-benchmark
 (Syntriq) and EasyOctopus/german-support-pii-data (EasyOctopus; see its NOTICE file). A third,
 gretelai/synthetic_pii_finance_multilingual (Gretel.ai, Apache-2.0), is downloaded on demand and not committed.
+
+## GermEval 2014 NER (CC BY 4.0)
+
+`packages/core/src/anonymizer/detect/data/common_nouns_de.txt` and `common_words_de.txt` are word lists derived
+from the train split of the GermEval 2014 NER dataset (Benikova, Biemann, Reznicek 2014,
+https://sites.google.com/site/germeval2014ner/), licensed under CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Changes: only word forms with their frequency outside entities
+were kept (`packages/core/scripts/build_common_nouns.py`); no sentences are included. GermEval 2014 sentences
+were also used to train the NER weights in `models/de_custom_ner/` (not distributed as text).
+
+## MultiCoNER v2 (CC BY 4.0)
+
+The NER weights in `models/de_custom_ner/` (version v6) were trained, among other data, on 4,000 sentences of the
+German part of MultiCoNER v2 (Fetahu, Chen, Kar, Rokhlenko, Malmasi 2023, https://multiconer.github.io,
+https://huggingface.co/datasets/MultiCoNER/multiconer_v2), licensed under CC BY 4.0. Changes: fine-grained labels
+mapped to PER/ORG/LOC (`load_multiconer` in `packages/core/scripts/ner_train.py`). The data itself is not part of
+this repository. CoNLL-2003 is not used anywhere in this repository (licence for research only).
