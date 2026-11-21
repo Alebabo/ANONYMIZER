@@ -429,7 +429,11 @@ ORGANIZATION = RegexRecognizer(
     postprocess=_trim_org,
 )
 
-_NAME = r"[A-ZÄÖÜ][a-zäöüßéèáàç]+(?:-[A-ZÄÖÜ][a-zäöüßéèáàç]+)?"
+# Latin letters of names common in Germany, not only German ones: García, Yıldız, Şahin, Wójcik, Đorđević,
+# Nguyễn. A narrower class silently dropped such names after "Herr"/"Zeugin", a gap that hits migrants hardest.
+_UPPER = "A-ZÀ-ÖØ-ÞĀĂĄĆĈĊČĎĐĒĖĘĚĞĠĢĪĮİĶĹĻĽŁŃŅŇŌŐŒŔŘŚŜŞŠŢŤŪŮŰŲŹŻŽ"
+_LOWER = "a-zß-öø-ÿāăąćĉċčďđēėęěğġģīįıķĺļľłńņňōőœŕřśŝşšţťūůűųźżžơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ"
+_NAME = rf"[{_UPPER}](?:['’][{_UPPER}])?[{_LOWER}]+(?:-[{_UPPER}][{_LOWER}]+)?"
 _PARTICLE = r"(?:von der|van der|von|van|de la|de|zu|del)"
 _FULL_NAME = rf"{_NAME}(?:\s(?:{_PARTICLE}\s)?{_NAME}){{0,2}}"
 _TITLES = r"(?:(?:Dr\.|Prof\.|Dipl\.-[A-Za-z]+\.?|med\.|jur\.|rer\.\s?nat\.)\s)*"
