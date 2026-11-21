@@ -139,7 +139,7 @@ def test_namespace_without_vault_is_rejected(tmp_path):
 
 def test_policy_management(client):
     names = [p["name"] for p in client.get("/v1/policies", headers=USER).json()]
-    assert names == ["banking-default", "support-default"]
+    assert names == ["banking-default", "legal-default", "support-default"]
     yaml_v1 = "name: strict\nversion: 1\ndocument_rules:\n  - {min_risk: critical, action: block}\ndefault_action: redact\n"
     created = client.post("/v1/policies", json={"yaml": yaml_v1}, headers=ADMIN)
     assert created.status_code == 201 and created.json()["hash"].startswith("sha256:")

@@ -42,3 +42,13 @@ CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: tokens joined
 grouped into documents, labels mapped to OpenAnonymizer's types, and anonymized names, companies and places in
 the published decisions replaced by synthetic values (`packages/core/src/anonymizer/ler.py`). The underlying
 court decisions are official works without copyright (§ 5 UrhG).
+
+## Open Legal Data (ODbL 1.0)
+
+`datasets/courts/` is derived from court decisions retrieved through the Open Legal Data API
+(https://de.openlegaldata.io). The decisions themselves are official works without copyright (§ 5 UrhG); the
+Open Legal Data database is licensed under the Open Database License 1.0
+(https://opendatacommons.org/licenses/odbl/1-0/). The derived dataset in `datasets/courts/` is therefore made
+available under ODbL 1.0 as well. Changes: HTML converted to text, and the courts' anonymization placeholders
+("…") replaced by synthetic names, companies, places, dates, case numbers and IBANs
+(`packages/core/src/anonymizer/courts.py`). The rest of this repository is not affected by this license.

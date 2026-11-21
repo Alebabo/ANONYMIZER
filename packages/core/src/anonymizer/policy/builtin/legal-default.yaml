@@ -1,0 +1,70 @@
+# OpenAnonymizer default policy for law firms and legal departments (§ 203 StGB, GDPR) using external models.
+# Parties, witnesses and case numbers become placeholders; courts, statutes and case law stay readable,
+# because they are public and the legal reasoning depends on them. Copy and adapt it with your
+# data-protection officer; this is a starting point, not legal advice.
+name: legal-default
+version: 1
+description: Pseudonymize parties, witnesses, addresses and case numbers; keep courts, statutes, case law and dates readable; keep special categories (health, criminal records) away from external models.
+
+rules:
+  # Persons, companies and places: placeholders, so "who did what to whom" stays understandable.
+  - id: parties
+    entity: [person, organization, location]
+    action: pseudonymize
+  - id: contact
+    entity: [email, phone, address]
+    action: pseudonymize
+
+  # A case number identifies the matter and therefore the client.
+  - id: case_numbers
+    entity: case_number
+    action: pseudonymize
+  # Except in a citation of a published federal or European decision ("BGH, Urteil vom … - VI ZR 12/20"):
+  # public, and the reader needs it. Only when the citation covers the number, not when it is nearby.
+  - id: cited_decisions
+    entity: [case_number, date]
+    signals: [case_law_citation]
+    action: allow
+    allow_critical: true
+    priority: 5
+
+  # Public references: needed for the legal argument, no personal data.
+  - id: public_references
+    entity: [court, legal_citation]
+    action: allow
+
+  # Deadlines and amounts matter in legal work; a date of birth is coarsened to the year.
+  - id: dates_and_amounts
+    entity: [date, money]
+    action: allow
+  - id: date_of_birth
+    entity: date_of_birth
+    action: generalize
+
+  # Payment and government identifiers carry no legal value.
+  - id: identifiers
+    entity: [iban, bic, credit_card, tax_id, tax_number, vat_id, social_security_number]
+    action: redact
+
+  # Confidentiality markers ("vertraulich", "Mandatsgeheimnis") are words, not data.
+  - id: markers
+    entity: [privilege_marker, business_secret_marker]
+    action: allow
+
+  # Special categories (Art. 9/10 GDPR: health, criminal records, …) never go to an external model.
+  - id: special_categories_external
+    category: special_category
+    destinations: [external]
+    action: local_only
+    priority: 10
+  - id: special_categories_local
+    category: special_category
+    destinations: [local]
+    action: allow
+
+default_action: redact
+critical_floor: true
+critical_floor_action: pseudonymize
+# Legal documents are long; one uncertain name must not hold back the whole text. Uncertain values are still
+# pseudonymized by their rule; only special categories stop a document.
+review_uncertain: false
