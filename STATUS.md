@@ -42,13 +42,13 @@ Rechtstexte mit `ANONYMIZER_NER_MODEL_DE="de_core_news_lg+models/de_legal_ner/ne
 
 | | vorher | jetzt |
 |---|---|---|
-| German LER: Präzision / Recall (Personen, Firmen, Orte) | 0,32 / 0,63 | **0,92 / 0,71** |
-| Personen P / R | 0,42 / 0,74 | 0,90 / 0,82 |
-| Firmen P / R | 0,23 / 0,30 | 0,88 / **0,45** ← größte Schwäche |
-| Orte P / R | 0,28 / 0,83 | 0,97 / 0,85 |
+| German LER: Präzision / Recall (Personen, Firmen, Orte) | 0,32 / 0,63 | **0,92 / 0,75** |
+| Personen P / R | 0,42 / 0,74 | 0,91 / 0,84 |
+| Firmen P / R | 0,23 / 0,30 | 0,88 / **0,54** ← größte Schwäche |
+| Orte P / R | 0,28 / 0,83 | 0,97 / 0,86 |
 | Falsche Treffer auf Gerichten, Gesetzen, Zitaten | 773 | 16 |
 | Gesetzeszitate / Gerichte / Aktenzeichen erkannt | 0,38 / 0,69 / 0,81 | 0,92 / 0,97 / 1,00 |
-| Gerichtsentscheidungen: eingesetzte Werte gefunden | – | 0,992 |
+| Gerichtsentscheidungen: eingesetzte Werte gefunden | – | 0,995 |
 
 Finanz- und Banktexte (`datasets/finance`, ohne Rechtsmodell): geschützt werden auf syntriq 0,905, EasyOctopus
 0,586, Gretel 0,654 der Werte (vorher 0,808 / 0,398 / 0,636). Neu erkannt: Telefon in allen gängigen Schreibweisen,
@@ -91,14 +91,16 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 
 | Branch | Inhalt | Stand |
 |---|---|---|
-| `claude/ner-org-recall` | Firmen-Recall verbessern: Kontext-Regeln, synthetische Firmennamen, GermEval 2014, ggf. GLiNER | läuft in eigener Cloud-Sitzung |
 | `claude/epic-thompson-ceb5ng` | Hauptentwicklungsbranch dieser Sitzung, entspricht main | – |
 
-Ergebnisse dieser Branches erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
+Keine offenen Arbeitsbranches. Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`, `claude/research-*`. Neue Arbeit erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
 
 ## 6. Nächste Schritte (priorisiert)
 
-1. **Firmen-Recall** (0,45 → Ziel ≥ 0,65 bei Präzision ≥ 0,90): siehe `docs/research/org-ner.md`.
+1. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
+   und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Restfehler sind zu großen Teilen Verbandskürzel und Marken
+   (oft keine personenbezogenen Daten). Noch nicht gemessen: GLiNER als zweiter Detektor, GermEval 2014.
+   Siehe `docs/research/org-ner.md` und `docs/research/org-ner-results.md`.
 2. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
 3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud).
 4. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
