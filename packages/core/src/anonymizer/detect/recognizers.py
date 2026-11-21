@@ -158,7 +158,12 @@ US_SSN = RegexRecognizer(
 _CAP = r"[A-ZÄÖÜ][a-zäöüß]+"
 _STREET_SUFFIX = r"(?:straße|strasse|str\.|weg|platz|allee|gasse|ring|damm|ufer|chaussee|steig|pfad|markt|hof)"
 _STREET_WORD = r"(?:Straße|Strasse|Str\.|Weg|Platz|Allee|Gasse|Ring|Damm|Ufer|Chaussee)"
-_DE_CITY = rf"{_CAP}(?:[\s-](?:am|an der|im|a\.\s?d\.)?\s?{_CAP})?"
+# Capitalised function words that start the next sentence, never part of a city name or a file number.
+_SENTENCE_START = (r"(?:Der|Die|Das|Den|Dem|Des|Ein|Eine|Einer|Es|Er|Sie|Wir|Ich|In|Im|Am|An|Auf|Aus|Bei|Mit|Nach|"
+                   r"Von|Vom|Zu|Zum|Zur|Und|Für|Gegen|Wie|The|A|On|At|And|For)\b")
+# The second part of a city stays on the same line ("Frankfurt am Main", "Berlin-Mitte"); a line break or the
+# next sentence ("10115 Berlin\n\nIn der Sache") ends it.
+_DE_CITY = rf"{_CAP}(?:[ \t-](?:am|an der|im|a\.\s?d\.)?[ \t]?(?!{_SENTENCE_START}){_CAP})?"
 
 ADDRESS = RegexRecognizer(
     "address", E.ADDRESS,
@@ -167,7 +172,7 @@ ADDRESS = RegexRecognizer(
             # Start only at a token start: with a plain \b every part of a long
             # hyphenated chain is a start and the scan becomes quadratic.
             rf"(?<![\w-])(?:{_CAP}(?:-{_CAP})*{_STREET_SUFFIX}|{_CAP}(?:\s{_CAP})?\s{_STREET_WORD})"
-            rf"\s\d{{1,4}}\s?[a-z]?(?:,?\s+\d{{5}}\s+{_DE_CITY})?(?!\w)",
+            rf"\s\d{{1,4}}\s?[a-z]?(?:,?\s+\d{{5}}[ \t]+{_DE_CITY})?(?!\w)",
             0.85,
         ),
         Pattern(
@@ -241,7 +246,10 @@ CASE_NUMBER = RegexRecognizer(
         Pattern(
             r"(?i:\b(?:Az\.|AZ:|Aktenzeichen|Gesch(?:äfts)?zeichen|Gz\.|Unser Zeichen|Ihr Zeichen|"
             r"Case No\.|Case Number|Docket No\.|File No\.|Matter No\.))\s*:?\s*"
-            r"(?P<v>[A-Z0-9][\w./:-]*(?:\s(?=[\w./:-]*\d|[A-Z][A-Za-z]{0,3}\b)[A-Z0-9][\w./:-]*){0,4})",
+            # Further parts only on the same line, not after a full stop and not the first word of the next
+            # sentence ("Az.: 12 C 345/24. Der Kläger", "Az.: 12 C 345/24\nDer").
+            r"(?P<v>[A-Z0-9](?:[\w./:-]*[\w/:-])?(?:[ \t](?=[\w./:-]*\d|(?!" + _SENTENCE_START + r")[A-Z][A-Za-z]{0,3}\b)"
+            r"[A-Z0-9](?:[\w./:-]*[\w/:-])?){0,4})",
             0.92, group="v",
         ),
         # German court files: "2 O 123/24", "VI ZR 12/23", "1 StR 123/22"
