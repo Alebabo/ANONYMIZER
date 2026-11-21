@@ -1,0 +1,130 @@
+{
+  "split": "test",
+  "docs": 1113,
+  "ner": true,
+  "seconds": 17.8,
+  "entities_partial": {
+    "micro": {
+      "tp": 580,
+      "fp": 53,
+      "fn": 232,
+      "precision": 0.916,
+      "recall": 0.714,
+      "f1": 0.803
+    },
+    "labels": {
+      "PER": {
+        "tp": 267,
+        "fp": 31,
+        "fn": 57,
+        "precision": 0.896,
+        "recall": 0.824,
+        "f1": 0.859
+      },
+      "ORG": {
+        "tp": 114,
+        "fp": 16,
+        "fn": 139,
+        "precision": 0.877,
+        "recall": 0.451,
+        "f1": 0.595
+      },
+      "LOC": {
+        "tp": 199,
+        "fp": 6,
+        "fn": 36,
+        "precision": 0.971,
+        "recall": 0.847,
+        "f1": 0.905
+      }
+    },
+    "sources": {
+      "ler": {
+        "tp": 580,
+        "fp": 53,
+        "fn": 232,
+        "precision": 0.916,
+        "recall": 0.714,
+        "f1": 0.803
+      }
+    }
+  },
+  "entities_strict": {
+    "micro": {
+      "tp": 539,
+      "fp": 94,
+      "fn": 273,
+      "precision": 0.852,
+      "recall": 0.664,
+      "f1": 0.746
+    },
+    "labels": {
+      "PER": {
+        "tp": 242,
+        "fp": 56,
+        "fn": 82,
+        "precision": 0.812,
+        "recall": 0.747,
+        "f1": 0.778
+      },
+      "ORG": {
+        "tp": 100,
+        "fp": 30,
+        "fn": 153,
+        "precision": 0.769,
+        "recall": 0.395,
+        "f1": 0.522
+      },
+      "LOC": {
+        "tp": 197,
+        "fp": 8,
+        "fn": 38,
+        "precision": 0.961,
+        "recall": 0.838,
+        "f1": 0.895
+      }
+    },
+    "sources": {
+      "ler": {
+        "tp": 539,
+        "fp": 94,
+        "fn": 273,
+        "precision": 0.852,
+        "recall": 0.664,
+        "f1": 0.746
+      }
+    }
+  },
+  "public_references_found": {
+    "GRT": {
+      "found": 312,
+      "total": 321,
+      "rate": 0.972
+    },
+    "GS": {
+      "found": 1670,
+      "total": 1818,
+      "rate": 0.919
+    },
+    "RS": {
+      "found": 1200,
+      "total": 1245,
+      "rate": 0.964
+    }
+  },
+  "case_numbers_in_case_law": {
+    "found": 768,
+    "total": 769,
+    "rate": 0.999
+  },
+  "false_positives_on_public_references": {
+    "ORG on VT": 4,
+    "LOC on VT": 3,
+    "ORG on RS": 3,
+    "PER on RS": 2,
+    "LOC on INN": 1,
+    "ORG on INN": 1,
+    "LOC on LIT": 1,
+    "LOC on VS": 1
+  }
+}

@@ -1,85 +1,85 @@
 {
   "seed": 24,
-  "best_epoch": 6,
+  "best_epoch": 4,
   "dev_baseline": {
-    "tp": 402,
-    "fp": 1502,
-    "fn": 407,
-    "precision": 0.211,
-    "recall": 0.497,
-    "f1": 0.296
+    "tp": 393,
+    "fp": 1499,
+    "fn": 416,
+    "precision": 0.208,
+    "recall": 0.486,
+    "f1": 0.291
   },
   "history": [
     {
       "epoch": 1,
-      "loss": 4701.8,
+      "loss": 4957.9,
       "dev": {
-        "tp": 526,
-        "fp": 77,
-        "fn": 283,
-        "precision": 0.872,
-        "recall": 0.65,
-        "f1": 0.745
+        "tp": 501,
+        "fp": 74,
+        "fn": 308,
+        "precision": 0.871,
+        "recall": 0.619,
+        "f1": 0.724
       }
     },
     {
       "epoch": 2,
-      "loss": 2574.4,
+      "loss": 2734.4,
       "dev": {
-        "tp": 541,
-        "fp": 78,
-        "fn": 268,
-        "precision": 0.874,
-        "recall": 0.669,
-        "f1": 0.758
+        "tp": 524,
+        "fp": 79,
+        "fn": 285,
+        "precision": 0.869,
+        "recall": 0.648,
+        "f1": 0.742
       }
     },
     {
       "epoch": 3,
-      "loss": 2085.7,
+      "loss": 2241.1,
       "dev": {
-        "tp": 546,
-        "fp": 65,
-        "fn": 263,
-        "precision": 0.894,
-        "recall": 0.675,
-        "f1": 0.769
+        "tp": 530,
+        "fp": 69,
+        "fn": 279,
+        "precision": 0.885,
+        "recall": 0.655,
+        "f1": 0.753
       }
     },
     {
       "epoch": 4,
-      "loss": 1715.2,
+      "loss": 1931.0,
       "dev": {
-        "tp": 548,
-        "fp": 61,
-        "fn": 261,
-        "precision": 0.9,
-        "recall": 0.677,
-        "f1": 0.773
+        "tp": 539,
+        "fp": 70,
+        "fn": 270,
+        "precision": 0.885,
+        "recall": 0.666,
+        "f1": 0.76
       }
     },
     {
       "epoch": 5,
-      "loss": 1470.1,
+      "loss": 1717.0,
       "dev": {
-        "tp": 554,
-        "fp": 58,
-        "fn": 255,
-        "precision": 0.905,
-        "recall": 0.685,
-        "f1": 0.78
+        "tp": 536,
+        "fp": 75,
+        "fn": 273,
+        "precision": 0.877,
+        "recall": 0.663,
+        "f1": 0.755
       }
     },
     {
       "epoch": 6,
-      "loss": 1238.1,
+      "loss": 1542.8,
       "dev": {
-        "tp": 555,
-        "fp": 53,
-        "fn": 254,
-        "precision": 0.913,
-        "recall": 0.686,
-        "f1": 0.783
+        "tp": 533,
+        "fp": 68,
+        "fn": 276,
+        "precision": 0.887,
+        "recall": 0.659,
+        "f1": 0.756
       }
     }
   ],
@@ -94,7 +94,7 @@
     "ler_repeat": 1,
     "feedback": 0,
     "feedback_repeat": 3,
-    "courts": 0,
+    "courts": 3891,
     "courts_repeat": 1,
     "dev": "ler_dev"
   }

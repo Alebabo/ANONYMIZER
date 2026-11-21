@@ -25,6 +25,15 @@ context says what it was:
 A bare "…" without such context stays as it is. Train and dev/test use disjoint name lists; the split is by
 decision.
 
+## Size and results
+
+1,240 downloaded decisions (`raw/`), 614 with filled placeholders: train 493, dev 65, test 56 decisions;
+9,513 persons, 196 places, 109 organisations, 89 dates, 30 case numbers, 16 addresses, 14 IBANs.
+
+Test split, inserted values found by the full detector (`eval_test.json` plain model,
+`eval_test_de_legal_ner.json` fine-tuned): 0.987 -> **0.992**; persons 0.990 -> 0.994. Most of this comes from
+the rules (names after "Herr", "Zeugin", "Rechtsanwalt" …, including García, Yıldız, Wójcik since 21.11.2026).
+
 ## Limits
 
 Only the inserted values are labelled. A court sometimes leaves real names in the text (judges, often
