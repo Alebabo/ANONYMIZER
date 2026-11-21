@@ -53,6 +53,20 @@ SIGNALS: dict[str, re.Pattern[str]] = {
 }
 
 
+# A decision of a federal or European court cited with date and case number ("BGH, Urteil vom 12.05.2021 -
+# VI ZR 12/20", "BAG 1. Oktober 2003 - 1 ABN 62/01"). Published and public, unlike the own matter's number.
+_FEDERAL = (r"(?:BGH|BVerfG|BAG|BVerwG|BSG|BFH|BPatG|EuGH|EuG|EGMR|Bundes(?:gerichtshof|verfassungsgericht|"
+            r"arbeitsgericht|verwaltungsgericht|sozialgericht|finanzhof|patentgericht)(?:e?s)?)")
+_DATE = r"\d{1,2}\.\s?(?:\d{1,2}\.|[A-ZÄÖÜ][a-zäöü]+)\s?\d{2,4}"
+SIGNALS["case_law_citation"] = re.compile(
+    rf"\b{_FEDERAL}\b,?\s(?:\(?[A-Za-z0-9. ]{{0,30}}Senat\)?,?\s)?(?:(?:Teil-|Versäumnis-|Schluss-)?(?:Urteil|Beschluss|"
+    rf"Urt\.|Beschl\.|Vorlagebeschluss)\s)?(?:vom\s|v\.\s)?{_DATE}\s?[-–,]\s?(?:Az\.?:?\s)?"
+    rf"(?:\d{{1,3}}|[IVX]{{1,5}}[a-z]?)\s?[A-Za-z][A-Za-z()-]{{0,10}}\s\d{{1,5}}[/.]\d{{2}}")
+# Signals that count for a detection only when they cover it (the case number inside the citation), not when
+# they are merely nearby: the own matter's number next to a citation must stay protected.
+COVERING_SIGNALS = frozenset({"case_law_citation"})
+
+
 def find_signals(text: str) -> list[Signal]:
     found: list[Signal] = []
     for name, regex in SIGNALS.items():
@@ -89,7 +103,8 @@ class SignalIndex:
         first = bisect_left(self._starts, lo - self._longest)
         last = bisect_left(self._starts, hi)
         names = {s.name for s in self._signals[first:last]
-                 if s.end > lo and not (s.start >= start and s.end <= end)}
+                 if ((s.start <= start and end <= s.end) if s.name in COVERING_SIGNALS
+                     else (s.end > lo and not (s.start >= start and s.end <= end)))}
         return tuple(sorted(names))
 
 

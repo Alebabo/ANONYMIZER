@@ -54,7 +54,7 @@ Brandt Haas Schreiber Graf Schulte Dietrich Ziegler Kuhn Kühn Pohl Engel Horn B
 Arnold Wolff Pfeiffer Yılmaz Kaya Demir Şahin Çelik Yıldız Öztürk Aydın Özdemir Arslan Doğan Kılıç Kowalski Nowak
 Wiśniewski Wójcik Kamiński Lewandowski Zieliński Iwanow Petrow Smirnow Popow Rossi Russo Ferrari Esposito Bianchi
 Romano Colombo Haddad Khalil Hassan Ibrahim Nguyen Tran Pham García Fernández López Martínez Novak Horváth Kovač
-Jansen de Vries van Dijk Bakker Petersen Nielsen Andersen Hansen Larsen Lindqvist Berg Eriksson""".split()
+Jansen Visser Dijkstra Bakker Petersen Nielsen Andersen Hansen Larsen Lindqvist Berg Eriksson""".split()
 _CITIES = """Aachen Augsburg Bamberg Bielefeld Bochum Bonn Braunschweig Bremen Chemnitz Cottbus Darmstadt Dessau
 Dortmund Dresden Duisburg Düsseldorf Erfurt Erlangen Essen Flensburg Frankfurt Freiburg Fulda Gera Gießen Göttingen
 Greifswald Hagen Halle Hamburg Hamm Hannover Heidelberg Heilbronn Hildesheim Ingolstadt Jena Kaiserslautern

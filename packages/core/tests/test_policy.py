@@ -302,3 +302,23 @@ def test_apply_changes_moves_types_like_the_dashboard_editor():
     ids = [r.id for r in nxt.rules]
     assert "contact" not in ids and "special" in ids                         # emptied simple rule dropped, others kept
     assert {"editor_allow", "editor_redact"} <= set(ids)
+
+
+def test_legal_default_keeps_public_references_and_protects_the_matter():
+    p = Pipeline(builtin_policy("legal-default"))
+    text = ("In der Sache 2 O 123/24 vertritt Rechtsanwältin Zeynep Kaya die Mandantin vor dem OLG Hamm. "
+            "Anspruch aus § 280 Abs. 1 BGB (BGH, Beschluss vom 3. Mai 2021 – VI ZR 12/20).")
+    r = p.protect(text, "external")
+    assert r.allowed
+    for public in ("OLG Hamm", "§ 280 Abs. 1 BGB", "VI ZR 12/20", "3. Mai 2021"):
+        assert public in r.text
+    assert "2 O 123/24" not in r.text and "Kaya" not in r.text   # own matter and persons are protected
+
+
+def test_case_law_signal_only_counts_when_it_covers_the_number():
+    from anonymizer.detect.context import SignalIndex, find_signals
+    text = "Unser Az. 4 Ca 77/24; vgl. BAG 1. Oktober 2003 - 1 ABN 62/01."
+    idx = SignalIndex(find_signals(text))
+    own, cited = text.index("4 Ca 77/24"), text.index("1 ABN 62/01")
+    assert "case_law_citation" not in idx.near(text, own, own + 10, 150)
+    assert "case_law_citation" in idx.near(text, cited, cited + 11, 150)

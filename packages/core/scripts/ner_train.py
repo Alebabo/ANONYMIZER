@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -359,6 +360,47 @@ def feedback_examples(nlp, files: list[Path]) -> list[Example]:
     return out
 
 
+_PUBLIC_TYPES = {"court", "legal_citation", "case_number", "date", "money", "iban", "email", "phone"}
+
+
+def court_examples(nlp, docs, max_chars: int = 2500) -> list[Example]:
+    """Whole decisions with filled placeholders (court_data.py): per paragraph block, inserted persons,
+    organisations and places are entities; lower-case words, numbers, punctuation and what the rules find
+    (courts, citations, case numbers, dates) are O; other capitalised words stay missing, because the court
+    may have left a real name there (judges, often lawyers)."""
+    from anonymizer.detect import Detector, DetectorConfig  # noqa: PLC0415
+
+    rules = Detector(DetectorConfig(enable_ner=False))
+    out = []
+    for d in docs:
+        public = [(x.start, x.end) for x in rules.scan(d.text, "de").detections if x.entity_type in _PUBLIC_TYPES]
+        start = 0
+        for block in re.split(r"(\n\n)", d.text):
+            end = start + len(block)
+            spans = [s for s in d.spans if start <= s.start and s.end <= end]
+            if spans and block.strip() and len(block) <= max_chars:
+                doc = nlp.make_doc(block)
+                tags = []
+                for t in doc:
+                    a, b = start + t.idx, start + t.idx + len(t.text)
+                    known_o = not t.text[:1].isupper() or any(ps <= a and b <= pe for ps, pe in public)
+                    tags.append("O" if known_o else "-")
+                for s in spans:
+                    span = doc.char_span(s.start - start, s.end - start, alignment_mode="expand")
+                    if span is None:
+                        continue
+                    if s.label not in ("PER", "ORG", "LOC"):
+                        for i in range(span.start, span.end):
+                            tags[i] = "-" if s.label == "ADDR" else "O"
+                        continue
+                    for k, i in enumerate(range(span.start, span.end)):
+                        tags[i] = ("U-" if len(span) == 1 else "B-" if k == 0 else "L-" if i == span.end - 1 else "I-") \
+                            + s.label
+                out.append(Example.from_dict(doc, {"entities": tags}))
+            start = end
+    return out
+
+
 def evaluate(nlp_path_or_obj, docs) -> dict:
     rec = SpacyRecognizer({"de": "de_core_news_lg", "en": "en_core_web_lg"}, NAME_STOPWORDS | NER_STOPWORDS,
                           keep=list(DEFAULT_KEEP))
@@ -390,6 +432,8 @@ def main() -> None:
     ap.add_argument("--ler", type=Path, help="datasets/ler: add LER train docs (and use LER dev without gold.jsonl)")
     ap.add_argument("--ler-docs", type=int, default=0, help="LER train docs to use (0 = all)")
     ap.add_argument("--ler-repeat", type=int, default=1)
+    ap.add_argument("--courts", type=Path, help="datasets/courts: whole decisions with filled placeholders")
+    ap.add_argument("--courts-repeat", type=int, default=1)
     ap.add_argument("--feedback", type=Path, nargs="*", default=[], help="feedback.jsonl from GET /v1/feedback/export")
     ap.add_argument("--feedback-repeat", type=int, default=3)
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
@@ -472,9 +516,15 @@ def main() -> None:
     examples += partial * args.partial_repeat
     fb = feedback_examples(nlp, args.feedback)
     examples += fb * args.feedback_repeat
+    court_ex = []
+    if args.courts:
+        from court_data import load as load_courts  # noqa: PLC0415 - same scripts folder
+
+        court_ex = court_examples(nlp, load_courts(args.courts, "train"))
+    examples += court_ex * args.courts_repeat
     print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
-          f"feedback {len(fb)} x{args.feedback_repeat}")
+          f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
@@ -507,6 +557,7 @@ def main() -> None:
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
+                 "courts": len(court_ex), "courts_repeat": args.courts_repeat,
                  "dev": "gold.jsonl" if gold else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
