@@ -7,6 +7,9 @@ Training data, all built here and never from the dev/test splits of gold.jsonl:
      its general German NER. OTH -> MISC, *deriv/*part -> O.
   2. The ``train`` split of gold.jsonl (real sbx/int mails and chats). Address spans and tokens that do not
      line up with an entity boundary are left out of the loss ("missing"), not taught as O.
+  4. Optional (--ler datasets/ler): German LER court decisions with synthetic names (see ler_data.py). Courts,
+     laws, case law and literature are taught as O, so the model stops tagging them as PER/ORG/LOC. Without
+     local/ner/gold.jsonl the LER dev split selects the model, so training runs from the repository alone.
   3. Synthetic support texts from templates: signatures, greetings, mail headers, payees, authorities, lower-
      case chat. Names come from GermEval and the INT test-customer list; organisations and places from a
      public-knowledge list. Every entity string that occurs in the dev or test split is removed from these
@@ -358,30 +361,48 @@ def main() -> None:
     ap.add_argument("--partial", type=Path, nargs="*", default=[],
                     help="partial annotation files for OCR letters (accept/reject lists), training only")
     ap.add_argument("--partial-repeat", type=int, default=2)
+    ap.add_argument("--ler", type=Path, help="datasets/ler: add LER train docs (and use LER dev without gold.jsonl)")
+    ap.add_argument("--ler-docs", type=int, default=0, help="LER train docs to use (0 = all)")
+    ap.add_argument("--ler-repeat", type=int, default=1)
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
                     "epochs that beat its dev score are saved")
     args = ap.parse_args()
     rng = random.Random(SEED)
 
-    gold = read_gold(args.dir / "gold.jsonl")
+    gold_path = args.dir / "gold.jsonl"
+    gold = read_gold(gold_path) if gold_path.exists() else []
+    ler_train, ler_dev, ler_test = [], [], []
+    if args.ler:
+        from ler_data import load as load_ler  # noqa: PLC0415 - same scripts folder
+
+        ler_train, ler_dev, ler_test = (load_ler(args.ler, s) for s in ("train", "dev", "test"))
+        if args.ler_docs:
+            ler_train = rng.sample(ler_train, min(args.ler_docs, len(ler_train)))
+    if not gold and not ler_dev:
+        sys.exit(f"no data: {gold_path} is missing and --ler is not set")
     train_docs = [d for d in gold if d.split == "train"]
-    dev_docs = [d for d in gold if d.split == "dev"]
-    held_out = {d.text[s.start:s.end].lower() for d in gold if d.split in ("dev", "test") for s in d.spans}
+    # Model selection: the company dev split if there is one, otherwise LER dev.
+    dev_docs = [d for d in gold if d.split == "dev"] or ler_dev
+    held_out = {d.text[s.start:s.end].lower() for d in [*gold, *ler_dev, *ler_test]
+                if d.split in ("dev", "test") for s in d.spans if s.label in ("PER", "ORG", "LOC")}
 
     def unseen(xs: list[str]) -> list[str]:
         return [x for x in xs if x.lower() not in held_out and not any(w.lower() in held_out for w in x.split())]
 
     ge_path = args.dir / "public" / "germeval14" / "train.tsv"
-    int_names = [n.strip() for n in (args.dir / "public" / "int_names.txt").read_text(encoding="utf-8").splitlines()
-                 if n.strip()]
-    names = unseen(germeval_names(ge_path) + int_names
+    names_path = args.dir / "public" / "int_names.txt"
+    int_names = [n.strip() for n in names_path.read_text(encoding="utf-8").splitlines() if n.strip()] \
+        if names_path.exists() else []
+    if not ge_path.exists():
+        print(f"{ge_path} missing: no GermEval rehearsal (LER and synthetic texts only)")
+    names = unseen((germeval_names(ge_path) if ge_path.exists() else []) + int_names
                    + [f"{f} {l}" for f in FIRST_EXTRA for l in LAST_EXTRA])
     orgs, locs = unseen(ORGS), unseen(LOCS)
     print(f"gazetteers after removing dev/test strings: {len(names)} names, {len(orgs)} orgs, {len(locs)} places")
 
     nlp = spacy.load(args.init or "de_core_news_lg")
     examples: list[Example] = []
-    for text, spans in load_germeval(ge_path, args.germeval, rng):
+    for text, spans in (load_germeval(ge_path, args.germeval, rng) if ge_path.exists() else []):
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
     n_ge = len(examples)
@@ -406,10 +427,23 @@ def main() -> None:
         if (ex := to_example(nlp, d.text, spans, missing)) is not None:
             gold_examples.append(ex)
     examples += gold_examples * args.gold_repeat
+    ler_examples = []
+    for d in ler_train:
+        # Only private parties are entities; courts, laws, case law, literature are O (taught, not missing).
+        spans = [(s.start, s.end, s.label) for s in d.spans if s.label in ("PER", "ORG", "LOC")]
+        missing = [(s.start, s.end) for s in d.spans if s.label == "ADDR"]
+        doc = nlp.make_doc(d.text)
+        for s in list(spans):
+            if doc.char_span(s[0], s[1]) is None:
+                spans.remove(s)
+                missing.append((s[0], s[1]))
+        if (ex := to_example(nlp, d.text, spans, missing)) is not None:
+            ler_examples.append(ex)
+    examples += ler_examples * args.ler_repeat
     partial = partial_examples(nlp, args.dir, args.partial)
     examples += partial * args.partial_repeat
     print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
-          f"partial {len(partial)} x{args.partial_repeat}")
+          f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
@@ -439,7 +473,9 @@ def main() -> None:
     (args.out / "training.json").write_text(json.dumps({
         "seed": SEED, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
         "data": {"germeval": n_ge, "synthetic": n_syn, "gold_train": len(gold_examples),
-                 "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat},
+                 "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
+                 "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
+                 "dev": "gold.jsonl" if gold else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
 

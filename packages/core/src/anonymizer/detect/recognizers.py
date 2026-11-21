@@ -244,6 +244,11 @@ CASE_NUMBER = RegexRecognizer(
         ),
         # German court files: "2 O 123/24", "VI ZR 12/23", "1 StR 123/22"
         Pattern(rf"(?<![\w/])(?:\d{{1,3}}|[IVX]{{1,5}})\s?{_SHORT_TOKEN}\s\d{{1,5}}/\d{{2}}(?![\w/])", 0.8),
+        # Federal Administrative Court (year after a dot): "6 C 6.15", "1 WB 42.09", "1 WDS-VR 9.17"
+        Pattern(r"(?<![\w/.])\d{1,2}\s(?:A|AV|B|BN|C|CN|D|ER|F|KSt|P|PB|PKH|VR|WB|WD|WDB|WDS-VR|WNB|WRB)"
+                r"\s\d{1,4}\.\d{2}(?![\w.])", 0.85),
+        # Federal Patent Court: "25 W (pat) 14/14", "4 Ni 12/16 (EP)"
+        Pattern(r"(?<![\w/])\d{1,2}\s[A-Z][a-z]?\s\((?:pat|Vas|EU)\)\s\d{1,5}/\d{2}(?![\w/])", 0.9),
         # Prosecutor files: "123 Js 4567/24"
         Pattern(r"(?<![\w/])\d{1,4}\s(?:Js|Ds|Ls|Cs|UJs|VRs)\s\d{1,6}/\d{2}(?![\w/])", 0.9),
         # US federal docket: "1:23-cv-01234"
@@ -257,15 +262,33 @@ _LAWS = (
     r"BGB|StGB|ZPO|StPO|GG|HGB|AO|GmbHG|AktG|VwGO|VwVfG|ArbGG|KSchG|BetrVG|InsO|UWG|UrhG|MarkenG|"
     r"PatG|BDSG|DSGVO|DS-GVO|GDPR|TMG|TTDSG|GWB|EStG|UStG|SGB\s?[IVX]+|FamFG|WEG|BRAO|AEUV|EUV|EMRK|GRCh"
 )
+# Any statute abbreviation after a § or Art. reference: at least two capitals ("TzBfG", "SGG", "BVerfGG",
+# "SächsPersVG", "DesignG", "AO"), optionally a book number ("SGB V") or year ("StVereinfG 2011").
+_LAW_ABBR = r"(?:SGB\s?[IVX]+|[A-ZÄÖÜ][a-zäöüß]*[A-ZÄÖÜ][A-Za-zÄÖÜäöüß]{0,12}(?:\s(?:19|20)\d{2})?)"
+# Subdivisions, with or without dots (federal social court style "Abs 2 S 3"), and lists ("§§ 7, 8").
+_SUBDIV = (r"(?:,?\s(?:Abs\.?|Absatz|S\.?|Satz|Nr\.?|Halbs(?:atz|\.)?|Hs\.?|Buchst\.?|lit\.?|Alt\.?|Var\.?|"
+           r"Unterabs\.?|UAbs\.?)\s?\d*[a-z]?)")
+_PARA = rf"\d+\s?[a-z]?(?:\s?(?:ff?\.|-\s?\d+[a-z]?))?{_SUBDIV}*"
+_AUTHOR = r"(?:(?:v\.|von|de|van)\s)?[A-ZÄÖÜ][a-zäöüß]+(?:-[A-ZÄÖÜ][a-zäöüß]+)?"
+_AUTHORS = rf"{_AUTHOR}(?:\s?/\s?{_AUTHOR}){{0,5}}"
 LEGAL_CITATION = RegexRecognizer(
     "legal_citation", E.LEGAL_CITATION,
     [
-        Pattern(
-            rf"§§?\s?\d+[a-z]?(?:\s?(?:ff?\.|-\s?\d+[a-z]?))?(?:,?\s(?:Abs\.|Absatz)\s?\d+)?(?:,?\s(?:S\.|Satz)\s?\d+)?"
-            rf"(?:,?\s(?:Nr\.)\s?\d+)?\s(?:{_LAWS})\b",
-            0.95,
-        ),
-        Pattern(rf"\bArt(?:\.|ikel)\s?\d+(?:\s?(?:Abs\.|para\.)\s?\d+)?(?:\s?(?:lit\.)\s?[a-z])?\s(?:{_LAWS})\b", 0.95),
+        Pattern(rf"§§?\s?{_PARA}(?:(?:,|\sund|\sbis|\si\.\s?V\.\s?m\.)\s§?\s?{_PARA})*\s(?:{_LAW_ABBR})(?![\w-])", 0.95),
+        Pattern(rf"\bArt(?:\.|ikel)\s?{_PARA}\s(?:{_LAW_ABBR}|EU-?GRCharta|GRC)(?![\w-])", 0.95),
+        # Named statutes: "Grundgesetz", "des Atomgesetzes", "Bewertungsgesetzes", "Wahlordnung".
+        Pattern(r"\b[A-ZÄÖÜ][a-zäöüß]*(?:gesetz(?:es|buch(?:es|s)?)?|ordnung|verordnung)\b", 0.7),
+        # Case reporters and journals: "BVerfGE 76, 253", "BGHZ 140, 1", "Buchholz 251.7", "NJW 2019, 123".
+        Pattern(r"\b(?:BVerfGE|BVerfGK|BVerwGE|BGHZ|BGHSt|BAGE|BFHE|BSGE|BFH/NV|SozR\s?\d(?:-\d+)?|Buchholz|"
+                r"NJW(?:-RR)?|NVwZ(?:-RR)?|NZA(?:-RR)?|GRUR(?:\sInt|-RR|-Prax)?|NStZ(?:-RR)?|ZIP|DStR|DStRE|MDR|WM|"
+                r"JZ|FamRZ|ZfBR|BauR|LVerfGE|Slg\.)\s\d{1,4}(?:\.\d+)?(?:,\s?(?:I-)?\d+)?", 0.9),
+        # Legal literature: author(s), optionally "in: editors", then edition, "a. a. O.", "§ x Rn." or a journal
+        # with year. Only with one of these markers, so a name in running text is never taken for an author.
+        Pattern(rf"\b{_AUTHORS}(?:,?\sin:?\s{_AUTHORS})?,?\s(?:a\.\s?a\.\s?O\.|aaO|"
+                rf"[^;()<>\n]{{0,60}}?(?:\d+\.\sAufl(?:\.|age)?|§\s?\d+[a-z]?(?:\s[A-Z][\w-]{{1,10}})?\s(?:Rn|RdNr|Rdn|Rz)\b)|"
+                rf"[A-Z][A-Za-z]{{1,6}}\s(?:19|20)\d{{2}},\s(?:S\.\s)?\d+)", 0.85),
+        # A bare reference without statute ("§ 5 Abs. 1") is public, but it may also be a contract clause.
+        Pattern(rf"§§?\s?\d+\s?[a-z]?{_SUBDIV}+", 0.6),
         Pattern(r"\b\d+\s(?:U\.S\.C\.|USC)\s§+\s?\d+[a-z]?\b", 0.9),
     ],
 )
@@ -278,9 +301,16 @@ COURT = RegexRecognizer(
     "court", E.COURT,
     [
         Pattern(r"\b(?:Bundesgerichtshof|Bundesverfassungsgericht|Bundesarbeitsgericht|Bundesverwaltungsgericht|"
-                r"Bundessozialgericht|Bundesfinanzhof|Europäische[nr]? Gerichtshof|BGH|BVerfG|BAG|BVerwG|BSG|BFH|EuGH)\b", 0.9),
+                r"Bundessozialgericht|Bundesfinanzhof|Bundespatentgericht|Bundesdisziplinargericht)(?:e?s)?\b", 0.9),
+        Pattern(r"\b(?:(?:Europäische|Internationale)[nr]?\s)?Gerichtshof(?:e?s)?(?:\sfür\sMenschenrechte|"
+                r"\sder\sEuropäischen\sUnion)?\b", 0.85),
+        # Unambiguous court abbreviations, also without a city. "AG", "KG", "LG", "SG", "FG", "VG" alone are
+        # company forms or other words too often; they only count with a city (pattern below).
+        Pattern(r"\b(?:BGH|BVerfG|BAG|BVerwG|BSG|BFH|BPatG|EuGH|EuG|EGMR|IGH|BayObLG|BayVGH|VGH|VerfGH|OVG|OLG|LSG|LAG|"
+                r"ArbG|StGH|LVerfG)\b(?!-)", 0.8),
+        Pattern(r"\bTruppendienstgericht(?:e?s)?(?:\s(?:Nord|Süd))?\b", 0.85),
         Pattern(rf"\b(?:{_COURT_LONG})(?:\s{_DE_CITY})?", 0.9),
-        Pattern(rf"\b(?:AG|LG|OLG|VG|OVG|ArbG|LAG|SG|LSG|FG)\s{_DE_CITY}", 0.75),
+        Pattern(rf"\b(?:(?:Bay|Sächs|Hess|Nds|Thür|Bbg)?(?:AG|LG|OLG|VG|OVG|VGH|VerfGH|ArbG|LAG|SG|LSG|FG))\s{_DE_CITY}", 0.75),
         Pattern(r"\b(?:Supreme Court|Court of Appeals?|High Court|Crown Court|County Court|"
                 r"(?:United States )?District Court)(?:\sfor the\s[A-Z][a-z]+(?:\s(?:of\s(?:the\s)?)?[A-Z][a-z]+){0,4})?", 0.85),
     ],
