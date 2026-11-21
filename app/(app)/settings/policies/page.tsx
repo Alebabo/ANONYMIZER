@@ -24,7 +24,7 @@ export default async function Policies({ searchParams }: { searchParams: Promise
   const usedBy: Record<string, string[]> = {};
   const use = (name: string | null | undefined, what: string) => { if (name) (usedBy[name] ??= []).push(what); };
   use(info.default_policy, "Chat, API & MCP");
-  use(sources.conversation_policy ?? "support-default", "CSV uploads");
+  use(sources.playground_policy ?? "support-default", "CSV uploads");
   const { name } = await searchParams;
   const active = policies.find(p => p.name === name) ?? policies.find(p => p.name === "support-default") ?? policies[0];
   const detail = active ? (await getPolicy(active.name)).data as PolicyJson | null : null;

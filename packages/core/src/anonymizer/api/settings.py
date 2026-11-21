@@ -17,9 +17,8 @@ def _split(value: str | None) -> list[str]:
     return [v.strip() for v in (value or "").split(",") if v.strip()]
 
 
-# Settings handed to the gateway, sources, prompt store and MCP; everything else stays out of ``env``.
-_PASS_THROUGH = ("ANONYMIZER_UPSTREAM", "ANONYMIZER_LOCAL", "ANONYMIZER_GATEWAY", "ANONYMIZER_SOURCE", "ANONYMIZER_CONVERSATIONS",
-                 "ANONYMIZER_PROMPTS", "ANONYMIZER_MCP", "ANONYMIZER_PROXY")
+# Settings handed to the MCP server; everything else stays out of ``env``.
+_PASS_THROUGH = ("ANONYMIZER_MCP",)
 
 
 class SettingsError(RuntimeError):
@@ -45,21 +44,17 @@ class Settings:
     ANONYMIZER_MAX_UPLOAD_BYTES max document upload size (default 25 MiB)
     ANONYMIZER_ENABLE_NER      "0" to disable spaCy NER (not recommended)
     ANONYMIZER_PLAYGROUND_DB  SQLite file for uploaded playground CSV datasets (default data/playground.db)
+    ANONYMIZER_PLAYGROUND_POLICY  policy for playground queries (default support-default; the former
+                               ANONYMIZER_CONVERSATIONS_POLICY is still read as a fallback)
     ANONYMIZER_FEEDBACK_DB    SQLite file for corrections from the Chat tab, raw text (default data/feedback.db)
     ANONYMIZER_TRACE_DB        SQLite file for metadata-only traces (default data/traces.db)
     ANONYMIZER_TRACE_RETENTION_DAYS  default 30
     ANONYMIZER_TRACE_CONTENT   "1" also stores protected text and original values per trace
                                (clear-text personal data, admins only; test data only)
-    ANONYMIZER_UPSTREAM_URL / _KEY / _PROVIDER            external OpenAI-compatible provider
-    ANONYMIZER_LOCAL_UPSTREAM_URL / _KEY / ANONYMIZER_LOCAL_MODEL  optional local model for local_only content
-    ANONYMIZER_GATEWAY_RESTORE "0" to return placeholders instead of restored values
     ANONYMIZER_KEEP_TERMS      comma-separated own brands/products kept unchanged by NER (e.g. "C24")
     ANONYMIZER_NER_MODEL_DE    German spaCy model; "de_core_news_lg+models/de_c24_ner/ner" uses the fine-tuned
                                support NER (base model plus NER weights)
     ANONYMIZER_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
-    ANONYMIZER_SOURCE / ANONYMIZER_SOURCE_*         conversation source (jsonl | http | langfuse), see docs/conversations.md
-    ANONYMIZER_CONVERSATIONS_*                policy, quota, k, database, label allow-list for conversation access
-    ANONYMIZER_PROMPTS / ANONYMIZER_PROMPTS_*       prompt store (local | langfuse), see docs/prompts.md
     ANONYMIZER_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a OpenAnonymizer API key)
     """
 
@@ -80,9 +75,9 @@ class Settings:
     session_hours: float = 12
     custom_patterns: str | None = None
     keep_terms: list[str] = field(default_factory=list)
-    conversations_db: str = "data/conversations.db"
     playground_db: str = "data/playground.db"
     feedback_db: str = "data/feedback.db"
+    playground_policy: str = "support-default"
     mcp_http: bool = False
     bootstrap_admin: tuple[str, str] | None = field(default=None, repr=False)
     env: dict[str, str] = field(default_factory=dict, repr=False)
@@ -115,9 +110,10 @@ class Settings:
             session_hours=float(env.get("ANONYMIZER_SESSION_HOURS", "12")),
             custom_patterns=env.get("ANONYMIZER_CUSTOM_PATTERNS") or None,
             keep_terms=_split(env.get("ANONYMIZER_KEEP_TERMS")),
-            conversations_db=env.get("ANONYMIZER_CONVERSATIONS_DB", "data/conversations.db"),
             playground_db=env.get("ANONYMIZER_PLAYGROUND_DB", "data/playground.db"),
             feedback_db=env.get("ANONYMIZER_FEEDBACK_DB", "data/feedback.db"),
+            playground_policy=(env.get("ANONYMIZER_PLAYGROUND_POLICY") or env.get("ANONYMIZER_CONVERSATIONS_POLICY")
+                               or "support-default"),
             mcp_http=env.get("ANONYMIZER_MCP_HTTP", "0") == "1",
             bootstrap_admin=_bootstrap(env),
             env={k: v for k, v in env.items() if k.startswith(_PASS_THROUGH)},

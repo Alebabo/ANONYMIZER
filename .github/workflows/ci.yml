@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: packages/core/pyproject.toml
       - name: Install
         run: |
-          pip install -e "packages/core[dev]" -e "sdk/python[dev]" openai
+          pip install -e "packages/core[dev]" -e "sdk/python[dev]"
           python -m spacy download de_core_news_lg
           python -m spacy download en_core_web_lg
       - name: Test core

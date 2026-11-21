@@ -13,9 +13,6 @@ Security properties:
 * Validation errors never echo the submitted input (FastAPI's default 422
   response would).
 * Text size is capped (``ANONYMIZER_MAX_CHARS``).
-* Conversations (``ANONYMIZER_SOURCE``) are only returned protected, behind opaque
-  ids, a daily quota per key and k-anonymous statistics. Prompt versions are
-  scanned before they are saved; moving a label is an admin action.
 * ``ANONYMIZER_MCP_HTTP=1`` serves the MCP tools at ``/mcp`` with the same keys.
 
 Note: no ``from __future__ import annotations`` here. FastAPI must resolve
@@ -26,7 +23,6 @@ breaks (covered by tests/test_api.py::test_endpoints_require_key).
 
 
 import logging
-import os
 import re
 from contextlib import asynccontextmanager
 import threading
@@ -34,13 +30,11 @@ import time
 import uuid
 from collections import defaultdict, deque
 from typing import Annotated
-from urllib.parse import urlsplit
 
 import base64
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
@@ -49,14 +43,13 @@ from anonymizer.anonymize import OpenAnonymizer, AnonymizerConfig, LeakError, re
 from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Principal
 from anonymizer.api.schemas import (
     AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, DryRunResult, LoginRequest, PolicyTestRequest, PolicyTestResult, MemberCreate,
-    MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
-    FeedbackCreate, PlaygroundColumns, PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, ProxyUpstreamToggle, RestoreRequest, ScanResponse, TextRequest,
+    MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary,
+    FeedbackCreate, PlaygroundColumns, PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, RestoreRequest, ScanResponse, TextRequest,
 )
 from anonymizer.audit import AuditLog
 from anonymizer.api.settings import Settings
 from anonymizer.anonymize.engine import AnonymizationResult, RestoreResult
 from anonymizer.classify import Classifier, DocumentClassification
-from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
 from anonymizer.feedback import FeedbackError, FeedbackStore
 from anonymizer.pipeline import Pipeline, ProtectResult
@@ -67,9 +60,6 @@ from anonymizer.policy import (
     FilePolicyStore, Policy, PolicyEngine, PolicyError, builtin_policy, diff_decisions,
 )
 from anonymizer.documents import DocumentError, protect_document
-from anonymizer.gateway import Gateway, GatewayConfig, GatewayError
-from anonymizer.prompts import PromptError, PromptService, backend_from_env
-from anonymizer.sources import source_from_env
 from anonymizer.tracing import Trace, TraceStep, TraceStore, trace_from_protect, trace_from_scan
 from anonymizer.vault import FileVault, InMemoryVault, VaultError, VaultKey
 
@@ -80,7 +70,7 @@ _REQUEST_ID = re.compile(r"[\w.:-]{1,64}", re.ASCII)
 
 
 class State:
-    def __init__(self, settings: Settings, gateway_transport=None, source_transport=None) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.accounts = AccountStore(settings.accounts_db, settings.session_hours)
         self.audit = AuditLog(settings.audit_db)
@@ -102,39 +92,16 @@ class State:
         for builtin in ("banking-default", "support-default", "legal-default"):
             if builtin not in self.policies.names():
                 self.policies.save(builtin_policy(builtin))
-        self.gateway = Gateway(
-            lambda vault: Pipeline(self.policy_for(None, None, None, None), detector=self.detector,
-                                   classifier=self.classifier, vault=vault),
-            GatewayConfig.from_env(settings.env), transport=gateway_transport,
-        )
-        env = settings.env
-        self.conversation_policy = env.get("ANONYMIZER_CONVERSATIONS_POLICY", "support-default")
-        source = source_from_env(env, transport=source_transport)
-        if source is not None or env.get("ANONYMIZER_PROMPTS"):
-            self.policies.effective(self.conversation_policy)  # unknown policy: fail at start, not per request
-        self.conversations = None if source is None else ConversationService(
-            source,
-            lambda vault: Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
-                                   classifier=self.classifier, vault=vault),
-            ConversationStore(settings.conversations_db), ConversationConfig.from_env(env),
-            vault=self.vault, traces=self.traces, audit=self.audit,
-        )
+        # Policy for playground queries (CSV datasets, dashboard and MCP); checked at start, not per request.
+        self.playground_policy = settings.playground_policy
+        self.policies.effective(self.playground_policy)
         self.playground = PlaygroundService(
             PlaygroundStore(settings.playground_db),
-            lambda vault: Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
+            lambda vault: Pipeline(self.policies.effective(self.playground_policy), detector=self.detector,
                                    classifier=self.classifier, vault=vault),
-            self.conversation_policy, traces=self.traces, audit=self.audit,
+            self.playground_policy, traces=self.traces, audit=self.audit,
         )
         self.feedback = FeedbackStore(settings.feedback_db)
-        backend = backend_from_env(env, transport=source_transport)
-        self.prompts = None if backend is None else PromptService(
-            backend, self.detector, self.classifier, self._protect_prompt, self.audit)
-
-    def _protect_prompt(self, text: str) -> str | None:
-        pipeline = Pipeline(self.policies.effective(self.conversation_policy), detector=self.detector,
-                            classifier=self.classifier)
-        return pipeline.protect(text, "external").text
-
     def _retention(self, org_id: str) -> int | None:
         try:
             return self.accounts.get_org(org_id)["trace_retention_days"]
@@ -180,38 +147,22 @@ class LoginLimiter:
             self._fails.pop(email, None)
 
 
-def _host(url: str) -> str:
-    parts = urlsplit(url)
-    return f"{parts.scheme}://{parts.hostname}{f':{parts.port}' if parts.port else ''}" if parts.hostname else ""
-
-
-def create_app(settings: Settings | None = None, gateway_transport=None, source_transport=None) -> FastAPI:
+def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    state = State(settings, gateway_transport, source_transport)
+    state = State(settings)
     mcp_holder: dict = {}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        import anyio
         from contextlib import AsyncExitStack
 
         # Load the NER model in the background so the first request does not wait several seconds.
         threading.Thread(target=lambda: state.detector.scan("Max Mustermann wohnt in Berlin."),
                          name="ner-warmup", daemon=True).start()
         async with AsyncExitStack() as stack:
-            for key in ("server", "proxy_server"):
-                if key in mcp_holder:
-                    await stack.enter_async_context(mcp_holder[key].session_manager.run())
-            proxy = mcp_holder.get("proxy")
-            if proxy is None:
-                yield
-                return
-            async with anyio.create_task_group() as tg:
-                tg.start_soon(proxy.run)
-                await proxy.wait_ready(10)
-                yield
-                proxy.stop()
-                tg.cancel_scope.cancel()
+            if "server" in mcp_holder:
+                await stack.enter_async_context(mcp_holder["server"].session_manager.run())
+            yield
 
     app = FastAPI(
         lifespan=lifespan,
@@ -335,14 +286,6 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
     @app.exception_handler(PolicyError)
     async def policy_error(_: Request, exc: PolicyError) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
-
-    @app.exception_handler(ConversationError)
-    async def conversation_error(_: Request, exc: ConversationError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
-
-    @app.exception_handler(PromptError)
-    async def prompt_error(_: Request, exc: PromptError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(AccountError)
     async def account_error(_: Request, exc: AccountError) -> JSONResponse:
@@ -479,35 +422,6 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             else:
                 body["text"] = doc.content.decode("utf-8")
         return body
-
-    # -- gateway ---------------------------------------------------------------
-    @app.post("/v1/chat/completions", tags=["gateway"])
-    async def chat_completions(request: Request, p: User) -> JSONResponse:
-        """OpenAI-compatible chat completions. Messages are protected by the active policy before they
-        reach the provider; placeholders in the answer are restored. Use your OpenAnonymizer API key as the
-        OpenAI API key and OpenAnonymizer's URL as base_url."""
-        try:
-            body = await request.json()
-        except ValueError:
-            return JSONResponse(status_code=400, content={"error": {"message": "invalid JSON", "type":
-                                                                    "invalid_request_error", "code": "invalid_json"}})
-        if not isinstance(body, dict):
-            return JSONResponse(status_code=400, content={"error": {"message": "invalid body", "type":
-                                                                    "invalid_request_error", "code": "invalid_body"}})
-        total = sum(len(m.get("content")) for m in body.get("messages", []) if isinstance(m, dict)
-                    and isinstance(m.get("content"), str))
-        if total > settings.max_chars:
-            return JSONResponse(status_code=413, content={"error": {"message": "request too large", "type":
-                                                                    "invalid_request_error", "code": "too_large"}})
-        try:
-            data, trace = await run_in_threadpool(state.gateway.chat_completions, body)
-        except GatewayError as exc:
-            if exc.trace is not None:
-                state.traces.add(exc.trace.model_copy(update=usage(p)), p.org_id)
-            headers = {"X-OpenAnonymizer-Trace-Id": exc.trace.id} if exc.trace else {}
-            return JSONResponse(status_code=exc.status, content=exc.body(), headers=headers)
-        state.traces.add(trace.model_copy(update=usage(p)), p.org_id)
-        return JSONResponse(content=data, headers={"X-OpenAnonymizer-Trace-Id": trace.id, "X-OpenAnonymizer-Outcome": trace.outcome or ""})
 
     # -- observability ---------------------------------------------------------
     @app.get("/v1/traces", response_model=list[Trace], tags=["observability"])
@@ -729,79 +643,10 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
             raise HTTPException(status_code=404, detail="audit log entry not found")
         return entry
 
-    # -- conversations -----------------------------------------------------------------
-    def conversations() -> ConversationService:
-        if state.conversations is None:
-            raise HTTPException(status_code=404, detail="conversation access is not configured (ANONYMIZER_SOURCE)")
-        return state.conversations
-
-    def prompts() -> PromptService:
-        if state.prompts is None:
-            raise HTTPException(status_code=404, detail="prompt management is not configured (ANONYMIZER_PROMPTS)")
-        return state.prompts
-
-    @app.get("/v1/sources", tags=["conversations"])
+    @app.get("/v1/sources", tags=["system"])
     def sources(_: User) -> dict:
-        """What is connected, without credentials (adapter type and host only)."""
-        return {
-            "conversations": state.conversations.describe() if state.conversations else None,
-            "conversation_policy": state.conversation_policy if state.conversations else None,
-            "prompts": state.prompts.describe() if state.prompts else None,
-            "mcp_http": settings.mcp_http,
-        }
-
-    @app.get("/v1/conversations", tags=["conversations"])
-    def list_conversations(p: User, since: float | None = None, until: float | None = None, tag: str | None = None,
-                           limit: int = 50, cursor: str | None = None) -> dict:
-        """Opaque ids and allow-listed metadata. No content."""
-        return conversations().list(p, since, until, tag, limit, cursor)
-
-    @app.get("/v1/conversations/stats", tags=["conversations"])
-    def conversation_stats(p: User, since: float | None = None, until: float | None = None,
-                           group_by: str = "day") -> dict:
-        return conversations().stats(p, since, until, group_by)
-
-    @app.get("/v1/conversations/kpis", tags=["conversations"])
-    def conversation_kpis(p: User, since: float | None = None, until: float | None = None) -> dict:
-        """Aggregate KPIs computed by the source (only if it provides them)."""
-        return conversations().kpis(p, since, until)
-
-    @app.get("/v1/conversations/quota", tags=["conversations"])
-    def conversation_quota(p: User) -> dict:
-        return conversations().quota(p)
-
-    @app.get("/v1/conversations/{conversation_id}", tags=["conversations"])
-    def get_conversation(conversation_id: str, p: User) -> dict:
-        """Protected messages. Counts against the daily quota; traced and audited."""
-        return conversations().get(p, conversation_id)
-
-    # -- prompts ---------------------------------------------------------------------------
-    @app.get("/v1/prompts", tags=["prompts"])
-    def list_prompts(p: User) -> list[dict]:
-        return prompts().list(p.org_id)
-
-    @app.post("/v1/prompts", status_code=201, tags=["prompts"])
-    def create_prompt(req: PromptCreate, p: User) -> dict:
-        """New version without labels. Rejected if it contains sensitive data or OpenAnonymizer placeholders."""
-        body = req.prompt if isinstance(req.prompt, str) else [m.model_dump() for m in req.prompt]
-        return prompts().create(p, req.name, body, req.config, req.note)
-
-    @app.get("/v1/prompts/{name}", tags=["prompts"])
-    def get_prompt(name: str, p: User, version: int | None = None, label: str | None = None) -> dict:
-        return prompts().get(p.org_id, name, version, label)
-
-    @app.get("/v1/prompts/{name}/history", tags=["prompts"])
-    def prompt_history(name: str, p: User) -> list[dict]:
-        return prompts().history(p.org_id, name)
-
-    @app.get("/v1/prompts/{name}/diff", tags=["prompts"])
-    def prompt_diff(name: str, p: User, from_version: int, to_version: int) -> dict:
-        return prompts().diff(p.org_id, name, from_version, to_version)
-
-    @app.post("/v1/prompts/{name}/labels", tags=["prompts"])
-    def set_prompt_label(name: str, req: PromptLabelSet, p: Admin) -> dict:
-        """Move a label (e.g. production) to a version. Admin only; audited with before/after."""
-        return prompts().set_label(p, name, req.version, req.label)
+        """Which policy the playground (CSV) uses and whether MCP over HTTP is on."""
+        return {"playground_policy": state.playground_policy, "mcp_http": settings.mcp_http}
 
     # -- playground ------------------------------------------------------------------------------
     # -- feedback (corrections from the Chat tab; raw text, admins read it) ------------------------
@@ -879,63 +724,12 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         if settings.vault_key:
             mcp_env |= {"ANONYMIZER_VAULT_KEY": settings.vault_key, "ANONYMIZER_VAULT_PATH": str(settings.vault_path)}
         tools = AnonymizerTools(MCPConfig.from_env(mcp_env), detector=state.detector,
-                          conversations=state.conversations, prompts=state.prompts, playground=state.playground,
+                          playground=state.playground,
                           traces=state.traces, policy_provider=lambda: state.policies.effective(settings.default_policy))
         hosts = [h.strip() for h in settings.env.get("ANONYMIZER_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
         server, endpoint = http_server(tools, lambda token: resolve_token(token), hosts)
         mcp_holder["server"] = server
         app.router.routes.append(Route("/mcp", endpoint=endpoint))
-
-    # -- MCP proxy (other MCP servers behind OpenAnonymizer) -----------------------------------------------
-    if settings.env.get("ANONYMIZER_PROXY_CONFIG"):
-        from starlette.routing import Route
-
-        from anonymizer.proxy import AnonymizerProxy, ProxyConfig, http_proxy
-
-        proxy = AnonymizerProxy(ProxyConfig.load(settings.env["ANONYMIZER_PROXY_CONFIG"], {**os.environ, **settings.env}),
-                          detector=state.detector, traces=state.traces, audit=state.audit,
-                          vault=state.vault)
-        hosts = [h.strip() for h in settings.env.get("ANONYMIZER_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
-        proxy_server, proxy_endpoint = http_proxy(proxy, lambda token: resolve_token(token), hosts)
-        mcp_holder["proxy"], mcp_holder["proxy_server"] = proxy, proxy_server
-        app.router.routes.append(Route("/proxy/mcp", endpoint=proxy_endpoint))
-
-    @app.get("/v1/proxy", tags=["mcp"])
-    def proxy_status(_: User) -> dict:
-        """Upstreams of the MCP proxy: connection, mode, policy, tool counts. 404 if not configured."""
-        if "proxy" not in mcp_holder:
-            raise HTTPException(status_code=404, detail="MCP proxy is not configured (ANONYMIZER_PROXY_CONFIG)")
-        p = mcp_holder["proxy"]
-        return {"path": "/proxy/mcp", "destination": p.config.destination, "upstreams": p.status(),
-                "tools": [t.name for t in p.list_tools()]}
-
-    @app.put("/v1/proxy/upstreams/{name}", tags=["mcp"])
-    async def proxy_set_upstream(name: str, req: ProxyUpstreamToggle, p: Admin) -> dict:
-        """Switch an upstream of the MCP proxy on or off (connect and log its calls / disconnect). Admin only."""
-        if "proxy" not in mcp_holder:
-            raise HTTPException(status_code=404, detail="MCP proxy is not configured (ANONYMIZER_PROXY_CONFIG)")
-        proxy = mcp_holder["proxy"]
-        if name not in proxy.config.upstreams:
-            raise HTTPException(status_code=404, detail=f"unknown upstream: {name}")
-        before = proxy.config.upstreams[name].enabled
-        proxy.set_enabled(name, req.enabled)
-        state.audit.record(p.org_id, "update", "proxy_upstream", name, p, before={"enabled": before},
-                           after={"enabled": req.enabled})
-        return {"name": name, "enabled": req.enabled}
-
-    # -- gateway status --------------------------------------------------------------
-    @app.get("/v1/gateway", tags=["gateway"])
-    def gateway_status(_: User) -> dict:
-        """Gateway configuration without credentials (host only, never keys or paths)."""
-        cfg = state.gateway.config
-
-        def up(u) -> dict | None:
-            return None if u is None else {"host": _host(u.base_url), "provider": u.provider,
-                                           "model": u.model, "authenticated": bool(u.api_key)}
-
-        return {"external": up(cfg.external), "local": up(cfg.local), "restore_responses": cfg.restore_responses,
-                "timeout_s": cfg.timeout, "streaming": False, "endpoint": "/v1/chat/completions",
-                "default_policy": settings.default_policy}
 
     return app
 

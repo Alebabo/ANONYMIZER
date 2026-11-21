@@ -39,7 +39,7 @@ Behind an MCP client there is usually a **cloud LLM**. Everything a tool returns
 | `ANONYMIZER_MCP_ROOT` | Document folder for `read_document_protected`. Without it, the file tools are disabled |
 | `ANONYMIZER_MCP_MAX_CHARS` | Max. characters per text/file (200,000) |
 | `ANONYMIZER_VAULT_KEY`, `ANONYMIZER_VAULT_PATH`, `ANONYMIZER_MCP_NAMESPACE` | Optional: consistent pseudonyms across calls (e.g. one namespace per matter) |
-| `ANONYMIZER_SOURCE`, `ANONYMIZER_PROMPTS`, `ANONYMIZER_CUSTOM_PATTERNS`, `ANONYMIZER_CONVERSATIONS_*` | Optional: conversation and prompt tools (stdio reads them from the environment) |
+| `ANONYMIZER_CUSTOM_PATTERNS` | Optional: deployment-specific patterns (see [detection.md](detection.md)) |
 
 ## Setup
 
@@ -86,23 +86,20 @@ docker run -i --rm -v /path/to/matter-folder:/docs:ro -e ANONYMIZER_MCP_ROOT=/do
 4. If the result is `review` / `local_only` / `block`, the agent stops and asks the user.
 5. A lawyer restores the original names in the final document via the admin API or `anonymizer restore`, outside the agent.
 
-## Conversations and prompts
+## Playground datasets (HTTP only)
 
-With a conversation source (`ANONYMIZER_SOURCE`) and/or a prompt store (`ANONYMIZER_PROMPTS`) the server offers more tools. Setup and the guarantees behind them: [conversations.md](conversations.md), [prompts.md](prompts.md).
+Over HTTP (`/mcp` of the API) the server also offers the CSV uploads from the dashboard (CSV tab):
 
-| Tool | Returns | Annotation |
-|---|---|---|
-| `list_conversations(since?, until?, tag?, limit?, cursor?)` | Opaque ids and metadata, no content | read-only |
-| `get_conversation(conversation_id)` | Protected messages; withheld ones as `content: null`. Counts against the daily quota | read-only, not idempotent |
-| `conversation_stats(since?, until?, group_by)` | Counts by day, tag, prompt, prompt_version, channel, language; groups < k suppressed | read-only |
-| `list_prompts()`, `get_prompt(name, version?, label?)`, `prompt_history(name)`, `diff_prompt(name, from_version, to_version)` | Prompt versions and diffs | read-only |
-| `create_prompt_draft(name, text? \| messages?, note?)` | New version without labels; rejected with customer data or placeholders | **write** |
+| Tool | Returns |
+|---|---|
+| `list_datasets()` | Id, name, visible columns, row count |
+| `query_dataset(dataset_id, query?, columns?, limit?, offset?)` | Protected rows; withheld values as `[WITHHELD]`. Hidden columns are never searched or sent |
 
-Not available over MCP on purpose: moving a label (promotion), restore, and every argument that could change policy, destination or namespace.
+Not available over MCP on purpose: restore, and every argument that could change policy, destination or namespace.
 
 ## HTTP transport (remote MCP)
 
-`ANONYMIZER_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a OpenAnonymizer API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization, the conversation quota and the actor in the audit log. Requests without a valid key get 401 before they reach the MCP server.
+`ANONYMIZER_MCP_HTTP=1` on the API serves the same tools at `/mcp` (streamable HTTP, stateless, JSON responses). Every request needs a OpenAnonymizer API key, `Authorization: Bearer <key>` or `X-API-Key`. The key decides the organization and the actor in traces and the audit log. Requests without a valid key get 401 before they reach the MCP server.
 
 ```bash
 claude mcp add --transport http anonymizer https://anonymizer.internal.example/mcp \
@@ -118,14 +115,14 @@ Cursor (`.cursor/mcp.json`):
 
 - Put TLS in front (reverse proxy), as for the rest of the API.
 - `ANONYMIZER_MCP_ALLOWED_HOSTS=anonymizer.internal.example` enables DNS-rebinding protection for those hosts.
-- One key per person: the quota and the audit log are per key.
+- One key per person: traces and the audit log are per key.
 - Claude Desktop and claude.ai custom connectors need OAuth; that is not included yet. Claude Code, Cursor and other clients that send a header work.
 
 ## Not included yet
 
 - **Only plain text formats** for `read_document_protected`. PDF/DOCX go through `POST /v1/documents/protect`.
 - **No OAuth** for remote MCP (see above).
-- **Audit:** conversation reads and prompt changes are audited; `scan`/`anonymize` calls are not.
+- **Audit:** playground queries are audited; `scan`/`anonymize` calls are traced, not audited.
 
 ## Traces
 

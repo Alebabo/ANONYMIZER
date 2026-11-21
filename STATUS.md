@@ -107,7 +107,11 @@ Keine offenen Arbeitsbranches. Abgeschlossen und gemergt: `claude/ner-org-recall
    TF-IDF + logistische Regression: Macro-F1 0,44 im zeitlichen Split (3 Klassen; binär 0,62), Metadaten-Baselines
    0,29–0,36. Messbares, aber für ein Produkt zu schwaches Signal. Details und Reproduktion ohne Download:
    `datasets/outcome/README.md` (`outcome_experiment.py train --dir local/outcome`).
-5. Offen im Backend: Conversations, Prompts, Gateway und MCP-Proxy sind nur noch per API erreichbar (UI entfernt); entscheiden, ob sie bleiben.
+5. **Backend-Bereinigung: erledigt** (Branch `claude/peaceful-keller-md3af4-backend-cleanup`). Conversations, Prompts,
+   Gateway (`/v1/chat/completions`) und MCP-Proxy (`/proxy/mcp`, `anonymizer-proxy`) entfernt (keine UI, weniger
+   Angriffsfläche). Der Ergebnisfilter des Proxys lebt als `anonymizer/result_filter.py` weiter, weil der CSV-Playground
+   ihn nutzt. Playground-Policy jetzt `ANONYMIZER_PLAYGROUND_POLICY` (alter Name `ANONYMIZER_CONVERSATIONS_POLICY` als
+   Fallback). Vorhandene `conversations.db`/`prompts.db` werden nicht mehr gelesen und nicht gelöscht.
 
 ## 7. Regeln für die Weiterarbeit
 

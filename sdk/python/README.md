@@ -3,7 +3,7 @@
 Python client for the [OpenAnonymizer](../../README.md) privacy API.
 
 ```bash
-pip install anonymizer-sdk            # plus "anonymizer-sdk[openai]" for the gateway helper
+pip install anonymizer-sdk
 ```
 
 ```python
@@ -20,10 +20,6 @@ else:
 anonymizer.anonymize("Herr Max Mustermann", methods={"person": "redact"}).text
 anonymizer.protect_document("klage.docx").content      # anonymized DOCX bytes
 anonymizer.scan("...").detections                      # types and offsets, never raw values
-
-# Existing OpenAI code through the privacy gateway:
-client = anonymizer.openai()
-client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": "..."}])
 ```
 
 `protect(..., require_allowed=True)` raises `PolicyViolation` instead of returning `text=None`.

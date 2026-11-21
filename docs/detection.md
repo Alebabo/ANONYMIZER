@@ -46,7 +46,7 @@ Names in chat self-introductions ("mein Name ist anna müller", "ich heiße …"
 
 ### Deployment patterns (`ANONYMIZER_CUSTOM_PATTERNS`)
 
-House formats such as order numbers or customer ids are configured in a YAML file. The API, `anonymizer-mcp` and `anonymizer source-check` load it from `ANONYMIZER_CUSTOM_PATTERNS`; an invalid file stops the server, because a silently missing pattern would let identifiers through.
+House formats such as order numbers or customer ids are configured in a YAML file. The API and `anonymizer-mcp` load it from `ANONYMIZER_CUSTOM_PATTERNS`; an invalid file stops the server, because a silently missing pattern would let identifiers through.
 
 ```yaml
 patterns:

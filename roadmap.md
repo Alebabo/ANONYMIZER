@@ -2,17 +2,21 @@
 
 Wedge: production MCPs. Verticals (legal, recruiting) come later as policy packs.
 
+> **Update November 2026:** the MCP proxy (Phase A MVP), the OpenAI-compatible gateway, conversation sources and
+> prompt management were removed from the code (no UI, smaller attack surface; see git history). The result filter
+> of the proxy lives on in `anonymizer/result_filter.py` for the CSV playground. Section 1 reflects the current code;
+> the phases below describe the earlier plan and would start from the git history if picked up again.
+
 ## 1. Starting point (what exists)
 
 | Area | Status |
 |---|---|
-| MCP server | `anonymizer-mcp` (stdio) and `/mcp` (HTTP, bearer key). Tools: scan, classify, anonymize, policy check, report, protected documents, conversations, prompts |
+| MCP server | `anonymizer-mcp` (stdio) and `/mcp` (HTTP, bearer key). Tools: scan, classify, anonymize, policy check, report, protected documents, CSV playground datasets (HTTP) |
 | Guarantees | No restore over MCP; no policy, destination or namespace arguments; read-only annotations; generic tool errors; content marked as data |
-| Sources | `jsonl`, `http` (two-endpoint contract), `langfuse` |
-| Protection | Detection DE/EN (rules + spaCy), deterministic YAML policies (`banking-default`, `support-default`), vault, quotas, k-anonymity, opaque ids |
-| Operations | Hash-chained audit log, traces, dashboard, OpenAI-compatible gateway, Python SDK, Docker |
-| MCP proxy | **Phase A MVP implemented** (`anonymizer-proxy`, `/proxy/mcp`, dashboard `/proxy`): A1–A3, A5–A7. Open: A4 placeholder resolution in arguments. See [docs/proxy.md](docs/proxy.md) |
-| Gaps | no SQL source; dry run only in the CLI; no OAuth; scan/anonymize calls not audited; only plain text in `read_document_protected`; recall on real data unmeasured |
+| Protection | Detection DE/EN (rules + spaCy), deterministic YAML policies (`banking-default`, `support-default`, `legal-default`), vault |
+| Operations | Hash-chained audit log, traces, dashboard, Python SDK, Docker |
+| MCP proxy | Removed in November 2026 (was a Phase A MVP; see git history) |
+| Gaps | no proxy for other MCP servers; no OAuth; scan/anonymize calls not audited; only plain text in `read_document_protected`; recall on real data unmeasured |
 
 **Core gap:** today OpenAnonymizer only protects data that flows through **its own** tools. Teams already use MCP servers for Postgres, Jira, Zendesk, Slack and GitHub. The product is the layer **in front of** these servers.
 
