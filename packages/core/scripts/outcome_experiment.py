@@ -557,6 +557,16 @@ def cmd_eval(base: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     res = json.loads((base / "results.json").read_text())
     res["build"] = json.loads((base / "build_stats.json").read_text())
+    # Referenz für den Brier-Score: immer die Klassenverteilung des Trainings vorhersagen
+    for r in res["splits"].values():
+        tr_counts = {k: res["labels"][k] - r["test_labels"].get(k, 0) for k in res["labels"]}
+        if r["n_train"] != sum(tr_counts.values()):  # Train ist nicht das Komplement (zeitlich+gericht)
+            tr_counts = res["labels"]
+        n_tr = sum(tr_counts.values())
+        prior = {k: v / n_tr for k, v in tr_counts.items()}
+        n_te = sum(r["test_labels"].values())
+        r["brier_prior_referenz"] = round(sum(cnt * (sum(q * q for q in prior.values()) - 2 * prior[k] + 1)
+                                              for k, cnt in r["test_labels"].items()) / n_te, 4)
     # Handprüfungen (von Hand ausgefüllt, siehe datasets/outcome/label_check_runde*.json)
     res["label_check"] = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(out.glob("label_check_runde*.json"))}
     (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
