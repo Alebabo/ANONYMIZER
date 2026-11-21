@@ -1,0 +1,7 @@
+{"beschreibung": "Handprüfung Runde 1 (vor Regelkorrektur): 30 zufällige Labels, Tenor bzw. ArbG-Satz gelesen",
+ "n": 30, "korrekt": 26, "genauigkeit": 0.8667,
+ "fehler": [
+  {"id": 118623, "auto": "abgewiesen", "richtig": "verwerfen", "grund": "Satz betrifft ein anderes (Vor-)Verfahren ('mittlerweile ... abgewiesen')"},
+  {"id": 118994, "auto": "abgewiesen", "richtig": "verwerfen", "grund": "dito, Parallelverfahren"},
+  {"id": 450236, "auto": "stattgegeben", "richtig": "teilweise", "grund": "'überwiegend stattgegeben'"},
+  {"id": 449518, "auto": "stattgegeben", "richtig": "verwerfen", "grund": "Abfindungsklage, kein Kündigungsschutzantrag"}]}

@@ -157,7 +157,9 @@ _HEAD_LINE = re.compile(rf"^\s*(?:[IVX]+\.\s*)?{HEAD}\s*:?\s*$", re.M)
 # Antrag einer Kündigungsschutzklage: "festzustellen, dass das Arbeitsverhältnis ... durch die Kündigung ... nicht
 # aufgelöst ..." (auch "nicht beendet"). Nur Urteile mit so einem Antrag oder dem Wort Kündigungsschutzklage zählen.
 KSCH = re.compile(r"(?:festzustellen|festgestellt),? dass das Arbeitsverhältnis[^.]{0,400}?Kündigung[^.]{0,300}?"
-                  r"nicht[^.]{0,120}?(?:aufgelöst|beendet)|Kündigungsschutzklage", re.S)
+                  r"nicht[^.]{0,120}?(?:aufgelöst|beendet)|Kündigungsschutzklage|Kündigungsschutzantrag"
+                  r"|streiten[^.]{0,80}?(?:Wirksamkeit|Rechtswirksamkeit|Rechtmäßigkeit)[^.]{0,120}?Kündigung"
+                  r"|streiten[^.]{0,80}?ob das Arbeitsverhältnis[^.]{0,250}?Kündigung[^.]{0,200}?(?:aufgelöst|beendet)", re.S)
 # Kläger gewinnt (Kündigung unwirksam / Arbeitsverhältnis nicht aufgelöst):
 _END = r"(?:aufgelöst|beendet|geendet|endete|endet|sein Ende gefunden)"
 WIN = re.compile(rf"Arbeitsverhältnis[^.]{{0,300}}?(?:nicht|weder)[^.]{{0,400}}?(?:Kündigung|gekündigt)[^.]{{0,300}}?{_END}"
@@ -191,6 +193,28 @@ def sections(text: str) -> dict[str, str]:
 
 
 _MONTHS = r"(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)"
+
+
+def _unspace_heading(m: re.Match) -> str:
+    return "\n" + re.sub(r"\s+", "", m.group(1)).capitalize() + "\n"
+
+
+def nodots(text: str) -> str:
+    """Punkte, die keine Satzgrenze sind (Daten, Beträge, Abkürzungen, Initialen), entfernen; Zeilen bleiben.
+
+    Außerdem gesperrte Überschriften ("T a t b e s t a n d", "1 T A T B E S T A N D :") vereinheitlichen.
+    """
+    text = re.sub(r"(?m)^[ \t]*(?:\d{1,3}[ \t]+)?((?:[A-Za-zÄÖÜäöü][ \t]+){4,}[A-Za-zÄÖÜäöü])[ \t]*:?[ \t]*$",
+                  _unspace_heading, text)
+    text = re.sub(r"(?m)^[ \t]*(?:\d{1,3}[ \t]+)?(TENOR|TATBESTAND|ENTSCHEIDUNGSGRÜNDE|GRÜNDE)[ \t]*:?[ \t]*$",
+                  lambda m: m.group(1).capitalize(), text)
+    t = re.sub(rf"\b\d{{1,2}}\.[ \t]?(?:\d{{1,2}}\.|{_MONTHS}|Jan|Feb|Sept?|Okt|Nov|Dez)\.?[ \t]?(?:\d{{2,4}})?", "DATUM", text)
+    t = re.sub(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?", "BETRAG", t)
+    t = re.sub(r"(?m)^[ \t]*(?:[IVX]+|\d{1,3}|[a-z])\.(?=[ \t])", " ", t)
+    t = re.sub(r"\b(?:Nr|Abs|bzw|ggf|z\. ?B|Ziff|Bl|S|vgl|gem|i\. ?V\. ?m|d\. ?h|u\. ?a|v|d\. ?A|f|ff|Az|Rn|Rdnr|"
+               r"Dr|Prof|Hr|Fr|ca|insb|evtl|sog|usw|etc|lt|inkl|zzgl|abzgl|zit|aaO|a\. ?a\. ?O|BAG|LAG)\.", lambda m: m.group()[:-1], t)
+    t = re.sub(r"\b([A-ZÄÖÜ])\.(?=\s?[A-ZÄÖÜa-zäöü(,)-])", r"\1", t)  # Initialen "M." / "Berlin-T."
+    return re.sub(r"(?<=\d)\.(?=\s?(?:Monat|Woche|Jahr|Kammer|Senat|Instanz))", "", t)
 
 
 def norm_tenor(tenor: str) -> str:
@@ -242,9 +266,54 @@ def clean_input(tatbestand: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+# LAG: Satz, mit dem der Tatbestand das erstinstanzliche Urteil wiedergibt ("Das Arbeitsgericht hat ... abgewiesen").
+_ARBG_SENT = re.compile(r"(?:hat|stellte|wies) das Arbeitsgericht[^.]{0,600}?(?:stattgegeben|abgewiesen|festgestellt|"
+                        r"erkannt|aufgelöst|verurteilt|zurückgewiesen|entsprochen|fest|ab)\b"
+                        r"|(?:Das|das) Arbeitsgericht(?: [A-ZÄÖÜ][\w.-]*(?: (?:am|an der|in der|im) [A-ZÄÖÜ][\w.-]*)?)?"
+                        r"(?:,[^.]{0,120},)? hat (?![^.]{0,200}Beweis)[^.]{0,600}?"
+                        r"(?:stattgegeben|abgewiesen|festgestellt|erkannt|aufgelöst|verurteilt|zurückgewiesen|entsprochen)")
+_ARBG_END = re.compile(r"(?:Zur Begründung|Zu den Gründen|Wegen der (?:weiteren )?(?:Einzelheiten|Begründung)|Gegen (?:dieses|das)"
+                       r"|Das Urteil ist|Mit (?:der|ihrer|seiner) Berufung|Hinsichtlich der Begründung|Die Kammer hat)")
+
+
+def label_first_instance(text: str) -> str | None:
+    """Label aus der Wiedergabe des ArbG-Urteils im LAG-Tatbestand."""
+    sents = _SENT.split(norm_tenor(text))
+    # erster Satz + Folgesätze im Indikativ, die weitere Aussprüche enthalten (keine Begründung im Konjunktiv)
+    keep = sents[:1] + [x for x in sents[1:4] if re.search(r"abgewiesen|stattgegeben|festgestellt|verurteilt|entsprochen"
+                                                            r"|aufgelöst|erkannt", x)
+                        and not re.search(r"\b(?:sei|seien|habe|hätten?|wäre|ausgeführt|begründet)\b", x)]
+    t = " ".join(keep)
+    if "erkannt" in sents[0] and len(sents) > 1:  # "hat wie folgt erkannt:" -> folgender Tenor
+        t = " ".join(sents[:6])
+    t = t.replace("entsprochen", "stattgegeben")
+    t = re.sub(r"[^.]*(?:Kosten|Streitwert|Revision|vorläufig vollstreckbar)(?![^.]*Kündigung)[^.]*\.", " ", t)
+    if re.search(r"Teil-?[Uu]rteil|Versäumnisurteil|unzulässig|verworfen|mittlerweile|[Rr]echtskr|Vorprozess|"
+                 r"Parallelverfahren|Vorverfahren|in (?:diesem|jenem|einem anderen) Verfahren|Vergleich[^.]{0,60}(?:geendet|beendet|erledigt)", t):
+        return None  # anderes Verfahren oder kein Sachurteil
+    if re.search(r"Abfindung", t) and not WIN.search(t) and not re.search(r"Kündigungsschutz", t):
+        return None  # Abfindungs-/Zahlungsklage statt Bestandsschutz
+    t = re.sub(r"(?:überwiegend|weitgehend|größtenteils|im Wesentlichen|zum großen Teil) stattgegeben", "teilweise stattgegeben", t)
+    win = bool(WIN.search(t)) or bool(re.search(r"(?<!teilweise )(?<!insoweit )(?:der|den) (?:Kündigungsschutz|Änderungsschutz)?[Kk]lagen? "
+                                                 r"(?:[^.]{0,250} )?stattgegeben", t))
+    part = bool(re.search(r"teilweise stattgegeben|[Ii]m Übrigen[^.]{0,80}?abgewiesen|"
+                          r"Klage im Übrigen abgewiesen|insoweit stattgegeben|zum Teil stattgegeben|weitergehende Klage abgewiesen", t)) or bool(PARTIAL.search(t))
+    dismiss = bool(re.search(r"(?:die|der) (?:Kündigungsschutz)?[Kk]lagen?\b[^.]{0,250}?abgewiesen", t))
+    if win and not part and not dismiss:
+        return "stattgegeben"
+    if (win or "stattgegeben" in t) and part:
+        return "teilweise"
+    if dismiss and not win and not part and "stattgegeben" not in t:
+        return "abgewiesen"
+    return None
+
+
 def iter_raw(base: Path):
     for p in sorted((base / "raw").glob("*.json")):
-        yield json.loads(p.read_text(encoding="utf-8"))
+        try:
+            yield json.loads(p.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:  # gerade im Schreiben
+            continue
 
 
 def cmd_build(base: Path) -> None:
@@ -256,11 +325,8 @@ def cmd_build(base: Path) -> None:
         if court.startswith("Bundes"):
             stats["bag_ausgelassen"] += 1
             continue
-        level = "LAG" if "Landesarbeitsgericht" in court else "ArbG"
-        if level == "LAG":  # Entscheidung: LAG weggelassen (Tatbestand enthält erstinstanzliches Ergebnis)
-            stats["lag_ausgelassen"] += 1
-            continue
-        text = clean_html(case.get("content") or "")
+        level = "LAG" if "Landesarbeits" in court else "ArbG"
+        text = nodots(clean_html(case.get("content") or ""))
         if not KSCH.search(text):
             stats["kein_kschg_antrag"] += 1
             continue
@@ -269,7 +335,19 @@ def cmd_build(base: Path) -> None:
         if not tenor or not tb:
             stats["ohne_tenor_oder_tatbestand"] += 1
             continue
-        label = label_tenor(tenor)
+        if level == "LAG":
+            # Nur erstinstanzlicher Sachverhalt: Tatbestand bis zur Wiedergabe des ArbG-Urteils; Label = dessen Ausgang.
+            m = _ARBG_SENT.search(tb)
+            if not m:
+                stats["lag_ohne_arbg_satz"] += 1
+                continue
+            start = tb.rfind(".", 0, m.start()) + 1
+            rest = tb[start:start + 2500]
+            e = _ARBG_END.search(rest, m.end() - start)
+            label = label_first_instance(rest[:e.start()] if e else rest[:1200])
+            tenor, tb = rest[:e.start() if e else 1200], tb[:start]
+        else:
+            label = label_tenor(tenor)
         if label is None:
             stats["label_unklar"] += 1
             continue
@@ -277,8 +355,8 @@ def cmd_build(base: Path) -> None:
         if len(x) < 400:
             stats["eingabe_zu_kurz"] += 1
             continue
-        stats[f"label_{label}"] += 1
-        rows.append({"id": case["id"], "court": court, "date": case.get("date"), "file_number": case.get("file_number"),
+        stats[f"label_{level}_{label}"] += 1
+        rows.append({"id": case["id"], "court": court, "level": level, "date": case.get("date"), "file_number": case.get("file_number"),
                      "label": label, "tenor": re.sub(r"\s+", " ", tenor)[:3000], "x": x})
     # Dubletten (gleiches Gericht + Aktenzeichen) entfernen
     seen, uniq = set(), []
@@ -293,7 +371,7 @@ def cmd_build(base: Path) -> None:
     with gzip.open(base / "cases.jsonl.gz", "wt", encoding="utf-8") as fh:
         for r in uniq:
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
-    rnd = random.Random(7)
+    rnd = random.Random(int(__import__("os").environ.get("LABEL_SEED", "7")))
     sample = rnd.sample(uniq, min(30, len(uniq)))
     with open(base / "label_check.jsonl", "w", encoding="utf-8") as fh:
         for r in sample:
@@ -470,13 +548,8 @@ def cmd_eval(base: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     res = json.loads((base / "results.json").read_text())
     res["build"] = json.loads((base / "build_stats.json").read_text())
-    checks = [json.loads(line) for line in (base / "label_check.jsonl").read_text(encoding="utf-8").splitlines()]
-    done = [c for c in checks if c.get("manual")]
-    if done:
-        ok = sum(c["manual"] == c["auto"] for c in done)
-        res["label_check"] = {"n": len(done), "korrekt": ok, "genauigkeit": round(ok / len(done), 4),
-                              "fehler": [{"id": c["id"], "auto": c["auto"], "manual": c["manual"]}
-                                         for c in done if c["manual"] != c["auto"]]}
+    # Handprüfungen (von Hand ausgefüllt, siehe datasets/outcome/label_check_runde*.json)
+    res["label_check"] = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(out.glob("label_check_runde*.json"))}
     (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
     # Kleine Labeldatei (ohne Text): id, Gericht, Datum, Aktenzeichen, Label
     with open(out / "labels.csv", "w", encoding="utf-8") as fh:
@@ -486,6 +559,50 @@ def cmd_eval(base: Path, out: Path) -> None:
     print(f"-> {out / 'results.json'}, {out / 'labels.csv'}")
 
 
+HF_REPO = "openlegaldata/court-decisions-germany"
+
+
+def cmd_download_hf(base: Path, dump: str) -> None:
+    """Parquet-Shards einzeln laden, Urteile der Arbeitsgerichtsbarkeit (ArbG/LAG) behalten, Shard löschen.
+
+    Das Dataset ist gated: Zugang auf huggingface.co beantragen, Token als HF_TOKEN setzen.
+    """
+    import pyarrow.compute as pc  # noqa: PLC0415
+    import pyarrow.parquet as pq  # noqa: PLC0415
+    from huggingface_hub import HfApi, hf_hub_download  # noqa: PLC0415
+
+    raw = base / "raw"
+    raw.mkdir(parents=True, exist_ok=True)
+    tmp = base / "hf_tmp"
+    done_path = base / f"hf_done_{dump}.json"
+    done = set(json.loads(done_path.read_text())) if done_path.exists() else set()
+    files = sorted(f for f in HfApi().list_repo_files(HF_REPO, repo_type="dataset")
+                   if f.startswith(f"{dump}/") and f.endswith(".parquet"))
+    kept = Counter()
+    for f in files:
+        if f in done:
+            continue
+        local = Path(hf_hub_download(HF_REPO, f, repo_type="dataset", local_dir=tmp))
+        pf = pq.ParquetFile(local)
+        cols = ["id", "court", "file_number", "date", "type", "content"]
+        for rg in range(pf.num_row_groups):
+            t = pf.read_row_group(rg, columns=cols)
+            juris = pc.struct_field(t["court"], "jurisdiction")
+            mask = pc.and_(pc.equal(juris, "Arbeitsgerichtsbarkeit"), pc.equal(t["type"], "Urteil"))
+            for r in t.filter(mask).to_pylist():
+                court = r["court"] or {}
+                (raw / f"{r['id']}.json").write_text(json.dumps({
+                    "id": r["id"], "court": court.get("name"), "court_slug": court.get("slug"),
+                    "file_number": r["file_number"], "date": r["date"], "type": r["type"],
+                    "content": r["content"]}, ensure_ascii=False), encoding="utf-8")
+                kept["LAG" if "Landesarbeits" in (court.get("name") or "") else
+                     "BAG" if (court.get("name") or "").startswith("Bundes") else "ArbG"] += 1
+        local.unlink()
+        done.add(f)
+        done_path.write_text(json.dumps(sorted(done)))
+        print(f"{f}: {dict(kept)}", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["download", "build", "train", "eval"])
@@ -493,8 +610,12 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=Path("datasets/outcome"))
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--delay", type=float, default=0.2)
+    ap.add_argument("--source", choices=["hf", "api"], default="hf")
+    ap.add_argument("--dump", default="dump-20260520", help="HF-Ordner, z. B. dump-20260520-1k zum Testen")
     a = ap.parse_args()
-    if a.cmd == "download":
+    if a.cmd == "download" and a.source == "hf":
+        cmd_download_hf(a.dir, a.dump)
+    elif a.cmd == "download":
         cmd_download(a.dir, a.workers, a.delay)
     elif a.cmd == "build":
         cmd_build(a.dir)
