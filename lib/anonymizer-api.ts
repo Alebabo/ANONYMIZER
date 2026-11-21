@@ -24,12 +24,12 @@ export type Trace = {
   latency_ms: number | null; status: number; error: string | null; entity_counts: Record<string, number>;
   risk_counts: Record<string, number>; actions: Record<string, number>; transformations: number;
   signals: string[]; warnings: string[]; steps: { name: string; detail: string; status: string }[];
-  /** MCP proxy traces only: upstream system, tool, mode and entity types per JSON field path. */
+  /** Playground traces (and older MCP proxy traces): source, tool, mode and entity types per JSON field path. */
   upstream?: string | null; tool?: string | null; mode?: string | null;
   fields?: Record<string, Record<string, number>>;
-  /** MCP proxy: characters of the call arguments and of the result handed to the model. */
+  /** Older MCP proxy traces: characters of the call arguments and of the result handed to the model. */
   args_chars?: number | null; result_chars?: number | null;
-  /** What was read, e.g. a conversation id. */
+  /** What was read, e.g. a playground dataset id. */
   resource?: string | null;
   /** Only with ANONYMIZER_TRACE_CONTENT=1 and for admins: protected text and original values. */
   content?: TraceContent[];
@@ -75,9 +75,8 @@ export type AuditVerify = { ok: boolean; entries: number; broken_at: string | nu
 export type Source = { live: boolean; reason?: string };
 
 export type SourcesInfo = {
-  conversations: { kind: string; location: string; daily_limit: number; min_group: number; stable_placeholders: boolean } | null;
-  conversation_policy: string | null;
-  prompts: { backend: string; location?: string } | null;
+  /** Policy used for playground (CSV) queries. */
+  playground_policy: string;
   mcp_http: boolean;
 };
 

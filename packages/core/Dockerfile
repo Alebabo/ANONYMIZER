@@ -36,8 +36,8 @@ ENV ANONYMIZER_HOST=0.0.0.0 \
     ANONYMIZER_TRACE_DB=/data/traces.db \
     ANONYMIZER_ACCOUNTS_DB=/data/accounts.db \
     ANONYMIZER_AUDIT_DB=/data/audit.db \
-    ANONYMIZER_CONVERSATIONS_DB=/data/conversations.db \
-    ANONYMIZER_PROMPTS_DB=/data/prompts.db
+    ANONYMIZER_PLAYGROUND_DB=/data/playground.db \
+    ANONYMIZER_FEEDBACK_DB=/data/feedback.db
 
 VOLUME ["/data"]
 EXPOSE 8080

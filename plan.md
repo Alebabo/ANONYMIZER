@@ -1,6 +1,10 @@
 # Plan: OpenAnonymizer as a privacy proxy between Claude and production chat data
 
-Status: packages 1–7 implemented, package 8 partly (see section 11). Scope: read customer chat history and manage prompts through Claude without any raw customer data leaving the company network.
+> **Historical (November 2026):** conversation access, prompt management, the gateway and the MCP proxy described
+> here were removed from the code because they had no UI. This plan is kept for reference; the code is in the git
+> history. Current state: [STATUS.md](STATUS.md).
+
+Status before removal: packages 1–7 implemented, package 8 partly (see section 11). Scope: read customer chat history and manage prompts through Claude without any raw customer data leaving the company network.
 
 ## 1. Problem
 

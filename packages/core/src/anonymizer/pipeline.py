@@ -1,6 +1,6 @@
 """End-to-end protection: detect -> classify -> policy -> anonymize.
 
-This is the single entry point the gateway uses. The anonymized text is
+This is the single entry point used by /v1/protect, documents, MCP and the playground. The anonymized text is
 only returned when the policy allows sending it to the requested
 destination; otherwise ``text`` is ``None`` and the caller must not forward
 anything.

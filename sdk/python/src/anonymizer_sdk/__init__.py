@@ -175,58 +175,6 @@ class OpenAnonymizer:
     def info(self) -> Result:
         return self._request("GET", "/v1/info")
 
-    # -- conversations -------------------------------------------------------------
     def sources(self) -> Result:
-        """Connected conversation source and prompt store (type and host only)."""
+        """Policy used by the playground (CSV) and whether MCP over HTTP is enabled."""
         return self._request("GET", "/v1/sources")
-
-    def conversations(self, since: float | None = None, until: float | None = None, tag: str | None = None,
-                      limit: int = 50, cursor: str | None = None) -> Result:
-        """Opaque ids and metadata. Pass ``result.next_cursor`` as ``cursor`` for the next page."""
-        return self._request("GET", "/v1/conversations", params=self._clean(
-            since=since, until=until, tag=tag, limit=limit, cursor=cursor))
-
-    def conversation(self, conversation_id: str) -> Result:
-        """Protected messages of one conversation. Counts against the key's daily quota."""
-        return self._request("GET", f"/v1/conversations/{conversation_id}")
-
-    def conversation_stats(self, group_by: str = "day", since: float | None = None,
-                           until: float | None = None) -> Result:
-        return self._request("GET", "/v1/conversations/stats", params=self._clean(
-            group_by=group_by, since=since, until=until))
-
-    def conversation_quota(self) -> Result:
-        return self._request("GET", "/v1/conversations/quota")
-
-    # -- prompts -------------------------------------------------------------------
-    def prompts(self) -> list[Result]:
-        return self._request("GET", "/v1/prompts")
-
-    def prompt(self, name: str, version: int | None = None, label: str | None = None) -> Result:
-        return self._request("GET", f"/v1/prompts/{name}", params=self._clean(version=version, label=label))
-
-    def prompt_history(self, name: str) -> list[Result]:
-        return self._request("GET", f"/v1/prompts/{name}/history")
-
-    def prompt_diff(self, name: str, from_version: int, to_version: int) -> Result:
-        return self._request("GET", f"/v1/prompts/{name}/diff",
-                             params={"from_version": from_version, "to_version": to_version})
-
-    def create_prompt(self, name: str, prompt: str | list[dict[str, str]], config: dict[str, Any] | None = None,
-                      note: str | None = None) -> Result:
-        """New version without labels. Raises ``AnonymizerError`` (422) if it contains sensitive data."""
-        return self._request("POST", "/v1/prompts", json=self._clean(name=name, prompt=prompt, config=config,
-                                                                     note=note))
-
-    def set_prompt_label(self, name: str, version: int, label: str = "production") -> Result:
-        """Move a label to a version. Admin key or admin session only."""
-        return self._request("POST", f"/v1/prompts/{name}/labels", json={"version": version, "label": label})
-
-    # -- gateway -----------------------------------------------------------------
-    def openai(self, **kwargs: Any):
-        """An ``openai.OpenAI`` client that talks to the OpenAnonymizer gateway."""
-        try:
-            from openai import OpenAI
-        except ImportError as exc:  # pragma: no cover
-            raise ImportError("pip install 'anonymizer-sdk[openai]'") from exc
-        return OpenAI(api_key=self.api_key, base_url=f"{self.base_url}/v1", **kwargs)

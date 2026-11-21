@@ -13,7 +13,7 @@ def _app(tmp_path, content=True):
     env = {"ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL": "a@example.org",
            "ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD": "secret-password-1", "ANONYMIZER_ENABLE_NER": "0",
            "ANONYMIZER_TRACE_CONTENT": "1" if content else "0"}
-    for k in ("TRACE", "ACCOUNTS", "AUDIT", "CONVERSATIONS", "PLAYGROUND"):
+    for k in ("TRACE", "ACCOUNTS", "AUDIT", "PLAYGROUND"):
         env[f"ANONYMIZER_{k}_DB"] = str(tmp_path / f"{k.lower()}.db")
     env["ANONYMIZER_POLICY_DIR"] = str(tmp_path / "policies")
     app = create_app(Settings.from_env(env))
@@ -72,7 +72,7 @@ def test_mcp_tools_return_protected_rows_only():
     svc = PlaygroundService(PlaygroundStore(), lambda v: Pipeline(builtin_policy("support-default"), detector=det, vault=v),
                             "support-default", traces=traces)
     tools = AnonymizerTools(detector=det, playground=svc)
-    from anonymizer.conversations import LOCAL_PRINCIPAL
+    from anonymizer.accounts import LOCAL_PRINCIPAL
     ds = svc.upload(LOCAL_PRINCIPAL, "k.csv", CSV)
     assert tools.list_datasets()["datasets"][0]["id"] == ds["id"]
     r = tools.query_dataset(ds["id"], query="erika")
@@ -136,3 +136,11 @@ def test_hidden_columns_are_never_searched_shown_or_sent(tmp_path):
     assert c.put(f"{url}/columns", headers=key, json={"hidden": ["email"]}).status_code in (401, 403)
     entries = c.get("/v1/audit-logs?resource_type=playground_dataset&action=update", headers=s).json()["data"]
     assert len(entries) == 2  # hide and show again; refused calls write nothing
+
+
+def test_sources_reports_playground_policy_and_removed_routes_are_gone(tmp_path):
+    _, c, s = _app(tmp_path)
+    assert c.get("/v1/sources", headers=s).json() == {"playground_policy": "support-default", "mcp_http": False}
+    for method, path in (("get", "/v1/conversations"), ("get", "/v1/prompts"), ("post", "/v1/chat/completions"),
+                         ("get", "/v1/gateway"), ("get", "/v1/proxy")):
+        assert getattr(c, method)(path, headers=s).status_code == 404, path

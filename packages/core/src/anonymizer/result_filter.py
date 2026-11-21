@@ -1,4 +1,6 @@
-"""Protect upstream tool results before they reach the MCP client.
+"""Protect structured results (tool results, CSV rows as JSON) before they reach an AI client.
+
+Used by the playground (CSV datasets, dashboard and MCP tools ``list_datasets`` / ``query_dataset``).
 
 * Text blocks: JSON (object/array) is protected value by value, keys stay readable; other text as a whole.
 * Field names act as hints (``email``, ``vorname``, ``iban``, ...): such values are treated as that entity
@@ -25,8 +27,31 @@ from anonymizer.detect import detect_language
 from anonymizer.detect.ner import ID_LIKE
 from anonymizer.models import DEFAULT_CATEGORIES, Category, ScanResult, make_detection
 from anonymizer.pipeline import Pipeline, ProtectResult
-from anonymizer.proxy.config import norm_key
 from anonymizer.tracing import Trace, merge_traces, trace_from_protect
+
+# Field names whose values are personal data regardless of what detection finds in the value.
+# Normalized: lower case, without "_", "-", "." and spaces. Plain "name" is not included on purpose
+# (table, tool and product names); pass own ``hints`` to :class:`ResultFilter` if it means a person there.
+DEFAULT_FIELD_HINTS: dict[str, str] = {
+    **dict.fromkeys(["firstname", "lastname", "surname", "fullname", "vorname", "nachname", "customername",
+                     "kundenname", "contactname", "personname", "displayname", "username"], "person"),
+    **dict.fromkeys(["email", "mail", "emailaddress", "emailadresse", "mailaddress"], "email"),
+    **dict.fromkeys(["phone", "phonenumber", "telephone", "telefon", "telefonnummer", "mobile", "mobil",
+                     "handy", "fax", "tel"], "phone"),
+    **dict.fromkeys(["iban", "accountnumber", "kontonummer", "konto"], "iban"),
+    **dict.fromkeys(["address", "adresse", "street", "strasse", "straße", "streetaddress", "anschrift",
+                     "zip", "zipcode", "postcode", "postalcode", "plz"], "address"),
+    **dict.fromkeys(["birthdate", "dateofbirth", "dob", "geburtsdatum", "birthday", "geburtstag"], "date_of_birth"),
+    **dict.fromkeys(["taxid", "steuerid", "steueridentifikationsnummer"], "tax_id"),
+    **dict.fromkeys(["ssn", "socialsecuritynumber",
+                     "sozialversicherungsnummer", "svnr"], "social_security_number"),
+    **dict.fromkeys(["ip", "ipaddress", "ipadresse"], "ip_address"),
+}
+
+
+def norm_key(key: str) -> str:
+    return re.sub(r"[\s_\-.]", "", key).lower()
+
 
 WITHHELD = "[WITHHELD]"
 _SAFE_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]{0,48}$")
@@ -40,7 +65,7 @@ _LEARN_MAX = 50_000
 
 
 class KnownValues:
-    """Raw values seen in hinted fields of one upstream. In memory only, like the in-memory vault."""
+    """Raw values seen in hinted fields of one dataset. In memory only, like the in-memory vault."""
 
     def __init__(self) -> None:
         self.values: dict[str, str] = {}
@@ -81,8 +106,8 @@ class FilterReport:
     warnings: list[str] = field(default_factory=list)
 
     def trace(self, **extra: Any) -> Trace:
-        t = merge_traces("/mcp/proxy", self.parts, **extra) if self.parts else Trace(
-            route="/mcp/proxy", outcome="allow", allowed=True, risk="low", **extra)
+        t = merge_traces("/v1/playground", self.parts, **extra) if self.parts else Trace(
+            route="/v1/playground", outcome="allow", allowed=True, risk="low", **extra)
         t.fields = {p: dict(c) for p, c in sorted(self.fields.items())}
         t.warnings = sorted(set(t.warnings) | set(self.warnings))
         return t
@@ -318,7 +343,7 @@ class ResultFilter:
             return text
         result: ProtectResult = self.pipeline.protect_scan(text, scan, self.destination, self.namespace,
                                                            dry_run=self.observe)
-        report.parts.append(trace_from_protect("/mcp/proxy", result, original=text, label=path))
+        report.parts.append(trace_from_protect("/v1/playground", result, original=text, label=path))
         report.fields[path].update(d.entity_type for d in scan.detections)
         if scan.detections:
             report.changed += 1

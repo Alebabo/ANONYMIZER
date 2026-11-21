@@ -11,7 +11,7 @@ encrypted with AES-256-GCM. Design rules:
   one namespace can never be resolved in another. Namespace names are
   stored as HMACs as well.
 * Nothing in this module is ever part of an anonymization result. The
-  vault object stays inside the trusted boundary; the gateway only sees
+  vault object stays inside the trusted boundary; callers only see
   the transformed text.
 """
 
