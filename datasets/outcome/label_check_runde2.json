@@ -1,0 +1,7 @@
+{"beschreibung": "Handprüfung Runde 2 (nach Korrektur der Runde-1-Fehler, neue Zufallsstichprobe Seed 2026): 30 Labels, Tenor bzw. ArbG-Satz gelesen",
+ "n": 30, "korrekt": 27, "genauigkeit": 0.9,
+ "fehler": [
+  {"id": 461625, "auto": "abgewiesen", "richtig": "verwerfen", "grund": "Schadensersatzklage, kein Bestandsschutzstreit (Falltyp-Fehler)"},
+  {"id": 423871, "auto": "abgewiesen", "richtig": "verwerfen", "grund": "Klage abgewiesen, weil Rechtsstreit durch Vergleich erledigt - kein Sachurteil"},
+  {"id": 452289, "auto": "stattgegeben", "richtig": "teilweise", "grund": "'im Wesentlichen stattgegeben', eine Kündigung wirksam"}],
+ "nachbesserung": "Die Fehler 423871 und 452289 sind danach per Regel behoben ('Vergleich ... geendet' -> verworfen, 'im Wesentlichen stattgegeben' -> teilweise); Falltyp-Fehler wie 461625 bleiben als Restrauschen."}

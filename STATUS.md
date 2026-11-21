@@ -34,6 +34,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
 | `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md` |
+| `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
 
@@ -91,7 +92,6 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 | Branch | Inhalt | Stand |
 |---|---|---|
 | `claude/ner-org-recall` | Firmen-Recall verbessern: Kontext-Regeln, synthetische Firmennamen, GermEval 2014, ggf. GLiNER | läuft in eigener Cloud-Sitzung |
-| `claude/outcome-experiment` | Experiment: Ausgang von Kündigungsschutzklagen vorhersagen (nur Tatbestand, zeitlicher Split, Baselines Majority/Gericht/Jahr, TF-IDF + linear) | läuft in eigener Cloud-Sitzung |
 | `claude/epic-thompson-ceb5ng` | Hauptentwicklungsbranch dieser Sitzung, entspricht main | – |
 
 Ergebnisse dieser Branches erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
@@ -101,7 +101,10 @@ Ergebnisse dieser Branches erst nach Prüfung (Tests grün, Messung besser) nach
 1. **Firmen-Recall** (0,45 → Ziel ≥ 0,65 bei Präzision ≥ 0,90): siehe `docs/research/org-ner.md`.
 2. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
 3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud).
-4. **Ausgangsvorhersage**: nur weiterverfolgen, wenn das Experiment Majority-, Gericht- und Jahr-Baseline klar schlägt (Erwartung laut Recherche Macro-F1 0,50–0,60).
+4. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
+   TF-IDF + logistische Regression: Macro-F1 0,44 im zeitlichen Split (3 Klassen; binär 0,62), Metadaten-Baselines
+   0,29–0,36. Messbares, aber für ein Produkt zu schwaches Signal. Details und Reproduktion ohne Download:
+   `datasets/outcome/README.md` (`outcome_experiment.py train --dir local/outcome`).
 5. Offen im Backend: Conversations, Prompts, Gateway und MCP-Proxy sind nur noch per API erreichbar (UI entfernt); entscheiden, ob sie bleiben.
 
 ## 7. Regeln für die Weiterarbeit

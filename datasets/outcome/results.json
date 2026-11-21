@@ -1,0 +1,1342 @@
+{
+ "n": 3226,
+ "labels": {
+  "abgewiesen": 1474,
+  "teilweise": 419,
+  "stattgegeben": 1333
+ },
+ "splits": {
+  "zufaellig": {
+   "n_train": 2580,
+   "n_test": 646,
+   "test_labels": {
+    "stattgegeben": 267,
+    "teilweise": 84,
+    "abgewiesen": 295
+   },
+   "train_dates": [
+    "1985-11-25",
+    "2026-01-27"
+   ],
+   "test_dates": [
+    "1998-03-17",
+    "2026-01-28"
+   ],
+   "mehrheit": {
+    "n": 646,
+    "macro_f1": 0.209,
+    "accuracy": 0.4567,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       295,
+       0,
+       0
+      ],
+      [
+       84,
+       0,
+       0
+      ],
+      [
+       267,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.197,
+     0.2218
+    ],
+    "binaer_macro_f1": 0.3135
+   },
+   "nur_gericht": {
+    "n": 646,
+    "macro_f1": 0.3615,
+    "accuracy": 0.4675,
+    "recall": {
+     "abgewiesen": 0.739,
+     "teilweise": 0.0952,
+     "stattgegeben": 0.2846
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       218,
+       7,
+       70
+      ],
+      [
+       54,
+       8,
+       22
+      ],
+      [
+       189,
+       2,
+       76
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3208,
+     0.4041
+    ],
+    "binaer_macro_f1": 0.4899
+   },
+   "nur_jahr": {
+    "n": 646,
+    "macro_f1": 0.3492,
+    "accuracy": 0.4923,
+    "recall": {
+     "abgewiesen": 0.6169,
+     "teilweise": 0.0,
+     "stattgegeben": 0.5094
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       182,
+       0,
+       113
+      ],
+      [
+       45,
+       0,
+       39
+      ],
+      [
+       131,
+       0,
+       136
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3214,
+     0.3752
+    ],
+    "binaer_macro_f1": 0.5526
+   },
+   "tfidf_logreg": {
+    "n": 646,
+    "macro_f1": 0.5076,
+    "accuracy": 0.5774,
+    "recall": {
+     "abgewiesen": 0.6169,
+     "teilweise": 0.2381,
+     "stattgegeben": 0.6404
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       182,
+       10,
+       103
+      ],
+      [
+       27,
+       20,
+       37
+      ],
+      [
+       80,
+       16,
+       171
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.459,
+     0.5495
+    ],
+    "binaer_macro_f1": 0.6563,
+    "brier": 0.519
+   },
+   "tfidf_linsvm": {
+    "n": 646,
+    "macro_f1": 0.4919,
+    "accuracy": 0.5728,
+    "recall": {
+     "abgewiesen": 0.6237,
+     "teilweise": 0.1905,
+     "stattgegeben": 0.6367
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       184,
+       8,
+       103
+      ],
+      [
+       28,
+       16,
+       40
+      ],
+      [
+       86,
+       11,
+       170
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.443,
+     0.5337
+    ],
+    "binaer_macro_f1": 0.6493
+   },
+   "probe_eingabe": {
+    "n": 646,
+    "macro_f1": 0.3364,
+    "accuracy": 0.3839,
+    "recall": {
+     "abgewiesen": 0.5525,
+     "teilweise": 0.2976,
+     "stattgegeben": 0.2247
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       163,
+       70,
+       62
+      ],
+      [
+       34,
+       25,
+       25
+      ],
+      [
+       146,
+       61,
+       60
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2995,
+     0.3724
+    ],
+    "binaer_macro_f1": 0.517
+   },
+   "probe_tenor_kontrolle": {
+    "n": 646,
+    "macro_f1": 0.855,
+    "accuracy": 0.9071,
+    "recall": {
+     "abgewiesen": 0.9424,
+     "teilweise": 0.7143,
+     "stattgegeben": 0.9288
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       278,
+       17,
+       0
+      ],
+      [
+       14,
+       60,
+       10
+      ],
+      [
+       3,
+       16,
+       248
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.8219,
+     0.8859
+    ],
+    "binaer_macro_f1": 0.947
+   },
+   "sekunden": 101.9,
+   "brier_prior_referenz": 0.6037
+  },
+  "zeitlich": {
+   "n_train": 2580,
+   "n_test": 646,
+   "test_labels": {
+    "abgewiesen": 272,
+    "teilweise": 131,
+    "stattgegeben": 243
+   },
+   "train_dates": [
+    "1985-11-25",
+    "2019-03-29"
+   ],
+   "test_dates": [
+    "2019-04-02",
+    "2026-01-28"
+   ],
+   "mehrheit": {
+    "n": 646,
+    "macro_f1": 0.1975,
+    "accuracy": 0.4211,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       272,
+       0,
+       0
+      ],
+      [
+       131,
+       0,
+       0
+      ],
+      [
+       243,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.1839,
+     0.21
+    ],
+    "binaer_macro_f1": 0.2963
+   },
+   "nur_gericht": {
+    "n": 646,
+    "macro_f1": 0.2923,
+    "accuracy": 0.3777,
+    "recall": {
+     "abgewiesen": 0.6176,
+     "teilweise": 0.0458,
+     "stattgegeben": 0.2881
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       168,
+       6,
+       98
+      ],
+      [
+       77,
+       6,
+       48
+      ],
+      [
+       167,
+       6,
+       70
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2589,
+     0.3282
+    ],
+    "binaer_macro_f1": 0.4594
+   },
+   "nur_jahr": {
+    "n": 646,
+    "macro_f1": 0.1975,
+    "accuracy": 0.4211,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       272,
+       0,
+       0
+      ],
+      [
+       131,
+       0,
+       0
+      ],
+      [
+       243,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.1839,
+     0.21
+    ],
+    "binaer_macro_f1": 0.2963
+   },
+   "tfidf_logreg": {
+    "n": 646,
+    "macro_f1": 0.4365,
+    "accuracy": 0.4892,
+    "recall": {
+     "abgewiesen": 0.5699,
+     "teilweise": 0.1832,
+     "stattgegeben": 0.5638
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       155,
+       17,
+       100
+      ],
+      [
+       46,
+       24,
+       61
+      ],
+      [
+       80,
+       26,
+       137
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.4009,
+     0.4724
+    ],
+    "binaer_macro_f1": 0.6159,
+    "brier": 0.6034
+   },
+   "tfidf_linsvm": {
+    "n": 646,
+    "macro_f1": 0.4175,
+    "accuracy": 0.4907,
+    "recall": {
+     "abgewiesen": 0.5809,
+     "teilweise": 0.1145,
+     "stattgegeben": 0.5926
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       158,
+       11,
+       103
+      ],
+      [
+       53,
+       15,
+       63
+      ],
+      [
+       80,
+       19,
+       144
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3809,
+     0.4517
+    ],
+    "binaer_macro_f1": 0.6112
+   },
+   "probe_eingabe": {
+    "n": 646,
+    "macro_f1": 0.3709,
+    "accuracy": 0.3901,
+    "recall": {
+     "abgewiesen": 0.5147,
+     "teilweise": 0.3969,
+     "stattgegeben": 0.2469
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       140,
+       86,
+       46
+      ],
+      [
+       49,
+       52,
+       30
+      ],
+      [
+       127,
+       56,
+       60
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3343,
+     0.4089
+    ],
+    "binaer_macro_f1": 0.5193
+   },
+   "probe_tenor_kontrolle": {
+    "n": 646,
+    "macro_f1": 0.8328,
+    "accuracy": 0.8622,
+    "recall": {
+     "abgewiesen": 0.9449,
+     "teilweise": 0.6947,
+     "stattgegeben": 0.8601
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       257,
+       15,
+       0
+      ],
+      [
+       20,
+       91,
+       20
+      ],
+      [
+       6,
+       28,
+       209
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.8012,
+     0.8628
+    ],
+    "binaer_macro_f1": 0.9352
+   },
+   "sekunden": 91.9,
+   "brier_prior_referenz": 0.6526
+  },
+  "gericht": {
+   "n_train": 2548,
+   "n_test": 678,
+   "test_labels": {
+    "abgewiesen": 315,
+    "teilweise": 109,
+    "stattgegeben": 254
+   },
+   "train_dates": [
+    "1985-11-25",
+    "2026-01-27"
+   ],
+   "test_dates": [
+    "2001-10-12",
+    "2026-01-28"
+   ],
+   "mehrheit": {
+    "n": 678,
+    "macro_f1": 0.2115,
+    "accuracy": 0.4646,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       315,
+       0,
+       0
+      ],
+      [
+       109,
+       0,
+       0
+      ],
+      [
+       254,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2002,
+     0.2222
+    ],
+    "binaer_macro_f1": 0.3172
+   },
+   "nur_gericht": {
+    "n": 678,
+    "macro_f1": 0.2115,
+    "accuracy": 0.4646,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       315,
+       0,
+       0
+      ],
+      [
+       109,
+       0,
+       0
+      ],
+      [
+       254,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2002,
+     0.2222
+    ],
+    "binaer_macro_f1": 0.3172
+   },
+   "nur_jahr": {
+    "n": 678,
+    "macro_f1": 0.3241,
+    "accuracy": 0.4528,
+    "recall": {
+     "abgewiesen": 0.5968,
+     "teilweise": 0.0,
+     "stattgegeben": 0.4685
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       188,
+       0,
+       127
+      ],
+      [
+       50,
+       0,
+       59
+      ],
+      [
+       135,
+       0,
+       119
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2997,
+     0.3501
+    ],
+    "binaer_macro_f1": 0.5397
+   },
+   "tfidf_logreg": {
+    "n": 678,
+    "macro_f1": 0.4726,
+    "accuracy": 0.5501,
+    "recall": {
+     "abgewiesen": 0.5937,
+     "teilweise": 0.1651,
+     "stattgegeben": 0.6614
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       187,
+       12,
+       116
+      ],
+      [
+       29,
+       18,
+       62
+      ],
+      [
+       76,
+       10,
+       168
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.431,
+     0.5135
+    ],
+    "binaer_macro_f1": 0.6525,
+    "brier": 0.5839
+   },
+   "tfidf_linsvm": {
+    "n": 678,
+    "macro_f1": 0.4628,
+    "accuracy": 0.5531,
+    "recall": {
+     "abgewiesen": 0.5937,
+     "teilweise": 0.1284,
+     "stattgegeben": 0.685
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       187,
+       8,
+       120
+      ],
+      [
+       30,
+       14,
+       65
+      ],
+      [
+       72,
+       8,
+       174
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.4221,
+     0.5027
+    ],
+    "binaer_macro_f1": 0.6567
+   },
+   "probe_eingabe": {
+    "n": 678,
+    "macro_f1": 0.332,
+    "accuracy": 0.3525,
+    "recall": {
+     "abgewiesen": 0.2032,
+     "teilweise": 0.3761,
+     "stattgegeben": 0.5276
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       64,
+       87,
+       164
+      ],
+      [
+       24,
+       41,
+       44
+      ],
+      [
+       31,
+       89,
+       134
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2952,
+     0.3683
+    ],
+    "binaer_macro_f1": 0.4815
+   },
+   "probe_tenor_kontrolle": {
+    "n": 678,
+    "macro_f1": 0.8525,
+    "accuracy": 0.8879,
+    "recall": {
+     "abgewiesen": 0.9143,
+     "teilweise": 0.7706,
+     "stattgegeben": 0.9055
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       288,
+       26,
+       1
+      ],
+      [
+       13,
+       84,
+       12
+      ],
+      [
+       4,
+       20,
+       230
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.821,
+     0.8816
+    ],
+    "binaer_macro_f1": 0.9346
+   },
+   "sekunden": 86.9,
+   "brier_prior_referenz": 0.622
+  },
+  "zeitlich+gericht": {
+   "n_train": 2095,
+   "n_test": 193,
+   "test_labels": {
+    "abgewiesen": 85,
+    "stattgegeben": 74,
+    "teilweise": 34
+   },
+   "train_dates": [
+    "1985-11-25",
+    "2019-03-29"
+   ],
+   "test_dates": [
+    "2019-04-17",
+    "2026-01-28"
+   ],
+   "mehrheit": {
+    "n": 193,
+    "macro_f1": 0.2038,
+    "accuracy": 0.4404,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       85,
+       0,
+       0
+      ],
+      [
+       34,
+       0,
+       0
+      ],
+      [
+       74,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.183,
+     0.226
+    ],
+    "binaer_macro_f1": 0.3058
+   },
+   "nur_gericht": {
+    "n": 193,
+    "macro_f1": 0.2038,
+    "accuracy": 0.4404,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       85,
+       0,
+       0
+      ],
+      [
+       34,
+       0,
+       0
+      ],
+      [
+       74,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.183,
+     0.226
+    ],
+    "binaer_macro_f1": 0.3058
+   },
+   "nur_jahr": {
+    "n": 193,
+    "macro_f1": 0.2038,
+    "accuracy": 0.4404,
+    "recall": {
+     "abgewiesen": 1.0,
+     "teilweise": 0.0,
+     "stattgegeben": 0.0
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       85,
+       0,
+       0
+      ],
+      [
+       34,
+       0,
+       0
+      ],
+      [
+       74,
+       0,
+       0
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.183,
+     0.226
+    ],
+    "binaer_macro_f1": 0.3058
+   },
+   "tfidf_logreg": {
+    "n": 193,
+    "macro_f1": 0.4227,
+    "accuracy": 0.5026,
+    "recall": {
+     "abgewiesen": 0.5176,
+     "teilweise": 0.1176,
+     "stattgegeben": 0.6622
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       44,
+       5,
+       36
+      ],
+      [
+       9,
+       4,
+       21
+      ],
+      [
+       19,
+       6,
+       49
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3544,
+     0.4872
+    ],
+    "binaer_macro_f1": 0.6296,
+    "brier": 0.6064
+   },
+   "tfidf_linsvm": {
+    "n": 193,
+    "macro_f1": 0.428,
+    "accuracy": 0.5233,
+    "recall": {
+     "abgewiesen": 0.5529,
+     "teilweise": 0.0882,
+     "stattgegeben": 0.6892
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       47,
+       4,
+       34
+      ],
+      [
+       10,
+       3,
+       21
+      ],
+      [
+       19,
+       4,
+       51
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.3634,
+     0.4929
+    ],
+    "binaer_macro_f1": 0.643
+   },
+   "probe_eingabe": {
+    "n": 193,
+    "macro_f1": 0.3474,
+    "accuracy": 0.3679,
+    "recall": {
+     "abgewiesen": 0.2118,
+     "teilweise": 0.3824,
+     "stattgegeben": 0.5405
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       18,
+       30,
+       37
+      ],
+      [
+       5,
+       13,
+       16
+      ],
+      [
+       14,
+       20,
+       40
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.2769,
+     0.4145
+    ],
+    "binaer_macro_f1": 0.4847
+   },
+   "probe_tenor_kontrolle": {
+    "n": 193,
+    "macro_f1": 0.8127,
+    "accuracy": 0.8446,
+    "recall": {
+     "abgewiesen": 0.9059,
+     "teilweise": 0.7647,
+     "stattgegeben": 0.8108
+    },
+    "confusion": {
+     "labels": [
+      "abgewiesen",
+      "teilweise",
+      "stattgegeben"
+     ],
+     "matrix": [
+      [
+       77,
+       8,
+       0
+      ],
+      [
+       3,
+       26,
+       5
+      ],
+      [
+       3,
+       11,
+       60
+      ]
+     ]
+    },
+    "macro_f1_ci95": [
+     0.7502,
+     0.8689
+    ],
+    "binaer_macro_f1": 0.9262
+   },
+   "sekunden": 60.8,
+   "brier_prior_referenz": 0.6313
+  }
+ },
+ "top_features": {
+  "abgewiesen": [
+   "wort:war seit",
+   "wort:auf die",
+   "wort:mit ablauf",
+   "wort:kläger war",
+   "wort:ablauf",
+   "wort:war",
+   "wort:beklagte zu",
+   "wort:sch",
+   "wort:prüfung",
+   "wort:ag",
+   "wort:nachdem der",
+   "wort:beklagten zu",
+   "wort:innerhalb",
+   "wort:person",
+   "wort:81",
+   "wort:zeugin",
+   "wort:bei der",
+   "wort:hätten die",
+   "wort:mitarbeiter der",
+   "wort:klägerin die",
+   "zeichen:til",
+   "zeichen:xxx ",
+   "wort:ob",
+   "wort:war bei",
+   "zeichen:xx "
+  ],
+  "stattgegeben": [
+   "wort:bereich",
+   "wort:hat beantragt",
+   "wort:im bereich",
+   "wort:bezog",
+   "wort:gegenüber dem",
+   "wort:der anlage",
+   "wort:vgl bl",
+   "wort:klägerin mit",
+   "wort:beabsichtigten außerordentlichen",
+   "wort:arbeitsvertrag",
+   "wort:sommer",
+   "wort:arbeitsvertrag der",
+   "wort:sozialauswahl",
+   "wort:ist bei",
+   "wort:soll",
+   "wort:hält die",
+   "wort:kläger ist",
+   "wort:welchem",
+   "wort:worden dass",
+   "wort:datum und",
+   "wort:datum beschäftigt",
+   "wort:dem mitarbeiter",
+   "wort:sommer datum",
+   "wort:verheiratete kläger",
+   "wort:sicht"
+  ],
+  "teilweise": [
+   "wort:hilfsweise fristgerecht",
+   "wort:von der",
+   "wort:er habe",
+   "wort:arbeitsverhältnisses mit",
+   "wort:eine weitere",
+   "wort:auflösungsantrag",
+   "wort:behauptet",
+   "wort:außerordentliche",
+   "wort:fristlos hilfsweise",
+   "wort:ist der",
+   "wort:mitarbeitenden",
+   "wort:auflösung des",
+   "wort:noch um",
+   "wort:die auflösung",
+   "wort:ansicht dass",
+   "wort:kläger habe",
+   "wort:auflösung",
+   "wort:fristgerechten kündigung",
+   "wort:geschäftsführer der",
+   "wort:berechtigt",
+   "wort:10 arbeitnehmer",
+   "wort:durch andere",
+   "wort:zugestellt",
+   "wort:für",
+   "wort:wurde nicht"
+  ]
+ },
+ "build": {
+  "urteile": 26765,
+  "label_unklar": 1496,
+  "label_LAG_abgewiesen": 1337,
+  "kein_kschg_antrag": 15675,
+  "lag_ohne_arbg_satz": 726,
+  "label_LAG_stattgegeben": 1083,
+  "label_LAG_teilweise": 256,
+  "bag_ausgelassen": 5062,
+  "label_ArbG_abgewiesen": 308,
+  "eingabe_zu_kurz": 179,
+  "ohne_tenor_oder_tatbestand": 159,
+  "label_ArbG_teilweise": 163,
+  "label_ArbG_stattgegeben": 321,
+  "dublette": 242
+ },
+ "label_check": {
+  "label_check_runde1": {
+   "beschreibung": "Handprüfung Runde 1 (vor Regelkorrektur): 30 zufällige Labels, Tenor bzw. ArbG-Satz gelesen",
+   "n": 30,
+   "korrekt": 26,
+   "genauigkeit": 0.8667,
+   "fehler": [
+    {
+     "id": 118623,
+     "auto": "abgewiesen",
+     "richtig": "verwerfen",
+     "grund": "Satz betrifft ein anderes (Vor-)Verfahren ('mittlerweile ... abgewiesen')"
+    },
+    {
+     "id": 118994,
+     "auto": "abgewiesen",
+     "richtig": "verwerfen",
+     "grund": "dito, Parallelverfahren"
+    },
+    {
+     "id": 450236,
+     "auto": "stattgegeben",
+     "richtig": "teilweise",
+     "grund": "'überwiegend stattgegeben'"
+    },
+    {
+     "id": 449518,
+     "auto": "stattgegeben",
+     "richtig": "verwerfen",
+     "grund": "Abfindungsklage, kein Kündigungsschutzantrag"
+    }
+   ]
+  },
+  "label_check_runde2": {
+   "beschreibung": "Handprüfung Runde 2 (nach Korrektur der Runde-1-Fehler, neue Zufallsstichprobe Seed 2026): 30 Labels, Tenor bzw. ArbG-Satz gelesen",
+   "n": 30,
+   "korrekt": 27,
+   "genauigkeit": 0.9,
+   "fehler": [
+    {
+     "id": 461625,
+     "auto": "abgewiesen",
+     "richtig": "verwerfen",
+     "grund": "Schadensersatzklage, kein Bestandsschutzstreit (Falltyp-Fehler)"
+    },
+    {
+     "id": 423871,
+     "auto": "abgewiesen",
+     "richtig": "verwerfen",
+     "grund": "Klage abgewiesen, weil Rechtsstreit durch Vergleich erledigt - kein Sachurteil"
+    },
+    {
+     "id": 452289,
+     "auto": "stattgegeben",
+     "richtig": "teilweise",
+     "grund": "'im Wesentlichen stattgegeben', eine Kündigung wirksam"
+    }
+   ],
+   "nachbesserung": "Die Fehler 423871 und 452289 sind danach per Regel behoben ('Vergleich ... geendet' -> verworfen, 'im Wesentlichen stattgegeben' -> teilweise); Falltyp-Fehler wie 461625 bleiben als Restrauschen."
+  }
+ }
+}
