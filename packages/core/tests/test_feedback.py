@@ -14,7 +14,7 @@ def _app(tmp_path):
     env = {"ANONYMIZER_API_KEYS": KEY, "ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL": "a@example.org",
            "ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD": "secret-password-1", "ANONYMIZER_ENABLE_NER": "0",
            "ANONYMIZER_POLICY_DIR": str(tmp_path / "policies")}
-    for k in ("TRACE", "ACCOUNTS", "AUDIT", "CONVERSATIONS", "PLAYGROUND", "FEEDBACK"):
+    for k in ("TRACE", "ACCOUNTS", "AUDIT", "PLAYGROUND", "FEEDBACK"):
         env[f"ANONYMIZER_{k}_DB"] = str(tmp_path / f"{k.lower()}.db")
     c = TestClient(create_app(Settings.from_env(env)))
     tok = c.post("/v1/auth/login", json={"email": "a@example.org", "password": "secret-password-1"}).json()["token"]

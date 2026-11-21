@@ -5,7 +5,7 @@ Skipped when spaCy or the German model is missing.
 
 import pytest
 
-from anonymizer.conversations import LOCAL_PRINCIPAL
+from anonymizer.accounts import LOCAL_PRINCIPAL
 from anonymizer.detect import Detector, DetectorConfig
 from anonymizer.pipeline import Pipeline
 from anonymizer.playground import PlaygroundService, PlaygroundStore

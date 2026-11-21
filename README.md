@@ -23,26 +23,21 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $ANONYMIZER_API_KEY"
 
 | Path | Content |
 |---|---|
-| `packages/core/` | Python package `anonymizer-core`: engine, CLI (`anonymizer`), REST API (`anonymizer-api`), MCP server (`anonymizer-mcp`), MCP proxy (`anonymizer-proxy`), Dockerfile |
+| `packages/core/` | Python package `anonymizer-core`: engine, CLI (`anonymizer`), REST API (`anonymizer-api`), MCP server (`anonymizer-mcp`), Dockerfile |
 | `sdk/python/` | Python client `anonymizer-sdk` (`from anonymizer_sdk import OpenAnonymizer`) |
 | `app/`, `components/`, `lib/` | Next.js dashboard with login, three tabs: **Chat** (type a text, see what the model receives), **Traces** (every use via API, MCP, Chat or CSV, with channel and key) and **CSV** (upload a test file, hide columns). Settings: policies (with test, also via API), API keys, members, audit log |
-| `examples/support/` | Synthetic support chats and example detection patterns |
-| `examples/proxy/` | Demo upstream (synthetic customer DB as MCP server) and proxy config |
+| `examples/support/` | Example detection patterns (order numbers, customer ids, ticket ids) |
 | `docs/` | Documentation |
 
 ## Documentation
 
 - [API & self-hosting](docs/API.md)
-- [Gateway](docs/gateway.md): OpenAI-compatible, local routing, traces & metrics
 - [Detection](docs/detection.md): DE/EN, rules + spaCy NER, context signals, roles
 - [Classification](docs/classification.md): low / sensitive / critical with reasons
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
 - [Accounts & audit log](docs/accounts.md): login, roles, organization scope, API keys, hash-chained audit log
-- [MCP proxy](docs/proxy.md): other MCP servers (databases, tickets, ...) behind OpenAnonymizer, filtered results, traces per tool and field
 - [MCP server](docs/mcp.md): `anonymizer-mcp` (stdio) and `/mcp` (HTTP) for Claude, Cursor & other agents, with protected document access
-- [Conversations](docs/conversations.md): protected access to customer chats (JSONL, HTTP contract, Langfuse) with quota, k-anonymity and audit
-- [Prompts](docs/prompts.md): versions, labels, drafts from agents, promotion by people
 
 ## One model, three ways to use it
 
@@ -54,19 +49,7 @@ The same model and the same saved policy serve every channel; every call is a tr
 
 Traces can be filtered by channel (`GET /v1/traces?client=mcp`).
 
-## Customer chats and prompts for AI agents (API only)
-
-OpenAnonymizer can run next to production and give Claude Code or Cursor protected access to customer conversations and prompt management, without the agent ever seeing raw customer data:
-
-```bash
-ANONYMIZER_API_KEYS=anonymizer_demo_key_change_me_0123456789 ANONYMIZER_MCP_HTTP=1 ANONYMIZER_PROMPTS=local \
-ANONYMIZER_SOURCE=jsonl ANONYMIZER_SOURCE_PATH=examples/support/conversations.jsonl \
-ANONYMIZER_CUSTOM_PATTERNS=examples/support/patterns.yaml anonymizer-api
-claude mcp add --transport http anonymizer http://127.0.0.1:8080/mcp \
-  --header "Authorization: Bearer anonymizer_demo_key_change_me_0123456789"
-```
-
-Details, guarantees and the checks required before production: [docs/conversations.md](docs/conversations.md). Step-by-step handover for testing and adapting it in a company environment (German): [HANDOVER.md](HANDOVER.md).
+Step-by-step handover for testing and adapting OpenAnonymizer in a company environment (German): [HANDOVER.md](HANDOVER.md).
 
 ## Development
 
@@ -97,7 +80,7 @@ ANONYMIZER_API_URL=http://localhost:8080 npm run dev      # live: sign in with a
 
 ## Roadmap
 
-- **Phase 2:** streaming in the gateway, TypeScript SDK, native Anthropic endpoint, OAuth for remote MCP (done: gateway, MCP over stdio and HTTP, documents, Python SDK, conversation access, prompt management)
+- **Phase 2:** TypeScript SDK, OAuth for remote MCP (done: MCP over stdio and HTTP, documents, Python SDK). Removed in November 2026 because they had no UI: OpenAI-compatible gateway, MCP proxy, conversation access, prompt management (see git history)
 - **Phase 3:** review queue with approvals, graphical policy editor (done: traces, metrics, dashboard on live data, API key management in the UI)
 - **Phase 4:** SSO/MFA, finer RBAC, PostgreSQL, Helm (done: organizations, login, roles, hash-chained audit log)
 

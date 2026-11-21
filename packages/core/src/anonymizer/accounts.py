@@ -96,6 +96,10 @@ class Principal:
         return "user" if self.kind == "session" else "api_key"
 
 
+# Principal of the MCP server over stdio (local operator, default organization).
+LOCAL_PRINCIPAL = Principal("local", DEFAULT_ORG, "user", "local", "anonymizer-mcp (stdio)")
+
+
 # -- store ---------------------------------------------------------------------
 
 class AccountStore:

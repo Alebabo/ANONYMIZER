@@ -29,7 +29,6 @@ dev = ["pytest>=8", "httpx>=0.27"]
 anonymizer = "anonymizer.cli:main"
 anonymizer-api = "anonymizer.api:run"
 anonymizer-mcp = "anonymizer.mcp:main"
-anonymizer-proxy = "anonymizer.proxy:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
