@@ -1,0 +1,3 @@
+German support model lab, 2026. Experimental release, Apache License 2.0.
+Scenario templates, generated messages, evaluation and example code are original synthetic work.
+Supplemental replay / prior classifier training uses naeyn/nobody-pii-synth-de (Apache-2.0), revision f78fcbcad638f5e7f69bfe55a8ebd508e32c3731. See NOTICE-nobody-pii.txt. Prior original support augmentation was Apache-2.0.

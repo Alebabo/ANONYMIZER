@@ -1,0 +1,108 @@
+{
+  "seed": 20261118,
+  "task": "pii",
+  "license": "Apache-2.0",
+  "source": "original fictional scenario templates",
+  "templates_sha256": "ea1b57647c882a0380b8f64efc5d350b7ffc6270f935f1779ef5e167bcf5f782",
+  "generator_sha256": "5244cc340e5b4c29b15d50e48290ec77507df571c482546c51fc9277a70e2a68",
+  "splits": {
+    "train": {
+      "rows": 784,
+      "scenarios": [
+        "billing-address",
+        "card-dispute",
+        "catalog-size",
+        "change-of-name",
+        "clinic-intake",
+        "maintenance-calendar",
+        "parcel-locker",
+        "payroll-query",
+        "public-release",
+        "refund-routing",
+        "return-fees",
+        "sim-replacement",
+        "standing-order",
+        "vpn-session"
+      ],
+      "templates": 28,
+      "annotations": 1120,
+      "negative_rows": 224,
+      "sha256": "6cfb2539bd697a5b190b67b386356108fb4da2797d9ccab05b0c499ae5e8dd28",
+      "prior_normalised_text_overlap": {
+        "v1-train": 0,
+        "v1-validation": 0,
+        "v1-support-dev": 0,
+        "independent": 0,
+        "confirmation": 0,
+        "old-support": 0,
+        "public-test": 0,
+        "public-validation": 0,
+        "public-train": 0
+      }
+    },
+    "validation": {
+      "rows": 112,
+      "scenarios": [
+        "disputed-invoice",
+        "error-manual",
+        "membership-transfer",
+        "prescription-pickup",
+        "privacy-export",
+        "public-opening",
+        "warehouse-call"
+      ],
+      "templates": 14,
+      "annotations": 160,
+      "negative_rows": 32,
+      "sha256": "62b3c748035a3cefc3c52f37cb0f649688e0b580a5e43d196a9507f579c8ffef",
+      "prior_normalised_text_overlap": {
+        "v1-train": 0,
+        "v1-validation": 0,
+        "v1-support-dev": 0,
+        "independent": 0,
+        "confirmation": 0,
+        "old-support": 0,
+        "public-test": 0,
+        "public-validation": 0,
+        "public-train": 0
+      }
+    },
+    "test": {
+      "rows": 176,
+      "scenarios": [
+        "accessibility-interpreter",
+        "caregiver-contact",
+        "direct-debit-reversal",
+        "fare-machine",
+        "firmware-compatibility",
+        "hotel-lost-property",
+        "museum-price",
+        "pension-record",
+        "public-roadworks",
+        "scanner-audit",
+        "tax-adviser"
+      ],
+      "templates": 22,
+      "annotations": 256,
+      "negative_rows": 48,
+      "sha256": "49bc3e4eabc5161c27198ea2902ddffc2dee2a38613fc3336d2f1d6576038815",
+      "prior_normalised_text_overlap": {
+        "v1-train": 0,
+        "v1-validation": 0,
+        "v1-support-dev": 0,
+        "independent": 0,
+        "confirmation": 0,
+        "old-support": 0,
+        "public-test": 0,
+        "public-validation": 0,
+        "public-train": 0
+      }
+    }
+  },
+  "replay": {
+    "rows": 1024,
+    "sha256": "d0cb30185cc8412cefdbc997f895a27d2a181d791a59d3d6118813809bdc90ae",
+    "source_sha256": "6ee4bba05aa8819f1cb2b2613ca4894fa92c5d2d9df7aee7a6f9a7016134e75e",
+    "source": "frozen v1 train only, intentionally shared by controlled variants; supplemental, outside new splits"
+  }
+}

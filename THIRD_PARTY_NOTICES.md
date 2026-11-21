@@ -52,3 +52,10 @@ Open Legal Data database is licensed under the Open Database License 1.0
 available under ODbL 1.0 as well. Changes: HTML converted to text, and the courts' anonymization placeholders
 ("…") replaced by synthetic names, companies, places, dates, case numbers and IBANs
 (`packages/core/src/anonymizer/courts.py`). The rest of this repository is not affected by this license.
+
+## Financial PII datasets (Apache-2.0)
+
+`datasets/finance/raw/` contains unchanged copies (German parts) of three synthetic datasets licensed under the
+Apache License 2.0, each with its license or dataset card next to the data:
+gretelai/synthetic_pii_finance_multilingual (Gretel.ai), syntriq/german-pii-benchmark (Syntriq) and
+EasyOctopus/german-support-pii-data (EasyOctopus; see its NOTICE file).

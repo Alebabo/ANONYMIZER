@@ -32,10 +32,12 @@ export const ENTITY_GROUPS: { title: string; types: [string, string][] }[] = [
   { title: "People and places", types: [["person", "Names"], ["organization", "Companies"], ["location", "Places"]] },
   { title: "Contact", types: [["email", "E-mail"], ["phone", "Phone"], ["address", "Address"]] },
   { title: "Payment and IDs", types: [["iban", "IBAN"], ["credit_card", "Credit card"], ["bic", "BIC"],
-    ["tax_id", "Tax ID"], ["social_security_number", "Social security no."], ["vat_id", "VAT ID"]] },
+    ["tax_id", "Tax ID"], ["tax_number", "Tax number"], ["social_security_number", "Social security no."], ["vat_id", "VAT ID"],
+    ["id_document", "ID card / passport"], ["health_insurance_number", "Health insurance no."]] },
   { title: "Dates and amounts", types: [["date_of_birth", "Date of birth"], ["date", "Dates"], ["money", "Amounts"]] },
   { title: "Business references", types: [["customer_number", "Customer no."], ["order_number", "Order no."],
     ["ticket_number", "Ticket no."], ["contract_number", "Contract no."], ["invoice_number", "Invoice no."]] },
+  { title: "Technical and vehicles", types: [["ip_address", "IP address"], ["license_plate", "Licence plate"]] },
 ];
 
 // Same order as Action in the API: on a conflict the more restrictive action wins.
