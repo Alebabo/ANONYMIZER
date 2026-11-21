@@ -42,12 +42,18 @@ UA = "OpenAnonymizer-dataset-builder/0.1 (research; low rate)"
 
 def get(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    for attempt in range(4):
+    for attempt in range(6):
         try:
             with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 - fixed public API
                 return json.load(r)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 or attempt == 5:
+                raise
+            # 429: the API asks us to slow down; honour Retry-After, else wait a minute or more.
+            wait = int(exc.headers.get("Retry-After") or 0) or (60 * (attempt + 1) if exc.code == 429 else 2 ** attempt * 2)
+            time.sleep(wait)
         except Exception:  # noqa: BLE001 - retry network errors with backoff
-            if attempt == 3:
+            if attempt == 5:
                 raise
             time.sleep(2 ** attempt * 2)
     raise RuntimeError("unreachable")
@@ -63,7 +69,11 @@ def cmd_download(base: Path, per: int, delay: float, workers: int = 3) -> None:
         path = raw / f"{case_id}.json"
         if path.exists():
             return
-        case = get(f"{API}{case_id}/?format=json")
+        try:
+            case = get(f"{API}{case_id}/?format=json")
+        except Exception as exc:  # noqa: BLE001 - skip one case, keep the run going
+            print(f"skip {case_id}: {exc}", flush=True)
+            return
         path.write_text(json.dumps({k: case.get(k) for k in (
             "id", "court", "file_number", "date", "type", "ecli", "content")}, ensure_ascii=False), encoding="utf-8")
         time.sleep(delay)
@@ -172,10 +182,11 @@ def main() -> None:
     ap.add_argument("--split", default="dev", choices=["train", "dev", "test"])
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--per-jurisdiction", type=int, default=400)
-    ap.add_argument("--delay", type=float, default=0.3, help="seconds between API calls")
+    ap.add_argument("--delay", type=float, default=1.0, help="seconds between API calls")
+    ap.add_argument("--workers", type=int, default=1)
     a = ap.parse_args()
     if a.cmd == "download":
-        cmd_download(a.dir, a.per_jurisdiction, a.delay)
+        cmd_download(a.dir, a.per_jurisdiction, a.delay, a.workers)
     elif a.cmd == "contexts":
         cmd_contexts(a.dir)
     elif a.cmd == "build":
