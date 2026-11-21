@@ -53,9 +53,19 @@ available under ODbL 1.0 as well. Changes: HTML converted to text, and the court
 ("…") replaced by synthetic names, companies, places, dates, case numbers and IBANs
 (`packages/core/src/anonymizer/courts.py`). The rest of this repository is not affected by this license.
 
+`datasets/outcome/` (Machbarkeitsexperiment Kündigungsschutz-Prognose) is derived from the Hugging Face dataset
+`openlegaldata/court-decisions-germany` (dump-20260520), i.e. the same Open Legal Data database, and is likewise
+made available under ODbL 1.0. Access to the source dataset on Hugging Face is gated (a Hugging Face account
+that has accepted the dataset's conditions is required). `datasets/outcome/raw/decisions.jsonl.gz` contains 3,226
+labour court judgments in derived form: ids, court, date, file number, the operative part (ArbG) or the summary of
+the first-instance judgment (LAG), a cleaned statement of facts (dates, file numbers and outcome sentences
+removed), the extracted outcome label and the split assignment. `labels.csv` and `results.json` are derived from
+it. Changes: HTML converted to text, sections cut, sentences removed, labels added
+(`packages/core/scripts/outcome_experiment.py`).
+
 ## Financial PII datasets (Apache-2.0)
 
-`datasets/finance/raw/` contains unchanged copies (German parts) of three synthetic datasets licensed under the
-Apache License 2.0, each with its license or dataset card next to the data:
-gretelai/synthetic_pii_finance_multilingual (Gretel.ai), syntriq/german-pii-benchmark (Syntriq) and
-EasyOctopus/german-support-pii-data (EasyOctopus; see its NOTICE file).
+`datasets/finance/raw/` contains unchanged copies (German parts) of two synthetic datasets licensed under the
+Apache License 2.0, each with its license or dataset card next to the data: syntriq/german-pii-benchmark
+(Syntriq) and EasyOctopus/german-support-pii-data (EasyOctopus; see its NOTICE file). A third,
+gretelai/synthetic_pii_finance_multilingual (Gretel.ai, Apache-2.0), is downloaded on demand and not committed.
