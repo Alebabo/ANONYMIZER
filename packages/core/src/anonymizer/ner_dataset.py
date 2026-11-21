@@ -207,10 +207,13 @@ class Score:
         return 2 * p * r / (p + r) if p and r else (0.0 if p is not None and r is not None else None)
 
 
-def score_doc(gold: list[Span], pred: list[Span], partial: bool) -> tuple[dict[str, Score], list[Span], list[Span]]:
+def score_doc(gold: list[Span], pred: list[Span], partial: bool,
+              labels: Iterable[str] = SCORED) -> tuple[dict[str, Score], list[Span], list[Span]]:
     """Per-label counts plus the false positives and false negatives. Strict: same start, end and label.
-    Partial: same label and overlapping; each gold span and each prediction is matched once."""
-    scored = [g for g in gold if g.label in SCORED]
+    Partial: same label and overlapping; each gold span and each prediction is matched once.
+    ``labels``: the scored gold labels (default PER, ORG, LOC); predictions must carry one of them."""
+    labels = tuple(labels)
+    scored = [g for g in gold if g.label in labels]
     used: set[int] = set()
     fps = []
     for p in sorted(pred, key=lambda s: (s.start, s.end)):
@@ -221,7 +224,7 @@ def score_doc(gold: list[Span], pred: list[Span], partial: bool) -> tuple[dict[s
         else:
             used.add(match)
     fns = [g for i, g in enumerate(scored) if i not in used]
-    out = {label: Score() for label in SCORED}
+    out = {label: Score() for label in labels}
     for i, g in enumerate(scored):
         if i in used:
             out[g.label].tp += 1
@@ -232,8 +235,8 @@ def score_doc(gold: list[Span], pred: list[Span], partial: bool) -> tuple[dict[s
     return out, fps, fns
 
 
-def summarize(per_doc: list[tuple[str, dict[str, Score]]]) -> dict[str, Any]:
-    total: dict[str, Score] = {label: Score() for label in SCORED}
+def summarize(per_doc: list[tuple[str, dict[str, Score]]], labels: Iterable[str] = SCORED) -> dict[str, Any]:
+    total: dict[str, Score] = {label: Score() for label in labels}
     by_source: dict[str, Score] = {}
     for key, scores in per_doc:
         src = key.split(":", 1)[0]
