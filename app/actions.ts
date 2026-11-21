@@ -197,14 +197,18 @@ export async function editPolicy(_: ActionState, form: FormData): Promise<Action
 }
 
 // -- chat ----------------------------------------------------------------------------------
+export type Detected = { start: number; end: number; type: string };
 export type ChatResult = {
   text: string | null; outcome: string; allowed: boolean; reasons: string[]; policy: string;
   entities: Record<string, number>; trace_id: string | null;
+  /** Where in the input something was found (offsets into the text the user typed). */
+  detections: Detected[];
 } | { error: string };
 
 type ProtectBody = {
   text: string | null; outcome: string; allowed: boolean; trace_id: string | null;
   decision: { policy: string; reasons: string[]; entities: { entity_type: string }[] };
+  classification: { entities: { start: number; end: number; entity_type: string }[] };
 };
 
 /** Chat tab: one message through the model with the chosen policy (POST /v1/protect, traced as "dashboard"). */
@@ -218,9 +222,32 @@ export async function protectText(text: string, policy: string): Promise<ChatRes
     const entities: Record<string, number> = {};
     for (const e of r.decision.entities) entities[e.entity_type] = (entities[e.entity_type] ?? 0) + 1;
     return { text: r.text, outcome: r.outcome, allowed: r.allowed, reasons: r.decision.reasons, policy: r.decision.policy,
-             entities, trace_id: r.trace_id };
+             entities, trace_id: r.trace_id,
+             detections: r.classification.entities.map(e => ({ start: e.start, end: e.end, type: e.entity_type })) };
   } catch (e) {
     if (e instanceof ApiError) return { error: e.message };
     throw e;
   }
+}
+
+// -- feedback ------------------------------------------------------------------------------
+export type FeedbackSpan = { start: number; end: number; kind: "missed" | "wrong"; label: string };
+
+/** Chat corrections: stores the text (test data only), admins export it for training. */
+export async function sendFeedback(text: string, spans: FeedbackSpan[], policy: string, traceId: string | null): Promise<ActionState> {
+  if (isDemo()) return DEMO;
+  try {
+    await api("/v1/feedback", { method: "POST", body: JSON.stringify({ text, spans, policy, trace_id: traceId }) });
+    return { ok: true, message: "Thanks, saved for training." };
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function deleteFeedback(_: ActionState, form: FormData): Promise<ActionState> {
+  return run(async () => {
+    await api(`/v1/feedback/${encodeURIComponent(str(form, "id"))}`, { method: "DELETE" });
+    return { message: "Deleted." };
+  }, "/settings/feedback");
 }

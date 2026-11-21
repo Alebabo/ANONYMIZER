@@ -18,7 +18,7 @@ const sections = {
     tabs: [
       { href: "/settings", label: "General" }, { href: "/settings/policies", label: "Policies" },
       { href: "/api-keys", label: "API Keys" }, { href: "/settings/members", label: "Members" },
-      { href: "/settings/audit-logs", label: "Audit Logs" },
+      { href: "/settings/feedback", label: "Feedback" }, { href: "/settings/audit-logs", label: "Audit Logs" },
     ],
   },
 } satisfies Record<string, { label: string; tabs: Tab[] }>;

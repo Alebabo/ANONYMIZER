@@ -181,6 +181,20 @@ class PlaygroundUpload(_Strict):
     csv: str = Field(min_length=1, max_length=100 * 1024 * 1024)  # playground.MAX_BYTES
 
 
+class FeedbackSpan(_Strict):
+    start: int = Field(ge=0)
+    end: int = Field(ge=1)
+    kind: Literal["missed", "wrong"]
+    label: str = Field("", max_length=40, description="type for 'missed' (person, case_number, …); detected type for 'wrong'")
+
+
+class FeedbackCreate(_Strict):
+    text: str = Field(min_length=1, max_length=20_000)
+    spans: list[FeedbackSpan] = Field(min_length=1, max_length=200)
+    policy: str | None = Field(None, max_length=64)
+    trace_id: str | None = Field(None, max_length=40)
+
+
 class PlaygroundColumns(_Strict):
     hidden: list[str] = Field(default_factory=list, max_length=200)
 

@@ -41,7 +41,7 @@ import base64
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 import anonymizer
@@ -50,7 +50,7 @@ from anonymizer.accounts import DEFAULT_ORG, AccountError, AccountStore, Princip
 from anonymizer.api.schemas import (
     AnonymizeRequest, ApiKeyCreate, ClassifyRequest, DetectionOut, DryRunRequest, DryRunResult, LoginRequest, PolicyTestRequest, PolicyTestResult, MemberCreate,
     MemberUpdate, OrganizationUpdate, PasswordChange, PolicyCreate, PolicySummary, PromptCreate, PromptLabelSet,
-    PlaygroundColumns, PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, ProxyUpstreamToggle, RestoreRequest, ScanResponse, TextRequest,
+    FeedbackCreate, PlaygroundColumns, PlaygroundQuery, PlaygroundUpload, ProtectRequest, ProtectResponse, ProxyUpstreamToggle, RestoreRequest, ScanResponse, TextRequest,
 )
 from anonymizer.audit import AuditLog
 from anonymizer.api.settings import Settings
@@ -58,6 +58,7 @@ from anonymizer.anonymize.engine import AnonymizationResult, RestoreResult
 from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.conversations import ConversationConfig, ConversationError, ConversationService, ConversationStore
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
+from anonymizer.feedback import FeedbackError, FeedbackStore
 from anonymizer.pipeline import Pipeline, ProtectResult
 from anonymizer.policy.edit import apply_changes
 from anonymizer.playground import MAX_BYTES as PLAYGROUND_MAX_BYTES
@@ -124,6 +125,7 @@ class State:
                                    classifier=self.classifier, vault=vault),
             self.conversation_policy, traces=self.traces, audit=self.audit,
         )
+        self.feedback = FeedbackStore(settings.feedback_db)
         backend = backend_from_env(env, transport=source_transport)
         self.prompts = None if backend is None else PromptService(
             backend, self.detector, self.classifier, self._protect_prompt, self.audit)
@@ -802,6 +804,41 @@ def create_app(settings: Settings | None = None, gateway_transport=None, source_
         return prompts().set_label(p, name, req.version, req.label)
 
     # -- playground ------------------------------------------------------------------------------
+    # -- feedback (corrections from the Chat tab; raw text, admins read it) ------------------------
+    @app.exception_handler(FeedbackError)
+    async def feedback_error(_: Request, exc: FeedbackError) -> JSONResponse:
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.post("/v1/feedback", status_code=201, tags=["feedback"])
+    def create_feedback(req: FeedbackCreate, p: User) -> dict:
+        """Mark what should have been detected (kind "missed", with a type) or was detected wrongly ("wrong").
+        Stores the text: send test data only. Audited without the text."""
+        check_size(req.text)
+        row = state.feedback.add(p.org_id, req.text, [s.model_dump() for s in req.spans], p.label, req.policy,
+                                 req.trace_id)
+        state.audit.record(p.org_id, "create", "feedback", row["id"], p, after={
+            "missed": sum(s["kind"] == "missed" for s in row["spans"]),
+            "wrong": sum(s["kind"] == "wrong" for s in row["spans"]), "chars": len(req.text)})
+        return {"id": row["id"], "spans": len(row["spans"])}
+
+    @app.get("/v1/feedback", tags=["feedback"])
+    def list_feedback(p: Admin, limit: int = 200) -> list[dict]:
+        return state.feedback.list(p.org_id, limit)
+
+    @app.get("/v1/feedback/export", tags=["feedback"])
+    def export_feedback(p: Admin) -> Response:
+        """All corrections as gold JSONL for training (ner_train.py --feedback). Audited."""
+        body = state.feedback.export(p.org_id)
+        state.audit.record(p.org_id, "export", "feedback", "all", p, after={"lines": body.count("\n")})
+        return Response(body, media_type="application/x-ndjson",
+                        headers={"Content-Disposition": 'attachment; filename="feedback.jsonl"'})
+
+    @app.delete("/v1/feedback/{feedback_id}", status_code=204, tags=["feedback"])
+    def delete_feedback(feedback_id: str, p: Admin) -> None:
+        if not state.feedback.delete(p.org_id, feedback_id):
+            raise HTTPException(status_code=404, detail="feedback not found")
+        state.audit.record(p.org_id, "delete", "feedback", feedback_id, p)
+
     @app.exception_handler(PlaygroundError)
     async def playground_error(_: Request, exc: PlaygroundError) -> JSONResponse:
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
