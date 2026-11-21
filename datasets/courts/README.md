@@ -32,10 +32,18 @@ lawyers), so these files measure **recall** and teach entities; **precision** is
 For training, `ner_train.py --courts` treats lower-case words and what the rules find (courts, citations,
 case numbers) as "not an entity" and leaves other capitalised words out of the loss.
 
+## Raw data
+
+`raw/decisions.jsonl.gz` holds every downloaded decision as published (id, court, file number, date, type,
+ECLI, HTML content; ODbL 1.0). `build` reads it when there is no local download, so the dataset can be rebuilt
+and changed without calling the API again. The published decisions are anonymized by the courts; they contain
+no data that is not already public.
+
 ## Use
 
 ```bash
-python packages/core/scripts/court_data.py download    # raw decisions to local/courts (not committed)
+python packages/core/scripts/court_data.py download    # more decisions to local/courts (polite, rate-limited)
+python packages/core/scripts/court_data.py pack        # local/courts -> raw/decisions.jsonl.gz
 python packages/core/scripts/court_data.py build
 python packages/core/scripts/court_data.py eval --split test
 ```

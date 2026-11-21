@@ -1,6 +1,7 @@
 """Full court decisions (Open Legal Data) with synthetic values in place of the court's anonymization.
 
     python packages/core/scripts/court_data.py download [--dir local/courts] [--per-jurisdiction 400]
+    python packages/core/scripts/court_data.py pack                                # raw -> datasets/courts/raw
     python packages/core/scripts/court_data.py contexts [--dir local/courts]      # which "…" placeholders exist
     python packages/core/scripts/court_data.py build    [--dir local/courts] [--out datasets/courts]
     python packages/core/scripts/court_data.py eval     [--data datasets/courts] [--split dev]
@@ -96,8 +97,26 @@ def cmd_download(base: Path, per: int, delay: float, workers: int = 3) -> None:
         print(f"{value}: {len(ids)}", flush=True)
 
 
+PACKED = Path("datasets/courts/raw/decisions.jsonl.gz")
+
+
 def load_raw(base: Path) -> list[dict]:
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted((base / "raw").glob("*.json"))]
+    """Downloaded decisions: local/courts/raw/*.json, or the committed pack if there is no local copy."""
+    files = sorted((base / "raw").glob("*.json"))
+    if files:
+        return [json.loads(p.read_text(encoding="utf-8")) for p in files]
+    with gzip.open(PACKED, "rt", encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def cmd_pack(base: Path) -> None:
+    """All downloaded decisions as one gzip JSONL for the repository (sorted, so the file is reproducible)."""
+    cases = sorted(load_raw(base), key=lambda c: c["id"])
+    PACKED.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(PACKED, "wt", encoding="utf-8", compresslevel=9) as fh:
+        for c in cases:
+            fh.write(json.dumps(c, ensure_ascii=False, sort_keys=True) + "\n")
+    print(f"{PACKED}: {len(cases)} decisions, {PACKED.stat().st_size // 1024} KB")
 
 
 def cmd_contexts(base: Path) -> None:
@@ -175,7 +194,7 @@ def cmd_eval(data: Path, split: str, limit: int | None) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["download", "contexts", "build", "eval"])
+    ap.add_argument("cmd", choices=["download", "pack", "contexts", "build", "eval"])
     ap.add_argument("--dir", type=Path, default=Path("local/courts"))
     ap.add_argument("--out", type=Path, default=Path("datasets/courts"))
     ap.add_argument("--data", type=Path, default=Path("datasets/courts"))
@@ -187,6 +206,8 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "download":
         cmd_download(a.dir, a.per_jurisdiction, a.delay, a.workers)
+    elif a.cmd == "pack":
+        cmd_pack(a.dir)
     elif a.cmd == "contexts":
         cmd_contexts(a.dir)
     elif a.cmd == "build":

@@ -60,7 +60,9 @@ and, where available, the support gold set does not get worse.
 
 ## Rebuild
 
+The original CoNLL files are in `raw/` (gzipped, CC BY 4.0), so no download is needed:
+
 ```bash
-python packages/core/scripts/ler_data.py download   # CoNLL files to local/ler (not committed)
-python packages/core/scripts/ler_data.py build
+python packages/core/scripts/ler_data.py build       # reads local/ler if present, else raw/
+python packages/core/scripts/ler_data.py download    # optional: fresh copy to local/ler
 ```
