@@ -24,6 +24,8 @@ from anonymizer.ner_dataset import GoldDoc, Span
 # How courts mark a removed value: "…", "...", "[...]", also an initial with dots ("H...", "M…", "Ts….").
 # Extra dots after the ellipsis belong to it, except the last one: that is the sentence's full stop.
 PH = r"(?:(?:(?<![\w.])[A-ZÄÖÜ][a-zäöü]?\s?)?(?:…|\.{3})(?:\.{1,3}(?=\.))?|\[\.{3}\])"
+# Initials instead of a name: "Herr K.", "das Kind A. L. D.", "Zeugin M" (only after a role word, see RULES).
+INITIALS = r"(?<![\w.])[A-ZÄÖÜ]\.?(?:\s?[A-ZÄÖÜ]\.){0,3}(?![\wÄÖÜäöü])"
 # A run of them for multi-word names: "M... H... & Co.", "C…. J.... S...".
 PH_RUN = rf"(?:{PH})(?:\s(?:&\s)?(?:{PH})){{0,4}}"
 _BLOCK = re.compile(r"</?(?:p|br|div|dd|dt|dl|li|h\d|tr|table|blockquote)\b[^>]*>", re.I)
@@ -104,6 +106,7 @@ RULES = [
     _r(rf"\b(?:Firma|Fa\.|Unternehmen|Arbeitgeberin|Bank|Versicherung|Sparkasse|Kanzlei)\s(?P<ph>{PH})", "ORG", "company"),
     # persons after a title or role
     _r(rf"\b{_TITLE}\s(?:(?:Dr\.|Prof\.)\s)?(?P<ph>{PH_RUN})", "PER", "person"),
+    _r(rf"\b{_TITLE}\s(?:(?:Dr\.|Prof\.)\s)?(?P<ph>{INITIALS})", "PER", "person"),
     # "geboren am … in …", "wohnhaft in …"
     _r(rf"\b(?:wohnhaft|wohnend|geboren|aus|in|nach)\s(?:in\s)?(?P<ph>{PH})(?=[\s,.;)])", "LOC", "city"),
 ]
@@ -150,6 +153,11 @@ def fill(text: str, filler: Filler) -> tuple[str, list[Span]]:
             s, e = m.span("ph")
             if s < 0 or e <= s:
                 continue
+            if rule.kind in ("iban", "case_number") and e < len(text) and text[e].isalnum():
+                continue  # only partly removed ("Kontonummer …14"): the full value is unknown
+            if re.fullmatch(INITIALS, text[s:e]) and text[s:e].endswith(".") \
+                    and re.match(r"\s+[A-ZÄÖÜ„(]|\s*$|\s*\n", text[e:]):
+                e -= 1  # "Herr K. Er sagte": the dot also ends the sentence, keep it
             if any(s < te and ts < e for ts, te, _, _ in jobs):
                 continue
             jobs.append((s, e, rule.label, rule.kind))
@@ -157,14 +165,18 @@ def fill(text: str, filler: Filler) -> tuple[str, list[Span]]:
     out, spans, pos, shift = [], [], 0, 0
     for s, e, label, kind in jobs:
         value = filler.value(kind, text[max(0, s - 30):s])
-        if kind == "company_stem" and e < len(text) and text[e].isalnum():
-            value += " "  # "…GmbH" -> "Weber GmbH", not "WeberGmbH"
+        glued = e < len(text) and text[e].isalnum()
+        if glued and kind == "date" and text[e].isdigit():
+            # partly removed: "geboren am …2017" (day and month gone), "am …11.2007" (day gone)
+            value = value[:3] if re.match(r"\d{1,2}\.\d{4}", text[e:]) else value[:6]
+        elif glued and kind in ("person", "company_stem", "company", "city"):
+            value += " "  # "Zeugin …als" -> "Zeugin Meier als", "…GmbH" -> "Weber GmbH"
         out.append(text[pos:s])
         new_start = s + shift
         out.append(value)
         shift += len(value) - (e - s)
         pos = e
-        spans.append((new_start, new_start + len(value), label, kind))
+        spans.append((new_start, new_start + len(value.rstrip()), label, kind))
     out.append(text[pos:])
     new = "".join(out)
     result = []

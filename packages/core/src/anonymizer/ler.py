@@ -108,14 +108,25 @@ class Names:
     def __init__(self, seed: int, held_out: bool) -> None:
         pick = lambda xs: [x for i, x in enumerate(sorted(set(xs))) if (i % 2 == 1) == held_out]  # noqa: E731
         self.first, self.last, self.cities = pick(_FIRST), pick(_LAST), pick(_CITIES)
+        cut = _FIRST.index("Max")  # the list holds female names first, then male ones
+        self.female = [n for n in self.first if n in _FIRST[:cut]]
+        self.male = [n for n in self.first if n in _FIRST[cut:]]
         self.rng = random.Random(seed)
 
     def person(self, after: str) -> str:
         # After a title or role ("Herrn", "Rechtsanwalt", "Dr.") a surname reads naturally; else 50:50.
         if re.search(r"(?:Herrn?|Frau|Dr\.|Prof\.|anwalt|anwältin|Richter(?:in)?|Zeugin|Zeuge)\s*$", after):
             return self.rng.choice(self.last)
-        return self.rng.choice(self.last) if self.rng.random() < 0.4 else \
-            f"{self.rng.choice(self.first)} {self.rng.choice(self.last)}"
+        if self.rng.random() < 0.4:
+            return self.rng.choice(self.last)
+        # A first name that fits the grammar around it: "die Zeugin", "Frau", "der Angeklagte", "Herrn".
+        if re.search(r"(?:\bFrau|\bDie\s\S+|\bdie\s\S+|\S+in|Tochter|Mutter|Ehefrau|Schwester)\s*$", after):
+            first = self.female
+        elif re.search(r"(?:\bHerrn?|\b[Dd]e[rsmn]\s\S+|Sohn|Sohnes|Vater|Vaters|Ehemann|Bruder)\s*$", after):
+            first = self.male
+        else:
+            first = self.first
+        return f"{self.rng.choice(first)} {self.rng.choice(self.last)}"
 
     def company_stem(self) -> str:
         return self.rng.choice(self.last)

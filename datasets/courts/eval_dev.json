@@ -1,0 +1,33 @@
+{
+  "split": "dev",
+  "docs": 11,
+  "seconds": 4.6,
+  "recall": {
+    "AZ": {
+      "found": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "DATE": {
+      "found": 5,
+      "total": 5,
+      "rate": 1.0
+    },
+    "LOC": {
+      "found": 11,
+      "total": 12,
+      "rate": 0.917
+    },
+    "ORG": {
+      "found": 7,
+      "total": 7,
+      "rate": 1.0
+    },
+    "PER": {
+      "found": 77,
+      "total": 81,
+      "rate": 0.951
+    }
+  },
+  "recall_all": 0.954
+}
