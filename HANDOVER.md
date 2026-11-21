@@ -369,6 +369,8 @@ Claude Desktop und Konnektoren auf claude.ai brauchen OAuth. Das ist noch nicht 
 
 Das ist der wichtigste Schritt vor Prod. Er darf **nur von einer berechtigten Person im geschützten Bereich** gemacht werden, ohne Cloud-LLM. Ergebnisse und Stichproben bleiben in `local/` bzw. auf dem geschützten System.
 
+**Kanzleien (Schriftsätze, Mandantenmails):** Mess-Kit mit Schritt-für-Schritt-Anleitung für Nicht-Entwickler in [docs/local-eval.md](docs/local-eval.md) (`packages/core/scripts/local_eval.py`, ca. 30 Minuten, offline). Ergebnis ist ein Bericht nur mit Zahlen, der an das Entwicklerteam gehen kann.
+
 ### 7.1 Schnelltest: Leck-Check
 
 1. OpenAnonymizer im geschützten Bereich gegen die Prod-Quelle starten (Docker, Abschnitt 6.1). Noch **kein** Laptop wird angebunden.
