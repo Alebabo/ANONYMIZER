@@ -403,38 +403,126 @@ BUSINESS_SECRET = RegexRecognizer(
 # Organizations and persons (rule-based; spaCy NER can be added on top)
 # --------------------------------------------------------------------------
 
+# Latin letters of names common in Germany, not only German ones: García, Yıldız, Şahin, Wójcik, Đorđević,
+# Nguyễn. A narrower class silently dropped such names after "Herr"/"Zeugin", a gap that hits migrants hardest.
+_UPPER = "A-ZÀ-ÖØ-ÞĀĂĄĆĈĊČĎĐĒĖĘĚĞĠĢĪĮİĶĹĻĽŁŃŅŇŌŐŒŔŘŚŜŞŠŢŤŪŮŰŲŹŻŽ"
+_LOWER = "a-zß-öø-ÿāăąćĉċčďđēėęěğġģīįıķĺļľłńņňōőœŕřśŝşšţťūůűųźżžơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ"
 _LEADING_NOISE = {
     "Der", "Die", "Das", "Den", "Dem", "Des", "Ein", "Eine", "Einer", "Unsere", "Unser", "Ihre", "Ihr", "Mandantin",
-    "Mandant", "Klägerin", "Kläger", "Beklagte", "Beklagten", "Gegen", "Für", "Von", "Mit", "Bei", "Firma",
+    "Mandant", "Klägerin", "Kläger", "Beklagte", "Beklagten", "Gegen", "Für", "Von", "Mit", "Bei", "Firma", "Fa.",
     "The", "A", "An", "Our", "Your", "Client", "Defendant", "Plaintiff", "Against", "For", "By", "With",
 }
+# Longer forms first: "GmbH & Co. KG" must not stop at "GmbH" and leave "Co. KG" as a second company.
 _LEGAL_FORMS = (
-    r"GmbH & Co\. KG|GmbH & Co\. KGaA|gGmbH|GmbH|AG|KGaA|KG|OHG|PartG mbB|PartG|UG \(haftungsbeschränkt\)|UG|"
-    r"e\.\s?V\.|eG|SE|Inc\.|Ltd\.|LLC|LLP|PLC|plc|Corp\.|Co\. KG"
+    r"(?:GmbH|AG|SE|UG \(haftungsbeschränkt\)) & Co\.? (?:KGaA|KG|OHG)|GmbH & atypisch [Ss]till|"
+    r"gGmbH|GmbH|mbH|AG|KGaA|KG|OHG|GbR|EWIV|PartG mbB|PartGmbB|PartG|UG \(haftungsbeschränkt\)|UG|"
+    r"e\.\s?V\.|e\.\s?K(?:fm|fr)?\.|eG|SE|Aktiengesellschaft|Kommanditgesellschaft|"
+    r"Inc\.|Ltd\.|LLC|LLP|PLC|plc|Corp\.|B\.\s?V\.|N\.\s?V\.|S\.\s?A\.|S\.p\.A\.|Co\.? KG|Co\.? OHG"
 )
+# Attached with a hyphen: "Hartmann-GmbH", "X-EWIV", "Wójcik Kondensatoren-GmbH", "Mansour-Gruppe", "VW-Konzern".
+_HYPHEN_FORMS = (
+    r"(?:GmbH|AG|SE|UG) & Co\.? (?:KGaA|KG|OHG)|GmbH & atypisch [Ss]till|"
+    r"gGmbH|GmbH|AG|KGaA|KG|OHG|GbR|EWIV|UG|SE|BV|KAG|Holding|Gruppe|Konzern|Werke"
+)
+# Hyphen compounds with "Gruppe"/"Konzern"/"Holding" that are no company ("Facebook-Gruppe", "Alters-Gruppe").
+_GROUP_STEM_STOP = {
+    "Facebook", "WhatsApp", "Telegram", "Signal", "Chat", "Ziel", "Alters", "Fall", "Arbeits", "Projekt", "Berufs",
+    "Personen", "Risiko", "Vergleichs", "Entgelt", "Lohn", "Gehalts", "Tarif", "Wohn", "Fach", "Selbsthilfe",
+    "Kontroll", "Test", "Ländern", "Länder", "Spiel", "Lern", "Eltern", "Jugend", "Kinder", "Senioren",
+}
+# A role, not a name: "die Holding-KG", "die Komplementär-GmbH", "eine Vorrats-GmbH".
+_GENERIC_ORG_STEMS = {
+    "Holding", "Komplementär", "Komplementärin", "Objekt", "Betriebs", "Besitz", "Grundstücks", "Verwaltungs",
+    "Beteiligungs", "Vorrats", "Mantel", "Tochter", "Mutter", "Schwester", "Organ", "Ziel", "Erwerber", "Ein-Mann",
+    "Familien", "Publikums", "Fonds", "Immobilien", "Service", "Personal", "Projekt", "Gründungs", "Auffang",
+}
+_ORG_TOKEN = rf"[{_UPPER}0-9][\w&.'’-]*"
 
 
-def _trim_org(text: str, start: int, end: int) -> tuple[int, int] | None:
+def _strip_leading_noise(text: str, start: int, end: int) -> tuple[int, list[str]]:
     tokens = text[start:end].split(" ")
     offset = start
     while len(tokens) > 1 and tokens[0].strip(",") in _LEADING_NOISE:
         offset += len(tokens[0]) + 1
         tokens = tokens[1:]
-    return (offset, end) if len(tokens) > 1 else None
+    return offset, tokens
+
+
+def _trim_org(text: str, start: int, end: int) -> tuple[int, int] | None:
+    offset, tokens = _strip_leading_noise(text, start, end)
+    if len(tokens) < 2 or (len(tokens) == 2 and tokens[0] in _GENERIC_ORG_STEMS):
+        return None
+    return offset, end
+
+
+def _trim_hyphen_org(text: str, start: int, end: int) -> tuple[int, int] | None:
+    offset, tokens = _strip_leading_noise(text, start, end)
+    if tokens[0] in _LEADING_NOISE:
+        return None
+    value = text[offset:end]
+    group = re.search(r"([^\s-]+)-(?:Gruppe|Konzern|Holding)$", value)
+    if group and group.group(1) in _GROUP_STEM_STOP:
+        return None
+    if " " not in value and value.split("-")[0] in _GENERIC_ORG_STEMS:
+        return None
+    return offset, end
+
+
+# "Firma Schreiber", "Fa. SCHÜCO", "der Firma Lorenz GmbH": a name after "Firma" is a company. Courts and
+# authorities never follow "Firma". The name ends at the first lower-case word or a stop word.
+_FIRM_CUE = re.compile(rf"(?<![\w-])(?:Firma|Fa\.)\s(?P<name>{_ORG_TOKEN}(?:\s(?:&\s)?{_ORG_TOKEN}){{0,3}})")
+_FIRM_STOP = {"Firma", "Gesellschaft", "Unternehmen", "In", "Im", "Und", "Oder", "Mit", "Bei", "Von", "Vom", "Zu",
+              "Zur", "Am", "An", "Auf", "Für", "Nach", "Seit", "Der", "Die", "Das", "Den", "Dem", "Des", "Ein",
+              "Eine", "Es", "Er", "Sie", "Wir", "Ich", "Herr", "Herrn", "Frau"}
+
+
+class FirmCueRecognizer:
+    """Company names without a legal form, introduced by "Firma" or "Fa."."""
+
+    name = "organization_cue"
+    languages: frozenset[str] = frozenset({"de"})
+
+    def analyze(self, text: str, language: str) -> Iterable[Detection]:
+        for m in _FIRM_CUE.finditer(text):
+            tokens = m.group("name").split(" ")
+            kept: list[str] = []
+            for tok in tokens:
+                if tok in _FIRM_STOP or tok in NAME_STOPWORDS:
+                    break
+                kept.append(tok)
+            while kept and kept[-1] == "&":
+                kept.pop()
+            if not kept:
+                continue
+            value = " ".join(kept)
+            # A sentence-final full stop is no part of the name; an initial ("Firma B.") keeps its dot.
+            if value.endswith(".") and not re.search(rf"(?:^|[\s-])[{_UPPER}]{{1,3}}\.$", value):
+                value = value.rstrip(".")
+            if len(value) < 2:
+                continue
+            start = m.start("name")
+            yield make_detection(E.ORGANIZATION, Category.PERSONAL_DATA, start, start + len(value), value, 0.8,
+                                 self.name)
+
+
+FIRM_CUE = FirmCueRecognizer()
 
 
 ORGANIZATION = RegexRecognizer(
     "organization_legal_form", E.ORGANIZATION,
     # Token-start lookbehind instead of \b keeps the scan linear on long
     # unbroken runs such as "1.000.000..." (see test_scan_scales_linearly).
-    [Pattern(rf"(?<![\w&.'-])(?:[A-ZÄÖÜ0-9][\w&.'-]*\s){{1,4}}(?:{_LEGAL_FORMS})(?![\w])", 0.85)],
+    [Pattern(rf"(?<![\w&.'-])(?:{_ORG_TOKEN}\s){{1,4}}(?:{_LEGAL_FORMS})(?![\w])", 0.85)],
     postprocess=_trim_org,
 )
 
-# Latin letters of names common in Germany, not only German ones: García, Yıldız, Şahin, Wójcik, Đorđević,
-# Nguyễn. A narrower class silently dropped such names after "Herr"/"Zeugin", a gap that hits migrants hardest.
-_UPPER = "A-ZÀ-ÖØ-ÞĀĂĄĆĈĊČĎĐĒĖĘĚĞĠĢĪĮİĶĹĻĽŁŃŅŇŌŐŒŔŘŚŜŞŠŢŤŪŮŰŲŹŻŽ"
-_LOWER = "a-zß-öø-ÿāăąćĉċčďđēėęěğġģīįıķĺļľłńņňōőœŕřśŝşšţťūůűųźżžơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ"
+ORGANIZATION_HYPHEN = RegexRecognizer(
+    "organization_legal_form", E.ORGANIZATION,
+    [Pattern(rf"(?<![\w&.'’-])(?:{_ORG_TOKEN}\s){{0,2}}[{_UPPER}0-9][\w&.'’]*(?:-[{_UPPER}][\w.'’]*)*"
+             rf"-(?:{_HYPHEN_FORMS})(?![\w-])", 0.85)],
+    postprocess=_trim_hyphen_org,
+)
+
 _NAME = rf"[{_UPPER}](?:['’][{_UPPER}])?[{_LOWER}]+(?:-[{_UPPER}][{_LOWER}]+)?"
 _PARTICLE = r"(?:von der|van der|von|van|de la|de|zu|del)"
 _FULL_NAME = rf"{_NAME}(?:\s(?:{_PARTICLE}\s)?{_NAME}){{0,2}}"
@@ -640,7 +728,8 @@ def builtin_recognizers() -> list:
     return [
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
-        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, PERSON, SELF_INTRO, *LABELLED_IDS, IP_ADDRESS,
+        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, ORGANIZATION_HYPHEN, FIRM_CUE, PERSON, SELF_INTRO, *LABELLED_IDS,
+        IP_ADDRESS,
     ]
 
 

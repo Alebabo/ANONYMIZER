@@ -1,7 +1,7 @@
 {
   "split": "test",
   "docs": 56,
-  "seconds": 22.9,
+  "seconds": 22.2,
   "recall": {
     "ADDR": {
       "found": 3,
@@ -29,15 +29,15 @@
       "rate": 1.0
     },
     "ORG": {
-      "found": 7,
+      "found": 9,
       "total": 9,
-      "rate": 0.778
+      "rate": 1.0
     },
     "PER": {
-      "found": 813,
+      "found": 814,
       "total": 818,
-      "rate": 0.994
+      "rate": 0.995
     }
   },
-  "recall_all": 0.992
+  "recall_all": 0.995
 }
