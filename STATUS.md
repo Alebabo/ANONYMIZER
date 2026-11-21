@@ -26,7 +26,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `packages/core/src/anonymizer/detect/` | Regeln (`recognizers.py`), Kontextsignale (`context.py`), spaCy-NER (`ner.py`) |
 | `packages/core/src/anonymizer/policy/builtin/` | `banking-default`, `support-default`, **`legal-default`** |
 | `packages/core/src/anonymizer/{ler,courts,feedback}.py` | Trainingsdaten (German LER, Gerichtsentscheidungen), Feedback-Speicher |
-| `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py` |
+| `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py`, `local_eval.py` (Mess-Kit echte Kanzleitexte, `docs/local-eval.md`) |
 | `app/`, `components/`, `lib/` | Next.js-Dashboard: Tabs **Chat**, **Traces**, **CSV**; Settings: Policies, API Keys, Members, Feedback, Audit Logs |
 | `models/de_legal_ner/` | Feinjustierte NER-Gewichte für Rechtstexte (Git LFS, ~6 MB) |
 | `models/de_c24_ner/` | Feinjustierte NER-Gewichte für Support-Mails/Chats (Git LFS) |
@@ -102,7 +102,9 @@ Keine offenen Arbeitsbranches. Abgeschlossen und gemergt: `claude/ner-org-recall
    (oft keine personenbezogenen Daten). Noch nicht gemessen: GLiNER als zweiter Detektor, GermEval 2014.
    Siehe `docs/research/org-ner.md` und `docs/research/org-ner-results.md`.
 2. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
-3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud).
+3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
+   `docs/local-eval.md`, `packages/core/scripts/local_eval.py` (Vorannotation, Korrektur im Texteditor, `eval`, `report` nur mit Zahlen).
+   Offen: Durchführung in einer Kanzlei.
 4. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
    TF-IDF + logistische Regression: Macro-F1 0,44 im zeitlichen Split (3 Klassen; binär 0,62), Metadaten-Baselines
    0,29–0,36. Messbares, aber für ein Produkt zu schwaches Signal. Details und Reproduktion ohne Download:
