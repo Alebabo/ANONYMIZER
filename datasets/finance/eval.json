@@ -1,8 +1,8 @@
 {
   "gretel": {
     "docs": 453,
-    "seconds": 12.1,
-    "masked_recall": 0.654,
+    "seconds": 10.6,
+    "masked_recall": 0.655,
     "masked_precision_lower_bound": 0.372,
     "labels": {
       "name": {
@@ -12,8 +12,8 @@
       },
       "company": {
         "total": 436,
-        "masked": 0.644,
-        "typed": 0.589
+        "masked": 0.649,
+        "typed": 0.606
       },
       "street_address": {
         "total": 282,
@@ -154,9 +154,9 @@
   },
   "syntriq": {
     "docs": 687,
-    "seconds": 24.9,
+    "seconds": 25.1,
     "masked_recall": 0.905,
-    "masked_precision_lower_bound": 0.551,
+    "masked_precision_lower_bound": 0.55,
     "labels": {
       "PERSON": {
         "total": 2957,
@@ -257,7 +257,7 @@
   },
   "easyoctopus": {
     "docs": 176,
-    "seconds": 0.6,
+    "seconds": 0.7,
     "masked_recall": 0.586,
     "masked_precision_lower_bound": 0.702,
     "labels": {
