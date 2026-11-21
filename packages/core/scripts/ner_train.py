@@ -510,6 +510,8 @@ def main() -> None:
     ap.add_argument("--ler", type=Path, help="datasets/ler: add LER train docs (and use LER dev without gold.jsonl)")
     ap.add_argument("--ler-docs", type=int, default=0, help="LER train docs to use (0 = all)")
     ap.add_argument("--ler-repeat", type=int, default=1)
+    ap.add_argument("--org-repeat", type=int, default=0,
+                    help="extra copies of every LER train doc that has an organisation (weights ORG higher)")
     ap.add_argument("--org-augment", type=int, default=0,
                     help="copies of every LER/court train doc with a company, names replaced by synthetic ones")
     ap.add_argument("--courts", type=Path, help="datasets/courts: whole decisions with filled placeholders")
@@ -596,6 +598,8 @@ def main() -> None:
         if (ex := to_example(nlp, d.text, spans, missing)) is not None:
             ler_examples.append(ex)
     examples += ler_examples * args.ler_repeat
+    org_ex = [ex for ex in ler_examples if any(t.endswith("-ORG") for t in ex.to_dict()["doc_annotation"]["entities"])]
+    examples += org_ex * args.org_repeat
     partial = partial_examples(nlp, args.dir, args.partial)
     examples += partial * args.partial_repeat
     fb = feedback_examples(nlp, args.feedback)
@@ -614,7 +618,7 @@ def main() -> None:
     print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
           f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}, "
-          f"org-augmented ler docs {len(ler_aug)}")
+          f"org-augmented ler docs {len(ler_aug)}, ler docs with ORG {len(org_ex)} x{args.org_repeat} extra")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
@@ -648,7 +652,7 @@ def main() -> None:
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
                  "courts": len(court_ex), "courts_repeat": args.courts_repeat,
-                 "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
+                 "org_repeat": args.org_repeat, "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
                  "dev": "gold.jsonl" if gold else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
