@@ -132,10 +132,6 @@ class PasswordChange(_Strict):
     new_password: str = Field(min_length=1, max_length=1024)
 
 
-class ProxyUpstreamToggle(_Strict):
-    enabled: bool
-
-
 class ApiKeyCreate(_Strict):
     name: str = Field(min_length=1, max_length=100)
     role: Literal["user", "admin"] = "user"
@@ -157,23 +153,6 @@ class MemberUpdate(_Strict):
 class OrganizationUpdate(_Strict):
     name: str | None = Field(None, min_length=1, max_length=100)
     trace_retention_days: int | None = Field(None, ge=1, le=3650)
-
-
-class PromptMessageIn(_Strict):
-    role: str = Field(min_length=1, max_length=32)
-    content: str
-
-
-class PromptCreate(_Strict):
-    name: str = Field(min_length=1, max_length=128)
-    prompt: str | list[PromptMessageIn]
-    config: dict[str, Any] = Field(default_factory=dict)
-    note: str | None = Field(None, max_length=500)
-
-
-class PromptLabelSet(_Strict):
-    version: int = Field(ge=1)
-    label: str = Field(min_length=1, max_length=32)
 
 
 class PlaygroundUpload(_Strict):

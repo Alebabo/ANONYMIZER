@@ -1,7 +1,7 @@
 """Playground: upload a CSV, query it, and see exactly what an AI client would receive.
 
 A dataset is a CSV file stored in SQLite (``ANONYMIZER_PLAYGROUND_DB``, default ``data/playground.db``),
-scoped to one organization. Queries run the same protection as the MCP proxy (:class:`ResultFilter`):
+scoped to one organization. Queries run the structured-result protection (:class:`~anonymizer.result_filter.ResultFilter`):
 rows are sent as a JSON array, column names act as field hints (``vorname``, ``email``, ``iban`` ...),
 and values learned from hinted columns are also found in free-text columns.
 
@@ -30,8 +30,7 @@ from typing import Any, Callable
 import mcp_types as types
 
 from anonymizer.accounts import Principal
-from anonymizer.proxy.config import DEFAULT_FIELD_HINTS
-from anonymizer.proxy.filter import KnownValues, ResultFilter
+from anonymizer.result_filter import DEFAULT_FIELD_HINTS, KnownValues, ResultFilter
 from anonymizer.tracing import Trace, TraceStep, TraceStore
 from anonymizer.vault import InMemoryVault, VaultKey
 
@@ -290,7 +289,7 @@ class PlaygroundService:
               columns: list[str] | None = None, limit: int = 20, offset: int = 0,
               include_original: bool = False, client: str = "api") -> dict[str, Any]:
         """Filter rows (case-insensitive substring over all or the given columns), protect them as one JSON
-        result and return what the client receives. Protection is the MCP proxy filter."""
+        result and return what the client receives. Protection is the structured-result filter (ResultFilter)."""
         t0 = time.perf_counter()
         ds = self.store.get(principal.org_id, dataset_id)
         if ds is None:

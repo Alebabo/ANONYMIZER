@@ -15,7 +15,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - anonymizer-data:/data
-      # Conversation access with the synthetic example (docs/conversations.md):
+      # Example detection patterns (ANONYMIZER_CUSTOM_PATTERNS=/examples/patterns.yaml):
       # - ./examples/support:/examples:ro
     read_only: true
     tmpfs:

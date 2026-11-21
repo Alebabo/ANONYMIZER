@@ -262,16 +262,7 @@ def test_audit_log_has_no_mutation_api():
     assert not any(hasattr(AuditLog, m) for m in ("update", "delete", "purge"))
 
 
-# --- gateway status, retention, CLI -----------------------------------------------------------------
-
-def test_gateway_status_hides_credentials(env):
-    env = {**env, "ANONYMIZER_UPSTREAM_URL": "https://user:pw@api.example.com/v1", "ANONYMIZER_UPSTREAM_KEY": "sk-secret"}
-    c = TestClient(create_app(Settings.from_env(env)))
-    body = c.get("/v1/gateway", headers=login(c)).json()
-    assert body["external"] == {"host": "https://api.example.com", "provider": "openai", "model": None,
-                                "authenticated": True}
-    assert "sk-secret" not in json.dumps(body) and "pw@" not in json.dumps(body)
-
+# --- retention, CLI -----------------------------------------------------------------
 
 def test_org_retention_is_applied(env, client):
     from anonymizer.tracing import Trace, TraceStore

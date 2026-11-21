@@ -11,63 +11,61 @@ export const exampleInfo: Info = {
 const base = Date.now() / 1000;
 export const exampleTraces: Trace[] = [
   {
-    id: "req_5d1a7c3e90b2", created_at: base - 60, route: "/mcp/proxy", client: "mcp", actor: "claude-code", outcome: "local_only", allowed: false,
+    id: "req_5d1a7c3e90b2", created_at: base - 60, route: "/v1/playground", client: "mcp", actor: "claude-code", outcome: "local_only", allowed: false,
     risk: "critical", needs_review: false, policy: "support-default@v1", policy_hash: "sha256:4be1…",
-    destination: "external", provider: "mcp", model: "demo", language: "de", latency_ms: 48.2, status: 200,
+    destination: "external", provider: "playground", model: "kunden-beispiel.csv", language: "de", latency_ms: 48.2, status: 200,
     error: null, entity_counts: { person: 7, email: 3, phone: 3, iban: 3, health_data: 1, address: 1 },
     risk_counts: { critical: 4, sensitive: 14 },
     actions: { "person:pseudonymize": 7, "email:pseudonymize": 3, "phone:pseudonymize": 3, "iban:redact": 3,
       "health_data:local_only": 1, "address:pseudonymize": 1 }, transformations: 17, signals: [], warnings: [],
-    upstream: "demo", tool: "get_customers", mode: "enforce",
+    upstream: "playground", tool: "query_dataset", mode: "enforce", resource: "ds_demo000001",
     fields: { "$.vorname": { person: 3 }, "$.nachname": { person: 3 }, "$.email": { email: 3 },
       "$.telefon": { phone: 3 }, "$.iban": { iban: 3 }, "$.notiz": { person: 1, health_data: 1, address: 1 } },
     steps: [
-      { name: "Tool call", detail: "demo · get_customers", status: "ok" },
-      { name: "Upstream response", detail: "3 content block(s) in 12 ms", status: "ok" },
-      { name: "Privacy detection", detail: "20 values analysed · 19 entities in 6 field(s) · 3 by field name", status: "ok" },
-      { name: "Policy evaluation", detail: "support-default@v1 → local_only · 1 value(s) withheld", status: "blocked" },
-      { name: "Anonymization", detail: "17 transformations · 0 non-text block(s) withheld", status: "ok" },
+      { name: "Tool call", detail: "playground · mcp · kunden-beispiel.csv", status: "ok" },
+      { name: "Query", detail: "3 matching row(s) of 3 · returned 3", status: "ok" },
+      { name: "Privacy detection", detail: "20 values analysed · 19 changed · 15 by column name · 1 known value(s)", status: "ok" },
+      { name: "Policy evaluation", detail: "support-default · 1 value(s) withheld", status: "blocked" },
     ],
   },
   {
-    id: "req_9e4f02b7c6d1", created_at: base - 90, route: "/mcp/proxy", client: "mcp", actor: "claude-code", outcome: "allow", allowed: true,
+    id: "req_9e4f02b7c6d1", created_at: base - 90, route: "/v1/playground", client: "dashboard", actor: "admin@kanzlei.example", outcome: "allow", allowed: true,
     risk: "critical", needs_review: false, policy: "support-default@v1", policy_hash: "sha256:4be1…",
-    destination: "external", provider: "mcp", model: "demo", language: "de", latency_ms: 21.6, status: 200,
+    destination: "external", provider: "playground", model: "kunden-beispiel.csv", language: "de", latency_ms: 21.6, status: 200,
     error: null, entity_counts: { person: 3, phone: 1, iban: 1 }, risk_counts: { critical: 1, sensitive: 4 },
     actions: { "person:pseudonymize": 3, "phone:pseudonymize": 1, "iban:redact": 1 }, transformations: 5,
-    signals: [], warnings: [], upstream: "demo", tool: "get_tickets", mode: "observe",
-    fields: { "$.text": { person: 3, phone: 1, iban: 1 } },
+    signals: [], warnings: [], upstream: "playground", tool: "dashboard", mode: "enforce", resource: "ds_demo000001",
+    fields: { "$[].anliegen": { person: 3, phone: 1, iban: 1 } },
     steps: [
-      { name: "Tool call", detail: "demo · get_tickets", status: "ok" },
-      { name: "Privacy detection", detail: "6 values analysed · 5 entities in 1 field(s) · 1 known value(s) in free text", status: "ok" },
-      { name: "Observe mode", detail: "original result returned · 2 value(s) would have been changed", status: "warning" },
+      { name: "Tool call", detail: "playground · dashboard · kunden-beispiel.csv", status: "ok" },
+      { name: "Query", detail: "1 matching row(s) of 3 for 'rückruf' · returned 1", status: "ok" },
+      { name: "Privacy detection", detail: "6 values analysed · 5 changed · 0 by column name · 1 known value(s)", status: "ok" },
+      { name: "Policy evaluation", detail: "support-default · 0 value(s) withheld", status: "ok" },
     ],
   },
   {
-    id: "req_8f29a1c0d2e4", created_at: base - 120, route: "/v1/chat/completions", client: "api", actor: "support-bot", outcome: "allow", allowed: true,
+    id: "req_8f29a1c0d2e4", created_at: base - 120, route: "/v1/protect", client: "api", actor: "support-bot", outcome: "allow", allowed: true,
     risk: "critical", needs_review: false, policy: "banking-default@v1", policy_hash: "sha256:c9218375…",
-    destination: "external", provider: "openai", model: "gpt-4o", language: "de", latency_ms: 182.3, status: 200,
+    destination: "external", provider: null, model: null, language: "de", latency_ms: 82.3, status: 200,
     error: null, entity_counts: { person: 2, iban: 1, case_number: 1 }, risk_counts: { critical: 2, sensitive: 2 },
     actions: { "person:pseudonymize": 2, "iban:redact": 1, "case_number:pseudonymize": 1 }, transformations: 4,
     signals: ["client_relationship"], warnings: [],
     steps: [
-      { name: "Request received", detail: "POST /v1/chat/completions · 2 text part(s)", status: "ok" },
+      { name: "Request received", detail: "/v1/protect", status: "ok" },
       { name: "Privacy detection", detail: "4 entities detected", status: "ok" },
       { name: "Classification", detail: "risk critical", status: "ok" },
       { name: "Policy evaluation", detail: "banking-default@v1 → allow", status: "ok" },
       { name: "Anonymization", detail: "4 transformations applied", status: "ok" },
-      { name: "Provider request", detail: "openai · gpt-4o · HTTP 200", status: "ok" },
-      { name: "Response restore", detail: "2 placeholder(s) restored, 0 unknown", status: "ok" },
     ],
   },
   {
-    id: "req_41c07e9b11aa", created_at: base - 300, route: "/v1/chat/completions", client: "api", actor: "support-bot", outcome: "local_only", allowed: false,
+    id: "req_41c07e9b11aa", created_at: base - 300, route: "/v1/protect", client: "api", actor: "support-bot", outcome: "local_only", allowed: false,
     risk: "critical", needs_review: false, policy: "banking-default@v1", policy_hash: "sha256:c9218375…",
-    destination: "external", provider: "openai", model: "gpt-4o", language: "de", latency_ms: 64.1, status: 403,
+    destination: "external", provider: null, model: null, language: "de", latency_ms: 64.1, status: 200,
     error: null, entity_counts: { person: 1, health_data: 1 }, risk_counts: { critical: 2 },
     actions: { "person:pseudonymize": 1, "health_data:local_only": 1 }, transformations: 0, signals: [], warnings: [],
     steps: [
-      { name: "Request received", detail: "POST /v1/chat/completions · 1 text part(s)", status: "ok" },
+      { name: "Request received", detail: "/v1/protect", status: "ok" },
       { name: "Privacy detection", detail: "2 entities detected", status: "ok" },
       { name: "Classification", detail: "risk critical", status: "ok" },
       { name: "Policy evaluation", detail: "banking-default@v1 → local_only", status: "blocked" },
@@ -174,15 +172,9 @@ export const exampleAudit: AuditEntry[] = [
     after: { id: "usr_3f1a9c0b7d2e", email: "admin@kanzlei.example", role: "admin", disabled: false } }),
 ];
 
-// -- conversations & prompts (synthetic) -------------------------------------------
+// -- playground (synthetic) ----------------------------------------------------------
 
-export const exampleSources: SourcesInfo = {
-  conversations: { kind: "langfuse", location: "https://langfuse.internal.example", daily_limit: 200, min_group: 10,
-                   stable_placeholders: true },
-  conversation_policy: "support-default",
-  prompts: { backend: "langfuse", location: "https://langfuse.internal.example" },
-  mcp_http: true,
-};
+export const exampleSources: SourcesInfo = { playground_policy: "support-default", mcp_http: true };
 
 export const exampleDatasets: Dataset[] = [
   { id: "ds_demo000001", name: "kunden-beispiel.csv", columns: ["kunden_id", "vorname", "nachname", "email", "iban", "anliegen"],

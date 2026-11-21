@@ -32,7 +32,7 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 
 - **Header:** `Authorization: Bearer <key>` or `X-API-Key: <key>`. The same header carries dashboard session tokens.
 - **API keys** are created in the dashboard (API Keys) or set as environment variables. Every key belongs to one organization; see [accounts.md](accounts.md).
-- **User keys** (`ANONYMIZER_API_KEYS` or role `user`): scan, classify, anonymize, protect, documents, gateway, read traces and policies.
+- **User keys** (`ANONYMIZER_API_KEYS` or role `user`): scan, classify, anonymize, protect, documents, read traces and policies.
 - **Admin keys** (`ANONYMIZER_ADMIN_KEYS` or role `admin`): in addition `POST /v1/restore`, `POST /v1/policies` and account management. If no admin key exists, restore and policy writes are disabled.
 - **Environment keys are optional.** Without any key the API starts but refuses every request. Keys need at least 24 characters, and admin keys must differ from API keys.
 
@@ -47,10 +47,8 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 | POST | `/v1/anonymize` | API | Anonymize; `namespace` enables reversible pseudonyms |
 | POST | `/v1/protect` | API | Full pipeline with policy; returns `text` only when allowed |
 | POST | `/v1/documents/protect` | API | Upload PDF/DOCX/TXT (multipart); DOCX comes back anonymized in place |
-| POST | `/v1/chat/completions` | API | OpenAI-compatible gateway (see [gateway.md](gateway.md)) |
 | GET | `/v1/traces`, `/v1/traces/{id}` | API | Metadata-only traces with decision history; every model call (scan, classify, anonymize, protect, MCP) is one, with `client` (api / mcp / dashboard) and `actor`. Filter: `?client=`, `?route=` |
 | GET | `/v1/metrics` | API | Aggregated privacy metrics |
-| GET | `/v1/gateway` | API | Gateway configuration without credentials |
 | POST | `/v1/restore` | Admin key | Resolve placeholders via the vault (audited) |
 | GET | `/v1/policies` | API | Policies (latest version, hash, scope) |
 | GET | `/v1/policies/{name}` | API | Policy (`?version=`, `?effective=true` resolves `extends`) |
@@ -64,15 +62,12 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 | POST | `/v1/feedback` | API | Correction from the Chat tab: `spans` with `kind` `missed` (+ type) or `wrong`. Stores the text (test data only); audited without text |
 | GET, DELETE | `/v1/feedback`, `/v1/feedback/{id}` | Admin | List (with text) and delete corrections |
 | GET | `/v1/feedback/export` | Admin | All corrections as gold JSONL for `ner_train.py --feedback` (audited) |
-| GET | `/v1/sources` | API | Connected conversation source and prompt store (type and host only) |
-| GET | `/v1/conversations`, `/v1/conversations/{id}`, `/v1/conversations/stats`, `/v1/conversations/quota` | API | Protected customer conversations, see [conversations.md](conversations.md) |
-| GET/POST | `/v1/prompts`, `/v1/prompts/{name}`, `.../history`, `.../diff` | API | Prompt versions and drafts, see [prompts.md](prompts.md) |
-| POST | `/v1/prompts/{name}/labels` | Admin | Promote a prompt version (audited) |
+| GET | `/v1/sources` | API | Policy used by the playground (`playground_policy`, set with `ANONYMIZER_PLAYGROUND_POLICY`) and whether `/mcp` is on |
 | POST | `/mcp` | API | MCP over streamable HTTP when `ANONYMIZER_MCP_HTTP=1`, see [mcp.md](mcp.md) |
 
 Login, members, API keys and the audit log: [accounts.md](accounts.md).
 
-The gateway from the spec is implemented as the OpenAI-compatible `POST /v1/chat/completions`.
+The OpenAI-compatible gateway (`/v1/chat/completions`), the MCP proxy (`/proxy/mcp`), conversation access (`/v1/conversations`) and prompt management (`/v1/prompts`) were removed in November 2026 because they had no UI; they are in the git history.
 
 ### Examples
 

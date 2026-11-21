@@ -76,16 +76,16 @@ class Trace(BaseModel):
     signals: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     steps: list[TraceStep] = Field(default_factory=list)
-    # MCP proxy: which upstream tool produced the data, and where in the result entities were found
+    # Structured results (playground): source and tool, and where in the result entities were found
     # (JSON paths with array indices collapsed, e.g. "$.rows[].email" -> {"email": 12}). No values.
     upstream: str | None = None
     tool: str | None = None
     mode: str | None = None  # enforce | observe
     fields: dict[str, dict[str, int]] = Field(default_factory=dict)
-    # MCP proxy: size of the call arguments and of the result handed to the model (characters of text).
+    # Size of the call arguments and of the result handed to the model (characters of text; older MCP proxy traces).
     args_chars: int | None = None
     result_chars: int | None = None
-    # What was read (e.g. conversation id). Content: only kept when the store allows it (see module doc).
+    # What was read (e.g. playground dataset id). Content: only kept when the store allows it (see module doc).
     resource: str | None = None
     content: list[ContentItem] = Field(default_factory=list)
     # Who used the model and how: api | mcp | dashboard, and the key name or user e-mail (never a secret).
@@ -150,7 +150,7 @@ def trace_from_protect(route: str, result: Any, latency_ms: float | None = None,
 
 
 def merge_traces(route: str, parts: list[Trace], **extra: Any) -> Trace:
-    """Combine per-message traces (gateway) into one request trace."""
+    """Combine per-part traces (e.g. the values of one playground query) into one request trace."""
     order = ["allow", "review", "local_only", "block"]
     risks = ["low", "sensitive", "critical"]
     outcome = max((p.outcome for p in parts if p.outcome), key=order.index, default="allow")
@@ -305,7 +305,7 @@ class TraceStore:
         series = [{"t": h, **{k: buckets.get(h, Counter()).get(k, 0) for k in keys}}
                   for h in range(start, int(now) + 1, step)]
 
-        # Per operation: MCP proxy tool, else route.
+        # Per operation: upstream__tool (playground, older MCP proxy traces), else route.
         ops: dict[str, dict[str, Any]] = {}
         for t in traces:
             key = f"{t.upstream}__{t.tool}" if t.upstream and t.tool else t.route

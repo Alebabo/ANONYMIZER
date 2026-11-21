@@ -39,7 +39,7 @@ export default async function Playground({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader title="Playground"
-                  description="Upload a CSV, query it and see exactly what Claude receives. Uses the same protection as the MCP proxy; column names count as hints (vorname, email, iban …)."
+                  description="Upload a CSV, query it and see exactly what Claude receives. Rows are protected value by value; column names count as hints (vorname, email, iban …)."
                   meta={<span className="bg-light-yellow text-dark-yellow rounded-md px-1.5 py-0.5">Test data only</span>} />
       <SourceBanner source={source} />
       <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[280px_1fr]">

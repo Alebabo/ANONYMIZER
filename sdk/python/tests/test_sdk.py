@@ -82,30 +82,3 @@ def test_errors(app):
         OpenAnonymizer(api_key=None)
 
 
-def test_conversations_and_prompts(tmp_path):
-    import json
-
-    src = tmp_path / "c.jsonl"
-    src.write_text(json.dumps({"id": "s1", "created_at": 1762905600, "tags": ["billing"], "messages": [
-        {"role": "user", "content": "Mein Name ist Max Mustermann."}]}) + "\n", encoding="utf-8")
-    app = TestClient(create_app(Settings.from_env({
-        "ANONYMIZER_API_KEYS": USER, "ANONYMIZER_ADMIN_KEYS": ADMIN, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"),
-        "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:",
-        "ANONYMIZER_SOURCE": "jsonl", "ANONYMIZER_SOURCE_PATH": str(src), "ANONYMIZER_CONVERSATIONS_DB": ":memory:",
-        "ANONYMIZER_PROMPTS": "local", "ANONYMIZER_PROMPTS_DB": ":memory:"})))
-    anonymizer = client(app)
-    assert anonymizer.sources().conversations["kind"] == "jsonl"
-    page = anonymizer.conversations()
-    conv = anonymizer.conversation(page.data[0]["id"])
-    assert "PERSON_001" in conv.messages[0]["content"] and "Mustermann" not in json.dumps(conv)
-    assert anonymizer.conversation_quota().used == 1
-    assert anonymizer.conversation_stats("tag").total is None  # 1 conversation < k
-    v = anonymizer.create_prompt("bot", "Du bist ein Assistent. Sprich {{name}} an.")
-    with pytest.raises(AnonymizerError) as exc:
-        anonymizer.create_prompt("bot", "Grüße an Max Mustermann")
-    assert exc.value.status == 422
-    with pytest.raises(AnonymizerError):
-        anonymizer.set_prompt_label("bot", v.version)
-    assert client(app, ADMIN).set_prompt_label("bot", v.version).version == 1
-    assert anonymizer.prompt("bot", label="production").version == 1
-    assert [p.name for p in anonymizer.prompts()] == ["bot"] and len(anonymizer.prompt_history("bot")) == 1
