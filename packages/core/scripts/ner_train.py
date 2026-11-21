@@ -333,6 +333,32 @@ def partial_examples(nlp, base: Path, files: list[Path]) -> list[Example]:
     return out
 
 
+def feedback_examples(nlp, files: list[Path]) -> list[Example]:
+    """Corrections exported from the Chat tab (GET /v1/feedback/export): marked persons, organisations and places
+    are entities, wrongly detected strings are O, every other token is left out of the loss."""
+    out = []
+    for f in files:
+        for line in f.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            text = row["text"]
+            doc = nlp.make_doc(text)
+            tags = ["-"] * len(doc)
+            for s in row["spans"]:
+                span = doc.char_span(s["start"], s["end"], alignment_mode="expand")
+                if span is None or s["label"] not in ("PER", "ORG", "LOC"):
+                    continue  # rule types (case numbers, courts, …) are not NER labels
+                for k, i in enumerate(range(span.start, span.end)):
+                    tags[i] = ("U-" if len(span) == 1 else "B-" if k == 0 else "L-" if i == span.end - 1 else "I-") \
+                        + s["label"]
+            for r in row.get("reject", []):
+                for t in doc:
+                    if t.idx < r["end"] and r["start"] < t.idx + len(t.text) and tags[t.i] == "-":
+                        tags[t.i] = "O"
+            if any(t != "-" for t in tags):
+                out.append(Example.from_dict(doc, {"entities": tags}))
+    return out
+
+
 def evaluate(nlp_path_or_obj, docs) -> dict:
     rec = SpacyRecognizer({"de": "de_core_news_lg", "en": "en_core_web_lg"}, NAME_STOPWORDS | NER_STOPWORDS,
                           keep=list(DEFAULT_KEEP))
@@ -364,6 +390,8 @@ def main() -> None:
     ap.add_argument("--ler", type=Path, help="datasets/ler: add LER train docs (and use LER dev without gold.jsonl)")
     ap.add_argument("--ler-docs", type=int, default=0, help="LER train docs to use (0 = all)")
     ap.add_argument("--ler-repeat", type=int, default=1)
+    ap.add_argument("--feedback", type=Path, nargs="*", default=[], help="feedback.jsonl from GET /v1/feedback/export")
+    ap.add_argument("--feedback-repeat", type=int, default=3)
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
                     "epochs that beat its dev score are saved")
     args = ap.parse_args()
@@ -442,8 +470,11 @@ def main() -> None:
     examples += ler_examples * args.ler_repeat
     partial = partial_examples(nlp, args.dir, args.partial)
     examples += partial * args.partial_repeat
+    fb = feedback_examples(nlp, args.feedback)
+    examples += fb * args.feedback_repeat
     print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
-          f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}")
+          f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
+          f"feedback {len(fb)} x{args.feedback_repeat}")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
@@ -475,6 +506,7 @@ def main() -> None:
         "data": {"germeval": n_ge, "synthetic": n_syn, "gold_train": len(gold_examples),
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
+                 "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
                  "dev": "gold.jsonl" if gold else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")

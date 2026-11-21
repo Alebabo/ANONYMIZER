@@ -127,6 +127,31 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 /** Unauthenticated login call (used by the login server action only). */
+/** Raw text of an API response (e.g. a JSONL export); same auth and error handling as api(). */
+export async function apiText(path: string): Promise<string> {
+  const t = await token();
+  if (!t) redirect("/login");
+  const res = await fetch(`${base()}${path}`, { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" });
+  if (res.status === 401) redirect("/login?expired=1");
+  if (!res.ok) throw new ApiError(res.status, `OpenAnonymizer API ${res.status}`);
+  return res.text();
+}
+
+export type FeedbackRow = {
+  id: string; created_at: number; created_by: string | null; text: string; policy: string | null; trace_id: string | null;
+  spans: { start: number; end: number; kind: "missed" | "wrong"; label: string }[];
+};
+/** Admins only (raw text); members get null. */
+export const getFeedback = async () => {
+  if (isDemo()) return { data: [] as FeedbackRow[], source: { live: false, reason: "API not connected (ANONYMIZER_API_URL)" } as Source };
+  try {
+    return { data: await api<FeedbackRow[]>("/v1/feedback"), source: { live: true } as Source };
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 403) return { data: null, source: { live: true } as Source };
+    throw e;
+  }
+};
+
 export async function apiLogin(email: string, password: string) {
   const res = await fetch(`${base()}/v1/auth/login`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }),

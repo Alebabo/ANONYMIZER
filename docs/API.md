@@ -61,6 +61,9 @@ ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 | GET | `/v1/playground/datasets` | API | Playground uploads; `columns` lists visible columns only |
 | PUT | `/v1/playground/datasets/{id}/columns` | Dashboard session | Hide columns (`{"hidden": [...]}`): never searched, shown or sent, also not over MCP (audited) |
 | POST | `/v1/playground/datasets/{id}/query` | API | Protected rows of an upload |
+| POST | `/v1/feedback` | API | Correction from the Chat tab: `spans` with `kind` `missed` (+ type) or `wrong`. Stores the text (test data only); audited without text |
+| GET, DELETE | `/v1/feedback`, `/v1/feedback/{id}` | Admin | List (with text) and delete corrections |
+| GET | `/v1/feedback/export` | Admin | All corrections as gold JSONL for `ner_train.py --feedback` (audited) |
 | GET | `/v1/sources` | API | Connected conversation source and prompt store (type and host only) |
 | GET | `/v1/conversations`, `/v1/conversations/{id}`, `/v1/conversations/stats`, `/v1/conversations/quota` | API | Protected customer conversations, see [conversations.md](conversations.md) |
 | GET/POST | `/v1/prompts`, `/v1/prompts/{name}`, `.../history`, `.../diff` | API | Prompt versions and drafts, see [prompts.md](prompts.md) |

@@ -5,6 +5,7 @@ import { ArrowUp, Trash2 } from "lucide-react";
 import { protectText, type ChatResult } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/widgets";
+import { Feedback } from "./feedback";
 import { cn } from "@/lib/utils";
 
 type Turn = { id: number; input: string; policy: string; result?: ChatResult };
@@ -21,7 +22,7 @@ function Highlighted({ text }: { text: string }) {
 /** "health_data (det_f471c2df3296) → local_only" twice -> "health_data → local_only": no internal ids, no repeats. */
 const reasons = (rs: string[]) => [...new Set(rs.map(x => x.replace(/\s*\(det_[0-9a-f]+\)/g, "")))];
 
-function Answer({ r }: { r?: ChatResult }) {
+function Answer({ r, onCorrect }: { r?: ChatResult; onCorrect?: () => void }) {
   if (!r) return <div className="text-muted-foreground animate-pulse text-sm">Anonymizing…</div>;
   if ("error" in r) return <div className="bg-light-red text-dark-red rounded-md px-3 py-2 text-sm">{r.error}</div>;
   return (
@@ -38,6 +39,7 @@ function Answer({ r }: { r?: ChatResult }) {
         {Object.entries(r.entities).sort((a, b) => b[1] - a[1]).map(([k, n]) => <Chip key={k}>{k} {n}</Chip>)}
         {!Object.keys(r.entities).length && <span className="text-muted-foreground">nothing personal found</span>}
         <span className="text-muted-foreground ml-auto">{r.policy}</span>
+        {onCorrect && <button type="button" onClick={onCorrect} className="text-link hover:text-link-hover">Correct detection</button>}
         {r.trace_id && <Link href={`/traces/${r.trace_id}`} className="text-link hover:text-link-hover">Trace →</Link>}
       </div>
     </div>
@@ -47,6 +49,7 @@ function Answer({ r }: { r?: ChatResult }) {
 /** Type a text, get back what the model would receive. Each message is one traced call (client "dashboard"). */
 export function Chat({ policies, defaultPolicy }: { policies: string[]; defaultPolicy: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [correcting, setCorrecting] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [policy, setPolicy] = useState(defaultPolicy);
   const [pending, start] = useTransition();
@@ -78,7 +81,13 @@ export function Chat({ policies, defaultPolicy }: { policies: string[]; defaultP
         {turns.map(t => (
           <div key={t.id} className="mx-auto max-w-3xl space-y-2">
             <div className="bg-muted ml-auto w-fit max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words">{t.input}</div>
-            <div className="max-w-[85%]"><Answer r={t.result} /></div>
+            <div className="max-w-[85%]">
+              <Answer r={t.result} onCorrect={t.result && !("error" in t.result) ? () => setCorrecting(t.id) : undefined} />
+            </div>
+            {correcting === t.id && t.result && !("error" in t.result) && (
+              <Feedback text={t.input} detections={t.result.detections} policy={t.policy} traceId={t.result.trace_id}
+                        onClose={() => setCorrecting(null)} />
+            )}
           </div>
         ))}
         <div ref={end} />
