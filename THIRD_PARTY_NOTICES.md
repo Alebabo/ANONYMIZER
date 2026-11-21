@@ -33,3 +33,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## German LER dataset (CC BY 4.0)
+
+`datasets/ler/` is derived from the German Legal Entity Recognition dataset by Elena Leitner, Georg Rehm and
+Julián Moreno-Schneider (2019), https://github.com/elenanereiss/Legal-Entity-Recognition, licensed under
+CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Changes: tokens joined into running text, sentences
+grouped into documents, labels mapped to OpenAnonymizer's types, and anonymized names, companies and places in
+the published decisions replaced by synthetic values (`packages/core/src/anonymizer/ler.py`). The underlying
+court decisions are official works without copyright (§ 5 UrhG).

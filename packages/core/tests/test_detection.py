@@ -261,3 +261,29 @@ def test_keep_terms_leave_own_brands_unchanged():
     found = [text[d.start:d.end] for d in kept.detections]
     assert not any(v.startswith("ACME") for v in found)
     assert any("Schmidt" in v for v in found)
+
+
+# --- legal references (measured on German LER, see datasets/ler) ----------------------------------------
+LEGAL_FOUND = [
+    ("Die Befristung verstößt gegen § 14 Abs. 2 Satz 2 TzBfG.", "legal_citation", "§ 14 Abs. 2 Satz 2 TzBfG"),
+    ("Zulassungsgrund nach § 160 Abs 2 Nr 3 SGG liegt nicht vor.", "legal_citation", "§ 160 Abs 2 Nr 3 SGG"),
+    ("Anspruch aus § 2 Abs 1 S 3 SGB V besteht.", "legal_citation", "§ 2 Abs 1 S 3 SGB V"),
+    ("vgl. BVerfGE 76, 253 < 255 >", "legal_citation", "BVerfGE 76, 253"),
+    ("so Greger, in: Zöller, ZPO, 31. Auflage 2016, § 3 Rn. 4", "legal_citation", "Greger, in: Zöller, ZPO, 31. Auflage"),
+    ("BVerwG, Urteil vom 18. März 2016 - 6 C 6.15 - Rn. 25", "case_number", "6 C 6.15"),
+    ("BPatG, Beschluss vom 6. August 2015 - 25 W (pat) 14/14", "case_number", "25 W (pat) 14/14"),
+    ("Die Entscheidung des Bundesverfassungsgerichts ist bindend.", "court", "Bundesverfassungsgerichts"),
+    ("Das LSG hat die Berufung zurückgewiesen.", "court", "LSG"),
+]
+
+
+@pytest.mark.parametrize("text,etype,value", LEGAL_FOUND)
+def test_legal_references_are_found(text, etype, value):
+    found = [(d.entity_type, text[d.start:d.end]) for d in scan(text, language="de").detections]
+    assert (etype, value) in found
+
+
+def test_company_forms_are_not_courts_and_private_names_are_not_authors():
+    types = {d.entity_type for d in
+             scan("Die Siemens AG klagt. Herr Max Müller, wohnhaft in Köln, verweist auf Rn. 5.", language="de").detections}
+    assert "court" not in types and "legal_citation" not in types
