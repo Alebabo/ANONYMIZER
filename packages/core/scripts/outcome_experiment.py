@@ -384,9 +384,18 @@ def cmd_build(base: Path) -> None:
 
 # ------------------------------------------------------------------------------------------------ train
 
+PACK = Path("datasets/outcome/raw/decisions.jsonl.gz")
+
+
 def load_cases(base: Path) -> list[dict]:
-    with gzip.open(base / "cases.jsonl.gz", "rt", encoding="utf-8") as fh:
-        return [json.loads(line) for line in fh]
+    """Gebaute Fälle aus local/outcome/cases.jsonl.gz, sonst das committete Paket (ohne HF-Download nutzbar)."""
+    path = base / "cases.jsonl.gz"
+    if not path.exists():
+        path = PACK
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh]
+    rows.sort(key=lambda r: r["id"])  # Reihenfolge fest -> Splits reproduzierbar
+    return [{k: r[k] for k in ("id", "court", "level", "date", "file_number", "label", "tenor", "x")} for r in rows]
 
 
 # Offensichtliche Ausgangsphrasen für die Leakage-Probe.
@@ -551,12 +560,32 @@ def cmd_eval(base: Path, out: Path) -> None:
     # Handprüfungen (von Hand ausgefüllt, siehe datasets/outcome/label_check_runde*.json)
     res["label_check"] = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(out.glob("label_check_runde*.json"))}
     (out / "results.json").write_text(json.dumps(res, indent=1, ensure_ascii=False))
-    # Kleine Labeldatei (ohne Text): id, Gericht, Datum, Aktenzeichen, Label
-    with open(out / "labels.csv", "w", encoding="utf-8") as fh:
-        fh.write("id,court,date,file_number,label\n")
-        for c in sorted(load_cases(base), key=lambda c: c["id"]):
-            fh.write(f'{c["id"]},"{c["court"]}",{c["date"]},"{c["file_number"]}",{c["label"]}\n')
-    print(f"-> {out / 'results.json'}, {out / 'labels.csv'}")
+    # Labels + Split-Zuordnung (klein) und Paket mit Texten (damit build/train ohne HF-Download laufen)
+    import csv  # noqa: PLC0415
+
+    cases = load_cases(base)
+    member: dict[int, dict[str, str]] = {c["id"]: {} for c in cases}
+    for sname, (tr, te) in splits(cases).items():
+        for i in tr:
+            member[cases[i]["id"]][sname] = "train"
+        for i in te:
+            member[cases[i]["id"]][sname] = "test"
+    names = ["zufaellig", "zeitlich", "gericht", "zeitlich+gericht"]
+    src = {"ArbG": "tenor_arbg", "LAG": "lag_tatbestand_wiedergabe_arbg_urteil"}
+    with open(out / "labels.csv", "w", encoding="utf-8", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["id", "court", "level", "date", "file_number", "label", "label_quelle"]
+                   + [f"split_{n}" for n in names])
+        for c in cases:
+            w.writerow([c["id"], c["court"], c["level"], c["date"], c["file_number"], c["label"], src[c["level"]]]
+                       + [member[c["id"]].get(n, "-") for n in names])
+    if (base / "cases.jsonl.gz").exists():
+        PACK.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(PACK, "wt", encoding="utf-8", compresslevel=9) as fh:
+            for c in cases:
+                fh.write(json.dumps({**c, "type": "Urteil", "label_quelle": src[c["level"]],
+                                     "splits": member[c["id"]]}, ensure_ascii=False, sort_keys=True) + "\n")
+    print(f"-> {out / 'results.json'}, {out / 'labels.csv'}, {PACK}")
 
 
 HF_REPO = "openlegaldata/court-decisions-germany"
