@@ -52,11 +52,28 @@ def cmd_download(base: Path) -> None:
         print(f"{f}: {target.stat().st_size // 1024} KB")
 
 
+RAW_PACKED = Path("datasets/ler/raw")
+
+
+def cmd_pack(base: Path) -> None:
+    """The original CoNLL files (CC BY 4.0) gzipped into the repository, so build needs no download."""
+    RAW_PACKED.mkdir(parents=True, exist_ok=True)
+    for f in FILES:
+        with (base / f).open("rb") as src, gzip.open(RAW_PACKED / f"{f}.gz", "wb", compresslevel=9) as dst:
+            dst.write(src.read())
+        print(f"{RAW_PACKED / f}.gz: {(RAW_PACKED / f'{f}.gz').stat().st_size // 1024} KB")
+
+
+def _open_conll(base: Path, f: str):
+    return (base / f).open(encoding="utf-8") if (base / f).exists() \
+        else gzip.open(RAW_PACKED / f"{f}.gz", "rt", encoding="utf-8")
+
+
 def cmd_build(base: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     for f in FILES:
         split = f.removeprefix("ler_").removesuffix(".conll")
-        with (base / f).open(encoding="utf-8") as fh:
+        with _open_conll(base, f) as fh:
             docs = build_docs(read_conll(fh), split)
         tmp = out / f"ler_{split}.jsonl"
         write_gold(docs, tmp)
@@ -138,7 +155,7 @@ def cmd_eval(data: Path, split: str, limit: int | None, ner: bool) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["download", "build", "eval"])
+    ap.add_argument("cmd", choices=["download", "pack", "build", "eval"])
     ap.add_argument("--dir", type=Path, default=Path("local/ler"), help="raw CoNLL files (not committed)")
     ap.add_argument("--out", type=Path, default=Path("datasets/ler"))
     ap.add_argument("--data", type=Path, default=Path("datasets/ler"))
@@ -148,6 +165,8 @@ def main() -> None:
     a = ap.parse_args()
     if a.cmd == "download":
         cmd_download(a.dir)
+    elif a.cmd == "pack":
+        cmd_pack(a.dir)
     elif a.cmd == "build":
         cmd_build(a.dir, a.out)
     else:
