@@ -44,16 +44,25 @@ LABELS = ["abgewiesen", "teilweise", "stattgegeben"]
 
 # --------------------------------------------------------------------------------------------- download
 
+class Throttled(RuntimeError):
+    pass
+
+
 def get(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     for attempt in range(6):
         try:
             with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 - fixed public API
-                return json.load(r)
+                data = json.load(r)
+            if isinstance(data, dict) and data.get("code") == "throttled":
+                raise Throttled(data.get("message", "gedrosselt"))
+            return data
         except urllib.error.HTTPError as exc:
             if exc.code in (400, 404) or attempt == 5:
                 raise
             wait = int(exc.headers.get("Retry-After") or 0) or (60 * (attempt + 1) if exc.code == 429 else 2 ** attempt * 2)
+            if wait > 600:  # Tageslimit: abbrechen statt stundenlang warten; Fortsetzen ist idempotent
+                raise Throttled(f"gedrosselt, Retry-After {wait}s") from exc
             time.sleep(wait)
         except Exception:  # noqa: BLE001 - retry network errors with backoff
             if attempt == 5:
@@ -68,9 +77,10 @@ def cmd_download(base: Path, workers: int, delay: float) -> None:
     raw = base / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     index_path = base / "index.json"
-    if index_path.exists():
-        index = json.loads(index_path.read_text())
-    else:
+    done_path = base / "index_done.json"
+    index = json.loads(index_path.read_text()) if index_path.exists() else {}
+    done = set(json.loads(done_path.read_text())) if done_path.exists() else set()
+    if not done_path.exists() or len(done) < 127:
         courts, url = [], f"{API}courts/?jurisdiction=Arbeitsgerichtsbarkeit&page_size=50&format=json"
         while url:
             res = get(url)
@@ -78,9 +88,10 @@ def cmd_download(base: Path, workers: int, delay: float) -> None:
             url = res.get("next")
         courts = [c for c in courts if not c["name"].startswith("Bundes")]  # BAG optional: weggelassen
         print(f"{len(courts)} Gerichte der Arbeitsgerichtsbarkeit", flush=True)
-        index: dict[str, dict] = {}
         for court in courts:
-            for q in QUERIES:
+            if court["code"] in done:
+                continue
+            for q in QUERIES[:1]:
                 for page in range(1, 11):
                     params = {"court_jurisdiction": "Arbeitsgerichtsbarkeit", "court": court["code"], "text": q,
                               "decision_type": "Urteil", "page_size": 100, "page": page, "format": "json"}
@@ -88,21 +99,33 @@ def cmd_download(base: Path, workers: int, delay: float) -> None:
                         res = get(f"{API}cases/search/?{urllib.parse.urlencode(params)}")
                     except urllib.error.HTTPError:
                         break
+                    except Throttled as exc:
+                        index_path.write_text(json.dumps(index))
+                        done_path.write_text(json.dumps(sorted(done)))
+                        sys.exit(f"{exc} - Index gespeichert ({len(index)}), später fortsetzen")
                     for h in res["results"]:
                         index[str(h["id"])] = {"court": court["name"], "court_code": court["code"],
                                                "date": h.get("date"), "type": h.get("decision_type")}
                     if not res.get("next"):
                         break
+            done.add(court["code"])
+            index_path.write_text(json.dumps(index))
+            done_path.write_text(json.dumps(sorted(done)))
             print(f"  {court['code']}: {len(index)} gesamt", flush=True)
-        index_path.write_text(json.dumps(index))
+        done_path.write_text(json.dumps(sorted(set(done) | {c["code"] for c in courts})))
     print(f"{len(index)} Urteile im Index", flush=True)
 
     def fetch(case_id: str) -> None:
         path = raw / f"{case_id}.json"
         if path.exists():
             return
+        if stop:
+            return
         try:
             case = get(f"{API}cases/{case_id}/?format=json")
+        except Throttled as exc:
+            stop.append(str(exc))
+            return
         except Exception as exc:  # noqa: BLE001 - skip one case, keep the run going
             print(f"skip {case_id}: {exc}", flush=True)
             return
@@ -113,12 +136,17 @@ def cmd_download(base: Path, workers: int, delay: float) -> None:
             "content": case.get("content")}, ensure_ascii=False), encoding="utf-8")
         time.sleep(delay)
 
-    todo = [i for i in index if not (raw / f"{i}.json").exists()]
+    stop: list[str] = []
+    # Nur Arbeitsgerichte (LAG/BAG werden im build ohnehin weggelassen) -> spart Abrufe
+    todo = [i for i, m in index.items() if not (raw / f"{i}.json").exists()
+            and not re.search(r"Landesarbeits|Bundesarbeits", m["court"])]
     print(f"{len(todo)} zu laden", flush=True)
     with ThreadPoolExecutor(workers) as pool:
         for n, _ in enumerate(pool.map(fetch, todo), 1):
             if n % 200 == 0:
                 print(f"  {n}/{len(todo)}", flush=True)
+    if stop:
+        sys.exit(f"{stop[0]} - bisher {len(list(raw.glob('*.json')))} Urteile geladen, später fortsetzen")
 
 
 # ------------------------------------------------------------------------------------------------ build
@@ -131,7 +159,9 @@ _HEAD_LINE = re.compile(rf"^\s*(?:[IVX]+\.\s*)?{HEAD}\s*:?\s*$", re.M)
 KSCH = re.compile(r"(?:festzustellen|festgestellt),? dass das Arbeitsverhältnis[^.]{0,400}?Kündigung[^.]{0,300}?"
                   r"nicht[^.]{0,120}?(?:aufgelöst|beendet)|Kündigungsschutzklage", re.S)
 # Kläger gewinnt (Kündigung unwirksam / Arbeitsverhältnis nicht aufgelöst):
-WIN = re.compile(r"Arbeitsverhältnis[^.]{0,400}?(?:Kündigung|gekündigt)[^.]{0,300}?nicht[^.]{0,80}?(?:aufgelöst|beendet)"
+_END = r"(?:aufgelöst|beendet|geendet|endete|endet|sein Ende gefunden)"
+WIN = re.compile(rf"Arbeitsverhältnis[^.]{{0,300}}?(?:nicht|weder)[^.]{{0,400}}?(?:Kündigung|gekündigt)[^.]{{0,300}}?{_END}"
+                 r"|Arbeitsverhältnis[^.]{0,400}?(?:Kündigung|gekündigt)[^.]{0,300}?(?:nicht|weder)[^.]{0,120}?(?:aufgelöst|beendet)"
                  r"|(?:Kündigung|Änderungskündigung)[^.]{0,200}?(?:rechts)?unwirksam(?! ist, soweit)"
                  r"|Arbeitsverhältnis[^.]{0,200}?nicht[^.]{0,100}?(?:aufgelöst|beendet)[^.]{0,200}?Kündigung"
                  r"|Änderung der Arbeitsbedingungen[^.]{0,200}?sozial ungerechtfertigt", re.S)
@@ -160,9 +190,22 @@ def sections(text: str) -> dict[str, str]:
     return out
 
 
+_MONTHS = r"(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)"
+
+
+def norm_tenor(tenor: str) -> str:
+    """Punkte in Daten, Beträgen, Nummerierungen und Abkürzungen entfernen, damit [^.] Satzgrenzen bedeutet."""
+    t = re.sub(r"\s+", " ", tenor)
+    t = re.sub(rf"\b\d{{1,2}}\.\s?(?:\d{{1,2}}\.|{_MONTHS})\s?\d{{2,4}}", "DATUM", t)
+    t = re.sub(r"\d{1,3}(?:\.\d{3})+(?:,\d+)?", "BETRAG", t)
+    t = re.sub(r"(?:^|(?<=\s))(?:[IVX]+|\d{1,2}|[a-z])\.(?=\s)", " ", t)
+    t = re.sub(r"\b(?:Nr|Abs|bzw|ggf|z\.B|Ziff|S|vgl|gem|i\.V\.m|d\.h|u\.a|v)\.", "", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def label_tenor(tenor: str) -> str | None:
     """Label aus dem Tenor oder None (unklar -> verwerfen)."""
-    t = re.sub(r"\s+", " ", tenor)
+    t = norm_tenor(tenor)
     # Kosten-, Streitwert- und Zulassungssätze tragen nichts zum Ausgang bei.
     t = re.sub(r"[^.]*(?:Kosten|Streitwert|Berufung wird|Revision wird|vorläufig vollstreckbar)[^.]*\.", " ", t)
     if OTHER.search(t):
@@ -241,10 +284,11 @@ def cmd_build(base: Path) -> None:
     seen, uniq = set(), []
     for r in rows:
         key = (r["court"], r["file_number"])
-        if key in seen:
+        near = re.sub(r"\W+", "", r["x"][:400].lower())
+        if key in seen or near in seen:
             stats["dublette"] += 1
             continue
-        seen.add(key)
+        seen.update([key, near])
         uniq.append(r)
     with gzip.open(base / "cases.jsonl.gz", "wt", encoding="utf-8") as fh:
         for r in uniq:
@@ -312,10 +356,37 @@ def metrics(y_true, y_pred, proba=None, classes=None) -> dict:
          "recall": {lab: round(r, 4) for lab, r in zip(LABELS, recall_score(
              y_true, y_pred, labels=LABELS, average=None, zero_division=0))},
          "confusion": {"labels": LABELS, "matrix": confusion_matrix(y_true, y_pred, labels=LABELS).tolist()}}
+    m["macro_f1_ci95"] = bootstrap_ci(y_true, y_pred)
+    bt = ["erfolg" if v != "abgewiesen" else "abgewiesen" for v in y_true]
+    bp = ["erfolg" if v != "abgewiesen" else "abgewiesen" for v in y_pred]
+    m["binaer_macro_f1"] = round(f1_score(bt, bp, average="macro", zero_division=0), 4)
     if proba is not None:
         onehot = np.array([[1.0 if yt == c else 0.0 for c in classes] for yt in y_true])
         m["brier"] = round(float(np.mean(np.sum((proba - onehot) ** 2, axis=1))), 4)
     return m
+
+
+def bootstrap_ci(y_true, y_pred, n: int = 1000) -> list[float]:
+    """95-%-Konfidenzintervall für Macro-F1 (Bootstrap über Testfälle)."""
+    import numpy as np  # noqa: PLC0415
+    from sklearn.metrics import f1_score  # noqa: PLC0415
+
+    rng = np.random.default_rng(0)
+    yt, yp = np.array(y_true), np.array(y_pred)
+    vals = [f1_score(yt[ix], yp[ix], average="macro", labels=LABELS, zero_division=0)
+            for ix in (rng.integers(0, len(yt), len(yt)) for _ in range(n))]
+    return [round(float(np.percentile(vals, 2.5)), 4), round(float(np.percentile(vals, 97.5)), 4)]
+
+
+def meta_baseline(cases, tr, te, key) -> list[str]:
+    """Häufigstes Label je Gericht bzw. Jahr aus dem Training (Fallback: globale Mehrheit)."""
+    from collections import Counter as C  # noqa: PLC0415
+
+    glob = C(cases[i]["label"] for i in tr).most_common(1)[0][0]
+    by: dict = {}
+    for i in tr:
+        by.setdefault(key(cases[i]), C())[cases[i]["label"]] += 1
+    return [by[key(cases[i])].most_common(1)[0][0] if key(cases[i]) in by else glob for i in te]
 
 
 def models():
@@ -372,6 +443,8 @@ def cmd_train(base: Path) -> None:
                    "test_dates": [min(cases[i]["date"] for i in te), max(cases[i]["date"] for i in te)]}
         maj = C(ytr).most_common(1)[0][0]
         r["mehrheit"] = metrics(yte, [maj] * len(yte))
+        r["nur_gericht"] = metrics(yte, meta_baseline(cases, tr, te, lambda c: c["court"]))
+        r["nur_jahr"] = metrics(yte, meta_baseline(cases, tr, te, lambda c: (c["date"] or "")[:4]))
         for mname, pipe in models().items():
             pipe.fit([X[i] for i in tr], ytr)
             pred = pipe.predict([X[i] for i in te])
