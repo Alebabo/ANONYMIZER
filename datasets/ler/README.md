@@ -35,16 +35,17 @@ Runs the full detector (rules + spaCy `de_core_news_lg`) and writes `eval_<split
 baseline) and `errors_<split>.md` (not committed).
 
 Results on the test split (full detector; `eval_test.json` = plain `de_core_news_lg` with the rules of
-21.11.2026, `eval_test_de_legal_ner.json` = with the fine-tuned model):
+21.11.2026 including the organisation rules, `eval_test_de_legal_ner.json` = with the fine-tuned model, run 3):
 
 | | Rules before 21.11. | Rules now | Rules now + `de_legal_ner` |
 |---|---|---|---|
-| Persons/organisations/places: precision / recall | 0.32 / 0.63 | 0.48 / 0.63 | **0.92 / 0.71** |
+| Persons/organisations/places: precision / recall | 0.32 / 0.63 | 0.49 / 0.66 | **0.92 / 0.75** |
+| Organisations: precision / recall | | 0.32 / 0.40 | 0.88 / 0.54 |
 | Courts found | 0.69 | 0.97 | 0.97 |
 | Statute citations found | 0.38 | 0.92 | 0.92 |
 | Case-law references found | 0.74 | 0.96 | 0.96 |
 | Case numbers in case law found | 0.81 | 1.00 | 1.00 |
-| PER/ORG/LOC on public references (false positives) | 773 | 348 | **16** |
+| PER/ORG/LOC on public references (false positives) | 773 | 347 | **16** |
 
 ## Train
 

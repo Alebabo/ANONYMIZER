@@ -2,96 +2,96 @@
   "split": "test",
   "docs": 1113,
   "ner": true,
-  "seconds": 24.0,
+  "seconds": 22.8,
   "entities_partial": {
     "micro": {
-      "tp": 510,
-      "fp": 563,
-      "fn": 302,
-      "precision": 0.475,
-      "recall": 0.628,
-      "f1": 0.541
+      "tp": 536,
+      "fp": 556,
+      "fn": 276,
+      "precision": 0.491,
+      "recall": 0.66,
+      "f1": 0.563
     },
     "labels": {
       "PER": {
         "tp": 238,
-        "fp": 157,
+        "fp": 154,
         "fn": 86,
-        "precision": 0.603,
+        "precision": 0.607,
         "recall": 0.735,
-        "f1": 0.662
+        "f1": 0.665
       },
       "ORG": {
-        "tp": 75,
-        "fp": 214,
-        "fn": 178,
-        "precision": 0.26,
-        "recall": 0.296,
-        "f1": 0.277
+        "tp": 101,
+        "fp": 212,
+        "fn": 152,
+        "precision": 0.323,
+        "recall": 0.399,
+        "f1": 0.357
       },
       "LOC": {
         "tp": 197,
-        "fp": 192,
+        "fp": 190,
         "fn": 38,
-        "precision": 0.506,
+        "precision": 0.509,
         "recall": 0.838,
-        "f1": 0.631
+        "f1": 0.633
       }
     },
     "sources": {
       "ler": {
-        "tp": 510,
-        "fp": 563,
-        "fn": 302,
-        "precision": 0.475,
-        "recall": 0.628,
-        "f1": 0.541
+        "tp": 536,
+        "fp": 556,
+        "fn": 276,
+        "precision": 0.491,
+        "recall": 0.66,
+        "f1": 0.563
       }
     }
   },
   "entities_strict": {
     "micro": {
-      "tp": 433,
-      "fp": 640,
-      "fn": 379,
-      "precision": 0.404,
-      "recall": 0.533,
-      "f1": 0.459
+      "tp": 462,
+      "fp": 630,
+      "fn": 350,
+      "precision": 0.423,
+      "recall": 0.569,
+      "f1": 0.485
     },
     "labels": {
       "PER": {
         "tp": 201,
-        "fp": 194,
+        "fp": 191,
         "fn": 123,
-        "precision": 0.509,
+        "precision": 0.513,
         "recall": 0.62,
-        "f1": 0.559
+        "f1": 0.561
       },
       "ORG": {
-        "tp": 60,
-        "fp": 229,
-        "fn": 193,
-        "precision": 0.208,
-        "recall": 0.237,
-        "f1": 0.221
+        "tp": 89,
+        "fp": 224,
+        "fn": 164,
+        "precision": 0.284,
+        "recall": 0.352,
+        "f1": 0.314
       },
       "LOC": {
         "tp": 172,
-        "fp": 217,
+        "fp": 215,
         "fn": 63,
-        "precision": 0.442,
+        "precision": 0.444,
         "recall": 0.732,
-        "f1": 0.551
+        "f1": 0.553
       }
     },
     "sources": {
       "ler": {
-        "tp": 433,
-        "fp": 640,
-        "fn": 379,
-        "precision": 0.404,
-        "recall": 0.533,
-        "f1": 0.459
+        "tp": 462,
+        "fp": 630,
+        "fn": 350,
+        "precision": 0.423,
+        "recall": 0.569,
+        "f1": 0.485
       }
     }
   },
@@ -125,8 +125,8 @@
     "ORG on RS": 39,
     "PER on RS": 29,
     "LOC on LIT": 22,
-    "LOC on VT": 11,
     "LOC on INN": 10,
+    "LOC on VT": 10,
     "ORG on EUN": 8,
     "ORG on LIT": 7,
     "LOC on VS": 6,
