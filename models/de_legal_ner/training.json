@@ -1,0 +1,101 @@
+{
+  "seed": 24,
+  "best_epoch": 6,
+  "dev_baseline": {
+    "tp": 402,
+    "fp": 1502,
+    "fn": 407,
+    "precision": 0.211,
+    "recall": 0.497,
+    "f1": 0.296
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 4701.8,
+      "dev": {
+        "tp": 526,
+        "fp": 77,
+        "fn": 283,
+        "precision": 0.872,
+        "recall": 0.65,
+        "f1": 0.745
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 2574.4,
+      "dev": {
+        "tp": 541,
+        "fp": 78,
+        "fn": 268,
+        "precision": 0.874,
+        "recall": 0.669,
+        "f1": 0.758
+      }
+    },
+    {
+      "epoch": 3,
+      "loss": 2085.7,
+      "dev": {
+        "tp": 546,
+        "fp": 65,
+        "fn": 263,
+        "precision": 0.894,
+        "recall": 0.675,
+        "f1": 0.769
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 1715.2,
+      "dev": {
+        "tp": 548,
+        "fp": 61,
+        "fn": 261,
+        "precision": 0.9,
+        "recall": 0.677,
+        "f1": 0.773
+      }
+    },
+    {
+      "epoch": 5,
+      "loss": 1470.1,
+      "dev": {
+        "tp": 554,
+        "fp": 58,
+        "fn": 255,
+        "precision": 0.905,
+        "recall": 0.685,
+        "f1": 0.78
+      }
+    },
+    {
+      "epoch": 6,
+      "loss": 1238.1,
+      "dev": {
+        "tp": 555,
+        "fp": 53,
+        "fn": 254,
+        "precision": 0.913,
+        "recall": 0.686,
+        "f1": 0.783
+      }
+    }
+  ],
+  "data": {
+    "germeval": 0,
+    "synthetic": 0,
+    "gold_train": 0,
+    "gold_repeat": 3,
+    "partial": 0,
+    "partial_repeat": 2,
+    "ler": 8898,
+    "ler_repeat": 1,
+    "feedback": 0,
+    "feedback_repeat": 3,
+    "courts": 0,
+    "courts_repeat": 1,
+    "dev": "ler_dev"
+  }
+}
