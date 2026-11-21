@@ -55,5 +55,10 @@ available under ODbL 1.0 as well. Changes: HTML converted to text, and the court
 
 `datasets/outcome/` (Machbarkeitsexperiment Kündigungsschutz-Prognose) is derived from the Hugging Face dataset
 `openlegaldata/court-decisions-germany` (dump-20260520), i.e. the same Open Legal Data database, and is likewise
-made available under ODbL 1.0. It contains only decision ids, court, date, file number and an outcome label
-extracted from the operative part (plus aggregate results); no decision text is redistributed.
+made available under ODbL 1.0. Access to the source dataset on Hugging Face is gated (a Hugging Face account
+that has accepted the dataset's conditions is required). `datasets/outcome/raw/decisions.jsonl.gz` contains 3,226
+labour court judgments in derived form: ids, court, date, file number, the operative part (ArbG) or the summary of
+the first-instance judgment (LAG), a cleaned statement of facts (dates, file numbers and outcome sentences
+removed), the extracted outcome label and the split assignment. `labels.csv` and `results.json` are derived from
+it. Changes: HTML converted to text, sections cut, sentences removed, labels added
+(`packages/core/scripts/outcome_experiment.py`).
