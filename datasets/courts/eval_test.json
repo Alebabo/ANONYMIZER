@@ -1,0 +1,43 @@
+{
+  "split": "test",
+  "docs": 56,
+  "seconds": 28.5,
+  "recall": {
+    "ADDR": {
+      "found": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "AZ": {
+      "found": 1,
+      "total": 1,
+      "rate": 1.0
+    },
+    "DATE": {
+      "found": 10,
+      "total": 10,
+      "rate": 1.0
+    },
+    "IBAN": {
+      "found": 5,
+      "total": 5,
+      "rate": 1.0
+    },
+    "LOC": {
+      "found": 11,
+      "total": 13,
+      "rate": 0.846
+    },
+    "ORG": {
+      "found": 8,
+      "total": 9,
+      "rate": 0.889
+    },
+    "PER": {
+      "found": 810,
+      "total": 818,
+      "rate": 0.99
+    }
+  },
+  "recall_all": 0.987
+}

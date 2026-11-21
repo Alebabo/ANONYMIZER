@@ -34,18 +34,17 @@ python packages/core/scripts/ler_data.py eval --split dev     # or --split test;
 Runs the full detector (rules + spaCy `de_core_news_lg`) and writes `eval_<split>.json` (committed as the
 baseline) and `errors_<split>.md` (not committed).
 
-Baseline on the test split, before and after the rule update of 21.11.2026 (plain `de_core_news_lg`):
+Results on the test split (full detector; `eval_test.json` = plain `de_core_news_lg` with the rules of
+21.11.2026, `eval_test_de_legal_ner.json` = with the fine-tuned model):
 
-| | Before | After |
-|---|---|---|
-| Persons/organisations/places: precision / recall | 0.32 / 0.63 | 0.48 / 0.63 |
-| Persons: precision / recall | 0.42 / 0.74 | 0.60 / 0.74 |
-| Organisations: precision / recall | 0.23 / 0.30 | 0.26 / 0.30 |
-| Courts found | 0.69 | 0.97 |
-| Statute citations found | 0.38 | 0.92 |
-| Case-law references found | 0.74 | 0.96 |
-| Case numbers in case law found | 0.81 | 1.00 |
-| PER/ORG/LOC on public references (false positives) | 773 | 348 |
+| | Rules before 21.11. | Rules now | Rules now + `de_legal_ner` |
+|---|---|---|---|
+| Persons/organisations/places: precision / recall | 0.32 / 0.63 | 0.48 / 0.63 | **0.92 / 0.71** |
+| Courts found | 0.69 | 0.97 | 0.97 |
+| Statute citations found | 0.38 | 0.92 | 0.92 |
+| Case-law references found | 0.74 | 0.96 | 0.96 |
+| Case numbers in case law found | 0.81 | 1.00 | 1.00 |
+| PER/ORG/LOC on public references (false positives) | 773 | 348 | **16** |
 
 ## Train
 
