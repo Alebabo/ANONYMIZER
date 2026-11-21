@@ -75,6 +75,56 @@ def test_organization_strips_leading_article():
     assert ("organization", "Muster Handel GmbH") in types(scan("Die Muster Handel GmbH hat geklagt."))
 
 
+RULES_ONLY = Detector(DetectorConfig(enable_ner=False))
+
+
+def orgs(text: str) -> list[str]:
+    return [d.text for d in RULES_ONLY.scan(text, "de").detections if d.entity_type == "organization"]
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Die Beteiligung an der Hartmann-GmbH gehörte zum Betriebsvermögen.", ["Hartmann-GmbH"]),
+    ("Die X-EWIV wäre dem Kläger auskunftspflichtig.", ["X-EWIV"]),
+    ("Rechtsnachfolgerin ist die Wójcik Kondensatoren-GmbH.", ["Wójcik Kondensatoren-GmbH"]),
+    ("Der Kläger war an der Ferrari-GmbH & atypisch Still beteiligt.", ["Ferrari-GmbH & atypisch Still"]),
+    ("Er ist aus der Becker-GbR ausgeschieden.", ["Becker-GbR"]),
+    ("die Gesellschaften der Mansour-Gruppe und der VW-Konzern", ["Mansour-Gruppe", "VW-Konzern"]),
+    ("Rechnung der Çelik GmbH vom 19.10.2016", ["Çelik GmbH"]),
+    ("Ein Mitarbeiter der Fa. Schreiber e.K. war in der Wohnung.", ["Schreiber e.K."]),
+    ("Die Ekliniken M-R GmbH & Co KG tritt in die Rechte ein.", ["Ekliniken M-R GmbH & Co KG"]),
+    ("Betriebsübergang auf die Öztürk GmbH & Co. OHG (im Folgenden)", ["Öztürk GmbH & Co. OHG"]),
+    ("Die Beschwerde der Nikolaidis Aktiengesellschaft ist wirksam.", ["Nikolaidis Aktiengesellschaft"]),
+])
+def test_organization_legal_forms(text, expected):
+    assert orgs(text) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Es bezeichnet in Unterlagen der Firma SCHÜCO ein Ausstattungselement.", ["SCHÜCO"]),
+    ("Er lieferte an die Firma Otto in Frankfurt.", ["Otto"]),
+    ("Zuletzt arbeitete er bei der Firma Weber.", ["Weber"]),
+    ("Der Kostenvoranschlag der Firma L. lag vor.", ["L."]),
+    ("bei der Firma Lorenz GmbH beschäftigt", ["Lorenz GmbH"]),
+])
+def test_organization_after_firma(text, expected):
+    assert orgs(text) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "Das AG Köln hat die Klage abgewiesen; das LG-Urteil und der BGH-Senat.",
+    "Die Holding KG wird beigeladen; die Holding-KG und eine Vorrats-GmbH.",
+    "Er postete in der Facebook-Gruppe und in einer Alters-Gruppe.",
+    "Die Firma hat Gewinne erzielt.",
+])
+def test_organization_rules_skip_courts_and_generic_words(text):
+    assert orgs(text) == []
+
+
+def test_court_after_firma_cue_stays_court():
+    r = RULES_ONLY.scan("Das Landgericht Köln und die Firma Weber.", "de")
+    assert ("court", "Landgericht Köln") in types(r) and ("organization", "Weber") in types(r)
+
+
 # --- context ---------------------------------------------------------------
 
 def test_spec_example_context_vs_client_context():
