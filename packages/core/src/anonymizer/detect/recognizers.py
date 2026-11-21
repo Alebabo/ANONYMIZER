@@ -543,7 +543,7 @@ ROLE_TERMS: dict[str, str] = {
     r"Arbeitnehmer(?:in)?": "employee",
     r"Arbeitgeber(?:in)?": "employer",
     r"(?:Rechtsanw(?:alt|ältin)|RAin|RA|Verteidiger(?:in)?|Prozessbevollmächtigte[rn]?)": "counsel",
-    r"(?:Richter(?:in)?|Vorsitzende[rn]?)": "judge",
+    r"(?:Richter(?:in(?:nen)?)?|Vorsitzende[rn]?|V?Rin?(?:BGH|BAG|BFH|BSG|BVerwG|BVerfG|OLG|LG|AG|LAG|LSG|FG|VG|OVG))": "judge",
     r"[Cc]lient": "client",
     r"[Pp]laintiff": "plaintiff",
     r"[Cc]laimant": "plaintiff",
@@ -578,6 +578,11 @@ def _role_for(term: str) -> str | None:
         if regex.match(term):
             return role
     return None
+
+
+# Capitalised words that can follow a comma after a judge's name and are not names.
+_BENCH_STOP = {"Der", "Die", "Das", "Den", "Dem", "Des", "Ein", "Eine", "Einer", "Dieser", "Diese", "Dieses", "Als",
+               "Auch", "Auf", "Aus", "Mit", "Von", "Vor", "Für", "Dass", "Da", "So", "Ob", "Wie", "Weil", "Wenn"}
 
 
 class PersonRecognizer:
@@ -622,6 +627,24 @@ class PersonRecognizer:
             confidence = 0.85 if len(tokens) > 1 else 0.75
             yield make_detection(E.PERSON, Category.PERSONAL_DATA, start, end, value, confidence, self.name,
                                  attributes=attributes)
+            if role == "judge" and self._bench_start.search(text, max(0, m.start() - 5), m.start()) \
+                    and not text[m.end("trigger"):m.start("name")].startswith(","):
+                yield from self._bench(text, end, attributes)
+
+    # The rest of a bench after the first judge: "der Richter Jacobi und Schödel", "die Richter Merzbach,
+    # Dr. Meiser und Schödel". Only after an article ("für Richter, Staatsanwälte und Rechtspfleger" is no bench).
+    _bench_start = re.compile(r"(?:^|\s)d(?:er|ie|en|es)\s\Z")
+    _bench_next = re.compile(rf"(?:,\s?|\s(?:und|sowie)\s){_TITLES}(?P<name>{_NAME})(?![\w-])")
+
+    def _bench(self, text: str, pos: int, attributes: dict) -> Iterable[Detection]:
+        while (m := self._bench_next.match(text, pos)) is not None:
+            name = m.group("name")
+            if name in NAME_STOPWORDS or name in _BENCH_STOP or _role_for(name) is not None \
+                    or text.startswith(".", m.end()) or name.endswith("richter"):  # "Dipl. - Phys.", "Proberichter"
+                return
+            yield make_detection(E.PERSON, Category.PERSONAL_DATA, m.start("name"), m.end("name"), name, 0.75,
+                                 self.name, attributes=attributes)
+            pos = m.end()
 
 
 PERSON = PersonRecognizer()

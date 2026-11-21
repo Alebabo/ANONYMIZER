@@ -171,6 +171,31 @@ def _window_pos(nlp: Any, doc: Any, spans: list[tuple[int, int]]) -> dict[int, s
     return pos
 
 
+# A name standing alone as a sentence or line: the signature block of a decision ("Raum", "Fieback", "Hayen"),
+# one judge per line or, in LER, one judge per sentence. In running text the model reads it as the start of the
+# next sentence and often misses it ("… entschieden. Fieback bb) Aus den …"). Such a word is checked once more
+# on its own, the way it stands in the signature block; only if NER then calls it a person is it kept. Headings
+# ("Tatbestand", "Geltungsbereich", "Urlaub") are not persons to the model even on their own.
+_ISOLATED_WORD = r"[A-ZÄÖÜ][a-zäöüßàáâãçćčéèêëğíìîıïłńñóòôõøšśşúùûžźż]+(?:-[A-ZÄÖÜ][a-zäöüßéèóçćčšž]+)?"
+# Before it: line or text start, or the end of a sentence; not an abbreviation or enumeration ("u. a.", "2.").
+# After it: line or text end, an enumeration ("bb)", "(1)", "2.", "III.", "A."), or the capitalised first word of
+# the next sentence.
+_ISOLATED = re.compile(
+    rf"(?:^|(?<=[\w)]{{2}}[.;!?]\s))(?P<name>{_ISOLATED_WORD})"
+    rf"(?=[ \t]*$|\s(?:\(?[a-z]{{1,3}}\)|\(\d+\)|\d+(?:\.\d+)*\.?|[IVX]+\.|[A-H]\.)\s|\s[A-ZÄÖÜ])",
+    re.MULTILINE,
+)
+# Adjectives opening a sentence ("Statthafte Klageart", "Gleichheitsrechtliche Anforderungen").
+_ADJECTIVE_END = re.compile(r"(?:lich|haft|isch|ig|bar|sam|los|end)(?:e[nmrs]?)?$")
+# Only models trained on such lines check isolated words: de_legal_ner learnt from LER, where a judge's signature is a
+# sentence of its own. The stock and the support model call almost any single word a person ("Kreditkartenauszug",
+# "Loan"); with them the check would only add false positives.
+_ISOLATED_MODELS = ("de_legal_ner",)
+# Words that appear alone in signature blocks and court copies and that the model takes for names on their own.
+_ISOLATED_STOP = {"Beglaubigt", "Ausgefertigt", "Siegel", "Urkundsbeamter", "Urkundsbeamtin", "Justizangestellte",
+                  "Justizbeschäftigte", "Justizsekretärin", "Justizsekretär"}
+
+
 class NERUnavailable(RuntimeError):
     pass
 
@@ -195,6 +220,7 @@ class SpacyRecognizer:
         # Fine-tuned support models ("base+ner_dir") were trained on lower-case chat; their lower-case spans are kept.
         self._casual = {lang for lang, model in self.models.items() if "+" in model}
         self._docs: dict[tuple[str, str], Any] = {}
+        self._isolated = {lang for lang, model in self.models.items() if any(k in model for k in _ISOLATED_MODELS)}
 
     def _nlp(self, language: str) -> Any:
         model = self.models[language]
@@ -262,10 +288,31 @@ class SpacyRecognizer:
                     if entity_type in _TAGGED and span is not None and len(span):
                         spans.append((max(0, span.start - 1), span.end))  # the title before it counts too
                 pos = _window_pos(nlp, doc, spans) if spans else {}
+            kept: list[tuple[int, int]] = []
             for entity_type, category, confidence, start, value in found:
                 # The tagger reads lower-case chat words as common nouns, so the proper-noun check does not apply.
                 casual = lang in self._casual and is_casual(value)
                 if entity_type in _TAGGED and not casual and not _name_like(doc, start, start + len(value), pos):
                     continue
+                kept.append((start, start + len(value)))
                 yield make_detection(entity_type, category, start, start + len(value), value,
                                      confidence, self.name)
+            if lang in self._isolated:
+                yield from self._isolated_names(nlp, text, kept, skipped)
+
+    def _isolated_names(self, nlp: Any, text: str, taken: list[tuple[int, int]],
+                        skipped: list[str]) -> Iterable[Detection]:
+        """Names standing alone as a sentence or line that NER missed in context (see ``_ISOLATED``). The
+        tagger reads unknown surnames there as common nouns ("Fieback", "Hayen"), so ``_name_like`` drops them
+        even where NER found them; the check on the word alone replaces the proper-noun check."""
+        cands = [m for m in _ISOLATED.finditer(text)
+                 if m.group("name") not in self.stopwords and m.group("name") not in _ISOLATED_STOP
+                 and not _ADJECTIVE_END.search(m.group("name"))
+                 and not any(s < m.end() and m.start() < e for s, e in taken)]
+        if not cands:
+            return
+        for m, alone in zip(cands, nlp.pipe([m.group("name") for m in cands], disable=skipped)):
+            if any(e.label_ in ("PER", "PERSON") and e.start_char == 0 and e.end_char == len(alone.text)
+                   for e in alone.ents):
+                yield make_detection(E.PERSON, Category.PERSONAL_DATA, m.start(), m.end(), m.group("name"), 0.7,
+                                     self.name)
