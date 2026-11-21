@@ -1,9 +1,12 @@
 name: CI
 
+# Nur main und Pull Requests; Arbeitsbranches (claude/**, feature/**) lösen keine Läufe
+# und keine Fehler-Mails aus. Manuell startbar über "Run workflow".
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
