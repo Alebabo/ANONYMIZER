@@ -92,8 +92,12 @@ def cmd_download(base: Path, per: int, delay: float, workers: int = 3) -> None:
                 break
             page += 1
         ids = ids[:want]
+        todo = [i for i in ids if not (raw / f"{i}.json").exists()]
+        print(f"{value}: {len(ids)} listed, {len(todo)} to fetch", flush=True)
         with ThreadPoolExecutor(workers) as pool:
-            list(pool.map(fetch, ids))
+            for n, _ in enumerate(pool.map(fetch, todo), 1):
+                if n % 50 == 0:
+                    print(f"  {n}/{len(todo)}", flush=True)
         print(f"{value}: {len(ids)}", flush=True)
 
 
