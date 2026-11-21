@@ -52,3 +52,8 @@ Open Legal Data database is licensed under the Open Database License 1.0
 available under ODbL 1.0 as well. Changes: HTML converted to text, and the courts' anonymization placeholders
 ("…") replaced by synthetic names, companies, places, dates, case numbers and IBANs
 (`packages/core/src/anonymizer/courts.py`). The rest of this repository is not affected by this license.
+
+`datasets/outcome/` (Machbarkeitsexperiment Kündigungsschutz-Prognose) is derived from the Hugging Face dataset
+`openlegaldata/court-decisions-germany` (dump-20260520), i.e. the same Open Legal Data database, and is likewise
+made available under ODbL 1.0. It contains only decision ids, court, date, file number and an outcome label
+extracted from the operative part (plus aggregate results); no decision text is redistributed.
