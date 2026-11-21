@@ -33,7 +33,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
-| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md` |
+| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
@@ -42,11 +42,11 @@ Rechtstexte mit `ANONYMIZER_NER_MODEL_DE="de_core_news_lg+models/de_legal_ner/ne
 
 | | vorher | jetzt |
 |---|---|---|
-| German LER: Präzision / Recall (Personen, Firmen, Orte) | 0,32 / 0,63 | **0,92 / 0,75** |
-| Personen P / R | 0,42 / 0,74 | 0,91 / 0,84 |
+| German LER: Präzision / Recall (Personen, Firmen, Orte) | 0,32 / 0,63 | **0,92 / 0,78** |
+| Personen P / R | 0,42 / 0,74 | 0,91 / **0,91** |
 | Firmen P / R | 0,23 / 0,30 | 0,88 / **0,54** ← größte Schwäche |
 | Orte P / R | 0,28 / 0,83 | 0,97 / 0,86 |
-| Falsche Treffer auf Gerichten, Gesetzen, Zitaten | 773 | 16 |
+| Falsche Treffer auf Gerichten, Gesetzen, Zitaten | 773 | 18 |
 | Gesetzeszitate / Gerichte / Aktenzeichen erkannt | 0,38 / 0,69 / 0,81 | 0,92 / 0,97 / 1,00 |
 | Gerichtsentscheidungen: eingesetzte Werte gefunden | – | 0,995 |
 
@@ -54,6 +54,10 @@ Finanz- und Banktexte (`datasets/finance`, ohne Rechtsmodell): geschützt werden
 0,586, Gretel 0,654 der Werte (vorher 0,808 / 0,398 / 0,636). Neu erkannt: Telefon in allen gängigen Schreibweisen,
 IP-Adressen, beschriftete Kundennummern, Ausweis-/Pass-/Führerscheinnummern, Krankenversichertennummer,
 Kfz-Kennzeichen, Steuernummer. Offen: unbeschriftete Kunden-/Auftragsnummern (firmenspezifische Muster).
+
+Personen-Recall 0,84 -> 0,91 (21.11.2026) ohne Neutraining: Richternamen in Unterschriftenzeilen werden einzeln
+nachgeprüft, weitere Richter einer Besetzung übernommen; Fehleranalyse in `docs/research/person-recall.md`.
+Restfehler Personen: Nachnamen im Fließtext ohne Anrede/Rolle, Platzhalter („W ...“), als Firma typisierte Namen.
 
 Messen: `python packages/core/scripts/ler_data.py eval --split test` und `court_data.py eval --split test`
 (Ergebnisse in `datasets/*/eval_test*.json`). Grenzen: gemessen an veröffentlichten Urteilen, nicht an
@@ -92,8 +96,10 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 | Branch | Inhalt | Stand |
 |---|---|---|
 | `claude/epic-thompson-ceb5ng` | Hauptentwicklungsbranch dieser Sitzung, entspricht main | – |
+| `claude/peaceful-keller-md3af4-person-recall` | Personen-Recall (Unterschriftenzeilen, Besetzung), LER-Test Personen R 0,84 -> 0,91 | geprüft, nicht gemergt |
+| `claude/peaceful-keller-md3af4-span-fix` | Aktenzeichen/Adressen enden an Zeile bzw. Satz; Finanz-Präzision -0,0004 | zur Entscheidung |
 
-Keine offenen Arbeitsbranches. Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`, `claude/research-*`. Neue Arbeit erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
+Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`, `claude/research-*`. Neue Arbeit erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
 
 ## 6. Nächste Schritte (priorisiert)
 
