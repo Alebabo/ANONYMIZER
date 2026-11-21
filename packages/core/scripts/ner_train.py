@@ -279,6 +279,84 @@ class Filler:
         return text, spans
 
 
+# Company names without a legal form: invented brands, initialisms, "Weber Logistik", "Hahn & Söhne". German LER
+# has few of them (anonymized "die K" became a bare surname), and recall on organisations suffered most.
+_BRAND_HEAD = ("Nova", "Medi", "Agro", "Logi", "Tecto", "Primo", "Alpha", "Inno", "Euro", "Inter", "Trans", "Data",
+               "Ener", "Elektro", "Holz", "Stahl", "Nord", "Süd", "West", "Ost", "Rhein", "Elb", "Main", "Iso",
+               "Vita", "Terra", "Aqua", "Solar", "Kraft", "Bau", "Feld", "Optik", "Plasto", "Metallo", "Fortis")
+_BRAND_TAIL = ("tronic", "lux", "tec", "med", "plan", "bau", "log", "form", "net", "con", "vest", "soft", "star",
+               "werk", "haus", "trans", "data", "line", "pharm", "therm", "matic", "flex", "tex", "nova", "sys")
+_ORG_WORDS = ("Logistik", "Bau", "Immobilien", "Software", "Consulting", "Handel", "Elektrotechnik", "Transporte",
+              "Reisen", "Pflegedienst", "Gebäudereinigung", "Sicherheitsdienst", "Autohaus", "Metallbau", "Druck",
+              "Medien", "Versand", "Spedition", "Personalservice", "Haustechnik")
+_FORM_TAIL = re.compile(r"(?P<sep>[\s-])(?P<form>(?:GmbH|AG|SE|UG) & Co\.? KG|GmbH & atypisch [Ss]till|gGmbH|GmbH|"
+                        r"AG|KGaA|KG|OHG|GbR|EWIV|UG|SE|e\.\s?V\.|e\.\s?K\.|mbH|Gruppe|Konzern|Holding|Werke)$")
+
+
+def synthetic_company(rng: random.Random, surnames: list[str]) -> str:
+    kind = rng.random()
+    if kind < 0.3:
+        return rng.choice(_BRAND_HEAD) + rng.choice(_BRAND_TAIL)
+    if kind < 0.45:
+        return "".join(rng.choice("ABCDEFGHKLMNPRSTVWZ") for _ in range(rng.randint(2, 4)))
+    if kind < 0.65:
+        return rng.choice(surnames)
+    if kind < 0.85:
+        return f"{rng.choice(surnames)} {rng.choice(_ORG_WORDS)}"
+    if kind < 0.93:
+        return f"{rng.choice(surnames)} & {rng.choice(['Söhne', 'Partner', rng.choice(surnames)])}"
+    return f"{rng.choice(_BRAND_HEAD)}{rng.choice(_BRAND_TAIL)} {rng.choice(_ORG_WORDS)}"
+
+
+def org_variants(docs, rng: random.Random, surnames: list[str], copies: int, held_out: set[str] = frozenset()) -> list:
+    """Copies of training documents with organisations in them, each company name replaced by a synthetic one.
+
+    "Hahn GmbH" keeps its form ("Novatec GmbH"); a bare company ("Kraus", "Electronicon") becomes a bare synthetic
+    name, mostly without a legal form. Other organisations (unions, the EU, brands in quotes) stay as they are."""
+    from anonymizer.ner_dataset import GoldDoc, Span  # noqa: PLC0415
+
+    out = []
+    for d in docs:
+        targets = [s for s in d.spans if s.label == "ORG" and _company_like(d.text[s.start:s.end])]
+        if not targets:
+            continue
+        for k in range(copies):
+            text, spans, shift, pos = "", [], 0, 0
+            for s in sorted(d.spans, key=lambda x: x.start):
+                if s not in targets or s.start < pos:
+                    continue
+                value = d.text[s.start:s.end]
+                m = _FORM_TAIL.search(value)
+                new = synthetic_company(rng, surnames)
+                while new.lower() in held_out:
+                    new = synthetic_company(rng, surnames)
+                if m and " " not in m.string[:m.start()].strip() and rng.random() < 0.7:
+                    new = f"{new.split(' ')[0]}{m.group('sep')}{m.group('form')}"
+                text += d.text[pos:s.start]
+                spans.append((s, len(text), len(text) + len(new)))
+                text += new
+                pos = s.end
+            text += d.text[pos:]
+            moved = {id(s): (a, b) for s, a, b in spans}
+            new_spans, delta, j = [], 0, 0
+            for s in sorted(d.spans, key=lambda x: x.start):
+                if id(s) in moved:
+                    a, b = moved[id(s)]
+                    delta = b - s.end
+                    new_spans.append(Span(a, b, s.label))
+                else:
+                    new_spans.append(Span(s.start + delta, s.end + delta, s.label))
+            out.append(GoldDoc(f"{d.key}#org{k}", text, new_spans, split=d.split))
+    return out
+
+
+def _company_like(value: str) -> bool:
+    if _FORM_TAIL.search(value):
+        return True
+    # A bare capitalised word that is no initialism of a public body ("Kraus", "Electronicon", "SCHÜCO").
+    return bool(re.fullmatch(r"[A-ZÄÖÜÀ-ÞĀ-Ž][\w'’-]+", value)) and not value.isupper()
+
+
 def to_example(nlp, text: str, spans: list[tuple[int, int, str]], missing: list[tuple[int, int]] = ()) -> Example | None:
     doc = nlp.make_doc(text)
     tags = offsets_to_biluo_tags(doc, [s for s in spans])
@@ -432,6 +510,10 @@ def main() -> None:
     ap.add_argument("--ler", type=Path, help="datasets/ler: add LER train docs (and use LER dev without gold.jsonl)")
     ap.add_argument("--ler-docs", type=int, default=0, help="LER train docs to use (0 = all)")
     ap.add_argument("--ler-repeat", type=int, default=1)
+    ap.add_argument("--org-repeat", type=int, default=0,
+                    help="extra copies of every LER train doc that has an organisation (weights ORG higher)")
+    ap.add_argument("--org-augment", type=int, default=0,
+                    help="copies of every LER/court train doc with a company, names replaced by synthetic ones")
     ap.add_argument("--courts", type=Path, help="datasets/courts: whole decisions with filled placeholders")
     ap.add_argument("--courts-repeat", type=int, default=1)
     ap.add_argument("--feedback", type=Path, nargs="*", default=[], help="feedback.jsonl from GET /v1/feedback/export")
@@ -500,7 +582,11 @@ def main() -> None:
             gold_examples.append(ex)
     examples += gold_examples * args.gold_repeat
     ler_examples = []
-    for d in ler_train:
+    from anonymizer.ler import Names  # noqa: PLC0415
+
+    org_surnames = unseen(Names(SEED, held_out=False).last)  # the train half of the LER name pool
+    ler_aug = org_variants(ler_train, rng, org_surnames, args.org_augment, held_out) if args.org_augment else []
+    for d in [*ler_train, *ler_aug]:
         # Only private parties are entities; courts, laws, case law, literature are O (taught, not missing).
         spans = [(s.start, s.end, s.label) for s in d.spans if s.label in ("PER", "ORG", "LOC")]
         missing = [(s.start, s.end) for s in d.spans if s.label == "ADDR"]
@@ -512,6 +598,8 @@ def main() -> None:
         if (ex := to_example(nlp, d.text, spans, missing)) is not None:
             ler_examples.append(ex)
     examples += ler_examples * args.ler_repeat
+    org_ex = [ex for ex in ler_examples if any(t.endswith("-ORG") for t in ex.to_dict()["doc_annotation"]["entities"])]
+    examples += org_ex * args.org_repeat
     partial = partial_examples(nlp, args.dir, args.partial)
     examples += partial * args.partial_repeat
     fb = feedback_examples(nlp, args.feedback)
@@ -520,11 +608,17 @@ def main() -> None:
     if args.courts:
         from court_data import load as load_courts  # noqa: PLC0415 - same scripts folder
 
-        court_ex = court_examples(nlp, load_courts(args.courts, "train"))
+        court_train = load_courts(args.courts, "train")
+        court_ex = court_examples(nlp, court_train)
+        if args.org_augment:
+            court_aug = org_variants(court_train, rng, org_surnames, args.org_augment, held_out)
+            court_ex += [ex for ex in court_examples(nlp, court_aug) if any(
+                t.startswith(("U-ORG", "B-ORG")) for t in ex.to_dict()["doc_annotation"]["entities"])]
     examples += court_ex * args.courts_repeat
     print(f"examples: germeval {n_ge}, synthetic {n_syn}, gold train {len(gold_examples)} x{args.gold_repeat}, "
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
-          f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}")
+          f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}, "
+          f"org-augmented ler docs {len(ler_aug)}, ler docs with ORG {len(org_ex)} x{args.org_repeat} extra")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
@@ -558,6 +652,7 @@ def main() -> None:
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
                  "courts": len(court_ex), "courts_repeat": args.courts_repeat,
+                 "org_repeat": args.org_repeat, "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
                  "dev": "gold.jsonl" if gold else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
