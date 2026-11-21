@@ -287,3 +287,35 @@ def test_company_forms_are_not_courts_and_private_names_are_not_authors():
     types = {d.entity_type for d in
              scan("Die Siemens AG klagt. Herr Max Müller, wohnhaft in Köln, verweist auf Rn. 5.", language="de").detections}
     assert "court" not in types and "legal_citation" not in types
+
+
+# --- financial identifiers (measured on datasets/finance) --------------------------------------------
+FINANCE_FOUND = [
+    ("Telefon: 0211 24 77 51 59", "phone", "0211 24 77 51 59"),
+    ("erreicht ihr mich auf +49 (30) 5550-7413.", "phone", "+49 (30) 5550-7413"),
+    ("Telefon: (0157) 86376363", "phone", "(0157) 86376363"),
+    ("Kundennummer: KD/1934232-WY", "customer_number", "KD/1934232-WY"),
+    ("Ihre Kundennummer bei uns: KU-765010. Danke", "customer_number", "KU-765010"),
+    ("Personalausweisnummer NF9290C1L", "id_document", "NF9290C1L"),
+    ("Reisepass-Nr.: HVTH16F0K", "id_document", "HVTH16F0K"),
+    ("Krankenversichertennummer: R249263510", "health_insurance_number", "R249263510"),
+    ("IP-Adresse: 209.255.58.99", "ip_address", "209.255.58.99"),
+    ("Registrierte IP-Adresse: ddb3:d8ee:6f8b:6cbe:b759:f3ed:1384:3901", "ip_address",
+     "ddb3:d8ee:6f8b:6cbe:b759:f3ed:1384:3901"),
+    ("Fahrzeugkennzeichen: CE-FI 346", "license_plate", "CE-FI 346"),
+    ("Steuernummer der Kanzlei: 137/653/52078", "tax_number", "137/653/52078"),
+    ("auf dem Storno steht Bankcode TESTDEB1756", "bic", "TESTDEB1756"),
+]
+
+
+@pytest.mark.parametrize("text,etype,value", FINANCE_FOUND)
+def test_financial_identifiers_are_found(text, etype, value):
+    found = [(d.entity_type, text[d.start:d.end]) for d in scan(text, language="de").detections]
+    assert (etype, value) in found
+
+
+def test_labels_without_value_and_version_numbers_stay_clean():
+    for text in ("Die Kundennummer wurde geändert.", "Version 1.2.3 vom Mai, Betrag 1.200,00 EUR",
+                 "Bitte geben Sie Ihre IBAN an."):
+        types = {d.entity_type for d in scan(text, language="de").detections}
+        assert not types & {"customer_number", "ip_address", "iban", "id_document"}, (text, types)

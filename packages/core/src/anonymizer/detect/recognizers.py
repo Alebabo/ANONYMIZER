@@ -29,9 +29,11 @@ PHONE = RegexRecognizer(
     "phone", E.PHONE,
     [
         # German international: +49 30 1234567, 0049 (0)171 123 4567
-        Pattern(r"(?<![\w/.+])(?:\+49|0049)\s?(?:\(0\)\s?)?\d{2,5}(?:[\s/-]?\d{2,}){1,4}(?![\w/])", 0.8),
+        Pattern(r"(?<![\w/.+])(?:\+49|0049)\s?(?:\(0\)\s?)?\(?\d{2,5}\)?(?:[\s/-]?\d{2,}){1,4}(?![\w/])", 0.8),
         # German national with separator after area code: 030 12345678, 0171/1234567
-        Pattern(r"(?<![\w/.,])0\d{2,5}(?:\s?/\s?|\s|-)\d{3,}(?:[\s-]\d{2,})*(?![\w/.,]\d)", 0.7),
+        Pattern(r"(?<![\w/.,])0\d{2,5}(?:\s?/\s?|\s|-)\d{2,}(?:[\s-]\d{2,})*(?![\w/.,]\d)", 0.7),
+        # Area code in brackets: (030) 1234567, (0157) 86376363
+        Pattern(r"(?<![\w(])\(0\d{2,5}\)\s?\d{2,}(?:[\s/-]\d{2,})*(?![\w/])", 0.75),
         # Other international numbers
         Pattern(r"(?<![\w+])\+(?!49)\d{1,3}[\s-]?\(?\d{1,4}\)?(?:[\s-]?\d{2,}){2,5}(?!\w)", 0.75),
         # US: (555) 123-4567, 555-123-4567
@@ -584,11 +586,61 @@ class SelfIntroductionRecognizer:
 SELF_INTRO = SelfIntroductionRecognizer()
 
 
+# --------------------------------------------------------------------------
+# Identifiers announced by a label ("Kundennummer: KD/1934232-WY", "Reisepass-Nr.: HVTH16F0K")
+# --------------------------------------------------------------------------
+# The label fixes the type, so the value pattern can be generic; it must contain a digit and ends at a line
+# break, comma, semicolon or a following lower-case word. Measured on datasets/finance (finance_data.py).
+# Optional owner between label and value: "Steuernummer der Kanzlei: …", "Kundennummer bei uns: …".
+_LABEL_SEP = (r"(?:\s(?:der|des|von|für|bei|unserer?|Ihrer?|meiner?|seiner?)\s[\wÄÖÜäöüß.-]{2,30})?"
+              r"\s*(?:[:#]|Nr\.?|-Nr\.?)?\s*:?\s*")
+_ID_TOKEN = r"[A-Z0-9](?:[A-Z0-9/.\-]*[A-Z0-9])?"  # ends with a letter or digit, never with a full stop
+_ID_VALUE = rf"(?P<v>{_ID_TOKEN}(?:\s{_ID_TOKEN}){{0,3}})"
+
+
+def _labelled(name: str, entity_type: str, labels: str, value: str = _ID_VALUE, confidence: float = 0.85,
+              validator=v.contains_digit, category: Category | None = None) -> RegexRecognizer:
+    return RegexRecognizer(name, entity_type, [Pattern(rf"(?:{labels}){_LABEL_SEP}{value}(?![\w/-])", confidence, group="v")],
+                           validator=validator, checksum=False, category=category)
+
+
+LABELLED_IDS = [
+    _labelled("customer_number_label", "customer_number",
+              r"\b(?:Kunden(?:nummer|-?Nr\.?|kennung|-?ID|konto)|Mitgliedsnummer|Mitglieds-Nr\.?|Personalnummer|"
+              r"Versichertennummer|Vertragsnummer|Vertrags-Nr\.?|Policennummer|Kontonummer|Konto-Nr\.?|Mandatsreferenz|"
+              r"Customer (?:ID|No\.?|number)|Client (?:ID|number))"),
+    _labelled("id_document_label", "id_document",
+              r"\b(?:Personalausweis(?:nummer)?(?:\s(?:mit der|Nr\.))?(?:\sNummer)?|Ausweis(?:nummer)?|Reisepass(?:nummer)?|"
+              r"Pass(?:nummer|-Nr\.?)|Führerschein(?:nummer)?|Passport (?:No\.?|number)|ID card (?:No\.?|number))"),
+    _labelled("health_insurance_label", "health_insurance_number",
+              r"\b(?:Krankenversichertennummer|Krankenversicherungsnummer|KVNR|Versicherten-?Nr\.?)",
+              value=r"(?P<v>[A-Z]\d{9})"),
+    _labelled("license_plate_label", "license_plate",
+              r"\b(?:(?:Fahrzeug|amtliche[sn]?\s)?[Kk]ennzeichen|Kfz-Kennzeichen|License plate)",
+              value=r"(?P<v>[A-ZÄÖÜ]{1,3}[-\s][A-Z]{1,2}\s?\d{1,4}[EH]?)"),
+    _labelled("tax_number_label", E.TAX_NUMBER, r"\b(?:Steuernummer|St\.-?Nr\.?|Steuer-Nr\.?)",
+              value=r"(?P<v>\d{2,3}/\d{3}/\d{4,5}|\d{10,13})"),
+    # A labelled IBAN with a failed checksum is kept by the IBAN recognizer itself (validated=False, so a policy
+    # can send it to review); BIC has no checksum, so a label is enough here.
+    _labelled("bic_label", E.BIC, r"\b(?:BIC|SWIFT(?:-Code)?|Bankcode)", value=r"(?P<v>[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)",
+              confidence=0.75, validator=None),
+]
+
+IP_ADDRESS = RegexRecognizer(
+    "ip_address", "ip_address",
+    [
+        Pattern(r"(?<![\w.])(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?![\w.]\d|\.\d)", 0.8),
+        Pattern(r"(?<![\w:])(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(?![\w:])", 0.85),
+    ],
+    checksum=False,
+)
+
+
 def builtin_recognizers() -> list:
     return [
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
-        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, PERSON, SELF_INTRO,
+        PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, PERSON, SELF_INTRO, *LABELLED_IDS, IP_ADDRESS,
     ]
 
 
