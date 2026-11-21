@@ -2,24 +2,24 @@
   "split": "test",
   "docs": 1113,
   "ner": true,
-  "seconds": 18.2,
+  "seconds": 20.7,
   "entities_partial": {
     "micro": {
-      "tp": 610,
-      "fp": 51,
-      "fn": 202,
+      "tp": 635,
+      "fp": 53,
+      "fn": 177,
       "precision": 0.923,
-      "recall": 0.751,
-      "f1": 0.828
+      "recall": 0.782,
+      "f1": 0.847
     },
     "labels": {
       "PER": {
-        "tp": 271,
-        "fp": 26,
-        "fn": 53,
-        "precision": 0.912,
-        "recall": 0.836,
-        "f1": 0.873
+        "tp": 296,
+        "fp": 28,
+        "fn": 28,
+        "precision": 0.914,
+        "recall": 0.914,
+        "f1": 0.914
       },
       "ORG": {
         "tp": 136,
@@ -40,32 +40,32 @@
     },
     "sources": {
       "ler": {
-        "tp": 610,
-        "fp": 51,
-        "fn": 202,
+        "tp": 635,
+        "fp": 53,
+        "fn": 177,
         "precision": 0.923,
-        "recall": 0.751,
-        "f1": 0.828
+        "recall": 0.782,
+        "f1": 0.847
       }
     }
   },
   "entities_strict": {
     "micro": {
-      "tp": 574,
-      "fp": 87,
-      "fn": 238,
-      "precision": 0.868,
-      "recall": 0.707,
-      "f1": 0.779
+      "tp": 599,
+      "fp": 89,
+      "fn": 213,
+      "precision": 0.871,
+      "recall": 0.738,
+      "f1": 0.799
     },
     "labels": {
       "PER": {
-        "tp": 247,
-        "fp": 50,
-        "fn": 77,
-        "precision": 0.832,
-        "recall": 0.762,
-        "f1": 0.795
+        "tp": 272,
+        "fp": 52,
+        "fn": 52,
+        "precision": 0.84,
+        "recall": 0.84,
+        "f1": 0.84
       },
       "ORG": {
         "tp": 126,
@@ -86,12 +86,12 @@
     },
     "sources": {
       "ler": {
-        "tp": 574,
-        "fp": 87,
-        "fn": 238,
-        "precision": 0.868,
-        "recall": 0.707,
-        "f1": 0.779
+        "tp": 599,
+        "fp": 89,
+        "fn": 213,
+        "precision": 0.871,
+        "recall": 0.738,
+        "f1": 0.799
       }
     }
   },
@@ -118,12 +118,12 @@
     "rate": 0.999
   },
   "false_positives_on_public_references": {
+    "PER on RS": 4,
     "LOC on INN": 3,
     "LOC on VT": 3,
     "ORG on RS": 3,
     "ORG on INN": 2,
     "ORG on VT": 2,
-    "PER on RS": 2,
     "LOC on VS": 1
   }
 }
