@@ -1,6 +1,6 @@
 # Projektstand OpenAnonymizer
 
-Stand: 21.11.2026. Übergabe für die Weiterarbeit, auch durch andere Coding-Agents (Codex, Claude Code).
+Stand: 22.11.2026. Übergabe für die Weiterarbeit, auch durch andere Coding-Agents (Codex, Claude Code).
 Hintergrund und Architekturentscheidungen: [plan.md](plan.md). Betrieb in einer Firma:
 [HANDOVER.md](HANDOVER.md).
 
@@ -90,7 +90,7 @@ pip install -e ".[dev]"
 # spaCy-Modelle (Wheels von github.com/explosion/spacy-models/releases, Version 3.8.0)
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
 git lfs pull                     # NER-Gewichte unter models/
-pytest                           # erwartet: alle grün (368 passed am 21.11.2026)
+pytest                           # erwartet: alle grün (379 passed am 22.11.2026)
 
 cd ../.. && npm install
 npx tsc --noEmit -p .            # Typecheck Dashboard
@@ -116,39 +116,50 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 
 ## 5. Laufende Arbeit (Branches)
 
-| Branch | Inhalt | Stand |
-|---|---|---|
-| `claude/peaceful-keller-md3af4` | Sammelbranch: person-recall, messkit, backend-cleanup, span-fix und `feature/ner-v6` (angepasst) zusammengeführt; Tests und Typecheck grün, Messung siehe Abschnitt 3 | geprüft, nicht auf main |
-| `claude/peaceful-keller-md3af4-person-recall` | Personen-Recall (Unterschriftenzeilen, Besetzung), LER-Test Personen R 0,84 -> 0,91 | in Sammelbranch |
-| `claude/peaceful-keller-md3af4-span-fix` | Aktenzeichen/Adressen enden an Zeile bzw. Satz; Finanz-Präzision -0,0004 (freigegeben) | in Sammelbranch |
-| `claude/peaceful-keller-md3af4-messkit` | Mess-Kit echte Kanzleitexte (`local_eval.py`) | in Sammelbranch |
-| `claude/peaceful-keller-md3af4-backend-cleanup` | Conversations, Prompts, Gateway, MCP-Proxy entfernt | in Sammelbranch |
-| `feature/ner-v6` | de_custom_ner v6 (MultiCoNER), Firmenregeln `orgs.py`, Wortlisten; Behörden/Schufa für die Zusammenführung herausgenommen | in Sammelbranch |
+`main` steht auf `e2a3c4e` und enthält alles aus der Sitzung vom 21./22.11.2026. Keine offenen Arbeitsbranches.
 
-`main` steht auf 337724e (alles bis einschließlich span-fix); ner-v6 und die Doku dieses Stands liegen nur auf `claude/peaceful-keller-md3af4`.
+Auf main zusammengeführt (Branches können gelöscht werden): `claude/peaceful-keller-md3af4` (Sammelbranch) mit
+`-person-recall`, `-span-fix`, `-messkit`, `-backend-cleanup`, `-gliner` sowie `feature/ner-v6` (angepasst, siehe
+Abschnitt 3); früher schon `claude/epic-thompson-ceb5ng`, `claude/ner-org-recall`, `claude/outcome-experiment`,
+`claude/research-*`, `feature/ner-training`.
 
-Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`, `claude/research-*`. Neue Arbeit erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
+Veraltet (vor dem Neuaufsetzen von main am 19.11.2026, keine gemeinsame Historie mit main): `claude/brave-hawking-t1behw`,
+`claude/cato-privacy-infrastructure-ppysem`, `claude/eager-faraday-pm1krh`, `claude/fervent-goldberg-6gtxv2`,
+`claude/keen-brahmagupta-jpiycw`, `claude/keen-wright-nz195h`, `claude/new-session-5566vm`,
+`claude/simplify-nav-playground`, `claude/sweet-curie-733nyb`. Vor dem Löschen als Tag `archive/<name>` sichern.
+Löschen geht nicht aus der Cloud-Umgebung (Push-Verbot außer auf den Sitzungsbranch), nur lokal mit `git push origin --delete`.
+
+CI (`.github/workflows/ci.yml`) läuft seit 21.11.2026 nur auf `main`, bei Pull Requests und manuell
+(`workflow_dispatch`), nicht mehr bei jedem Push auf Arbeitsbranches. Arbeitsbranches deshalb vor dem Merge lokal prüfen
+(`pytest`, `npx tsc --noEmit -p .`, Messungen).
+
+Bekannte Stolperstellen:
+- `finance_data.py eval` überspringt Gretel stillschweigend, wenn `pyarrow` oder die Gretel-Daten fehlen
+  (`finance_data.py download`), und überschreibt `datasets/finance/eval.json` dann ohne Gretel. Vor dem Committen prüfen.
+- `ler_data.py eval` schreibt je nach Konfiguration `eval_test.json` oder `eval_test_de_legal_ner.json`; nur die Datei
+  der gemessenen Konfiguration committen.
+- In git-Worktrees zeigt `pip install -e` auf das Hauptverzeichnis: `PYTHONPATH=<worktree>/packages/core/src` setzen.
 
 ## 6. Nächste Schritte (priorisiert)
 
-1. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
+1. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
+   `docs/local-eval.md`, `packages/core/scripts/local_eval.py` (Vorannotation, Korrektur im Texteditor, `eval`, `report` nur mit Zahlen).
+   Offen: Durchführung in einer Kanzlei. Wichtigster nächster Schritt: alle Zahlen oben stammen aus veröffentlichten Urteilen.
+2. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
    und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Am 21.11.2026 drei weitere Trainingsläufe (GermEval 2014
    als Rehearsal, `--org-repeat 3`, 10 Epochen): keiner hob den Firmen-Recall (LER-Test 0,538 unverändert), Modell nicht
    getauscht; Details in `docs/research/org-ner-results.md`. Das Modell ist hier ausgereizt; Restfehler sind
    Verbandskürzel, Marken und bloße Nachnamen als Firma. GLiNER als zweiter Detektor gemessen (optional, Standard aus): kein Gewinn,
    Präzision fällt, 25- bis 125-fache Latenz auf CPU (`docs/research/gliner-results.md`). Nächste Hebel: Feedback aus echten Texten, Produktentscheidung, ob Verbände/Marken überhaupt pseudonymisiert werden.
-2. **Personen im Fließtext ohne Anrede**: Lauf `--org-repeat 3 --epochs 10` (R2) brachte auf LER-Test Personen-Recall
+3. **Personen im Fließtext ohne Anrede**: Lauf `--org-repeat 3 --epochs 10` (R2) brachte auf LER-Test Personen-Recall
    0,914 -> 0,923 und Gesamtpräzision 0,923 -> 0,932 (Personen-Präzision 0,914 -> 0,912), verlor aber auf Courts-Test eine Person (813 statt 814/818) und wurde
    deshalb nicht übernommen. Kandidat für einen zweiten Seed oder für die Kombination mit Feedback-Daten.
-3. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
-4. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
-   `docs/local-eval.md`, `packages/core/scripts/local_eval.py` (Vorannotation, Korrektur im Texteditor, `eval`, `report` nur mit Zahlen).
-   Offen: Durchführung in einer Kanzlei.
+4. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
 5. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
    TF-IDF + logistische Regression: Macro-F1 0,44 im zeitlichen Split (3 Klassen; binär 0,62), Metadaten-Baselines
    0,29–0,36. Messbares, aber für ein Produkt zu schwaches Signal. Details und Reproduktion ohne Download:
    `datasets/outcome/README.md` (`outcome_experiment.py train --dir local/outcome`).
-6. **Backend-Bereinigung: erledigt** (im Sammelbranch `claude/peaceful-keller-md3af4`). Conversations, Prompts,
+6. **Backend-Bereinigung: erledigt** (auf main). Conversations, Prompts,
    Gateway (`/v1/chat/completions`) und MCP-Proxy (`/proxy/mcp`, `anonymizer-proxy`) entfernt (keine UI, weniger
    Angriffsfläche). Der Ergebnisfilter des Proxys lebt als `anonymizer/result_filter.py` weiter, weil der CSV-Playground
    ihn nutzt. Playground-Policy jetzt `ANONYMIZER_PLAYGROUND_POLICY` (alter Name `ANONYMIZER_CONVERSATIONS_POLICY` als
