@@ -24,6 +24,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+# Optional second NER detector (off by default, see docs/research/gliner-results.md). Pulls in PyTorch;
+# for CPU-only: pip install torch --index-url https://download.pytorch.org/whl/cpu first.
+gliner = ["gliner>=0.2.16"]
 
 [project.scripts]
 anonymizer = "anonymizer.cli:main"

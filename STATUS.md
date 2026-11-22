@@ -33,7 +33,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
-| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md` |
+| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
@@ -135,8 +135,8 @@ Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`,
    und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Am 21.11.2026 drei weitere Trainingsläufe (GermEval 2014
    als Rehearsal, `--org-repeat 3`, 10 Epochen): keiner hob den Firmen-Recall (LER-Test 0,538 unverändert), Modell nicht
    getauscht; Details in `docs/research/org-ner-results.md`. Das Modell ist hier ausgereizt; Restfehler sind
-   Verbandskürzel, Marken und bloße Nachnamen als Firma. Nächste Hebel: GLiNER als zweiter Detektor (Messung läuft
-   separat), Feedback aus echten Texten, Produktentscheidung, ob Verbände/Marken überhaupt pseudonymisiert werden.
+   Verbandskürzel, Marken und bloße Nachnamen als Firma. GLiNER als zweiter Detektor gemessen (optional, Standard aus): kein Gewinn,
+   Präzision fällt, 25- bis 125-fache Latenz auf CPU (`docs/research/gliner-results.md`). Nächste Hebel: Feedback aus echten Texten, Produktentscheidung, ob Verbände/Marken überhaupt pseudonymisiert werden.
 2. **Personen im Fließtext ohne Anrede**: Lauf `--org-repeat 3 --epochs 10` (R2) brachte auf LER-Test Personen-Recall
    0,914 -> 0,923 und Gesamtpräzision 0,923 -> 0,932 (Personen-Präzision 0,914 -> 0,912), verlor aber auf Courts-Test eine Person (813 statt 814/818) und wurde
    deshalb nicht übernommen. Kandidat für einen zweiten Seed oder für die Kombination mit Feedback-Daten.
