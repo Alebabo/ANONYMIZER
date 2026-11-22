@@ -62,6 +62,11 @@ Nachnamen wie „Fieback“, „Hayen“, „Raum“ oder „Grube“ für Subst
    Staatsanwälte und Rechtspfleger“), Abbruch bei Funktionswörtern, Titeln („Dipl. - Phys.“) und Wörtern auf
    „-richter“. Dazu „Richterinnen“ und Abkürzungen wie „RiBGH“, „VRiBGH“ als Richterrolle.
 
+Nach dem Zusammenführen mit `feature/ner-v6` läuft die Einzelwort-Prüfung nach dem neuen Ablauf in `ner.py`
+(`_detections`: Wortart-Filter, Filter für einzelne Gattungswörter aus GermEval, Firmen-Regeln) auf allen dort
+übrig gebliebenen Treffern; sie bleibt die einzige Stelle, an der beide Filter für allein stehende Wörter entfallen
+(„Raum“ steht in der Gattungswortliste und wird als Unterschrift trotzdem gefunden). Messwerte unverändert.
+
 Tests: `packages/core/tests/test_person_recall.py` (Kandidatenmuster, Ausschlüsse, Besetzung, Einschränkung auf das
 Rechtsmodell, Ende-zu-Ende mit `de_legal_ner`, falls die Gewichte vorhanden sind).
 
@@ -79,7 +84,8 @@ Rechtsmodell, Ende-zu-Ende mit `de_legal_ner`, falls die Gewichte vorhanden sind
   in diesen Branch übernommen: auf den Finanzdaten sinkt die Präzisions-Untergrenze leicht (syntriq 0.5499 ->
   0.5495, gretel 0.3718 -> 0.3717), weil der nun freie Text der Folgezeile („Amtsgericht Leipzig“,
   „Neubrandenburg“, „Personalnr“) eigene Treffer bekommt. Der Fix liegt separat im Branch
-  `claude/peaceful-keller-md3af4-span-fix` zur Entscheidung.
+  `claude/peaceful-keller-md3af4-span-fix` zur Entscheidung. Nachtrag: vom Inhaber freigegeben und am 21.11.2026 in
+  `claude/peaceful-keller-md3af4` übernommen.
 
 ## Reproduktion
 

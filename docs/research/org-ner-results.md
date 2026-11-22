@@ -117,3 +117,60 @@ ANONYMIZER_NER_MODEL_DE="de_core_news_lg+local/ner/models/org_rep2/ner" \
 
 Das Training ist mit Seed 24 reproduzierbar, aber nicht bitgenau über Plattformen; Unterschiede von ±0.01 in
 den Recall-Werten liegen im Rauschen.
+
+## Trainingsläufe vom 21.11.2026 (nach dem Zusammenführen von `feature/ner-v6`)
+
+Ziel: Firmen-Recall (LER-Test 0.538 -> >= 0.65 bei P >= 0.90) und Personen im Fließtext ohne Anrede. Basis wie
+Lauf 3 (`--ler datasets/ler --courts datasets/courts --synthetic 0`, Seed 24), Pipeline mit den Regeln nach dem
+ner-v6-Merge. Auswahl auf LER dev, Bestätigung auf Test. Höchstens drei Läufe.
+
+Neu in `ner_train.py`: `--germeval-public-o` setzt GermEval-ORG-Spannen auf Gerichte und Behörden
+("Bundesverfassungsgericht", "Bundestag", "Bundeskartellamt") auf O, wie LER sie behandelt (GRT/INN). GermEval 2014
+(CC BY 4.0) aus `huggingface.co/datasets/stefan-it/germeval14_no_wikipedia` (`original/NER-de-train.tsv`), lokal
+unter `local/ner/public/germeval14/train.tsv`. MultiCoNER v2 (CC BY 4.0) wurde nicht verwendet: die Sätze sind
+durchgehend klein geschrieben, und mit `de_legal_ner` behält die Pipeline klein geschriebene Treffer (Modell mit "+"),
+das Risiko neuer Fehltreffer in Rechtstexten ist hoch, der Nutzen für Firmen mit Rechtsform gering.
+
+| Lauf | Parameter | NER-dev-F1 (beste Epoche) | LER dev P / R | dev PER P / R | dev ORG P / R | Courts dev |
+|---|---|---|---|---|---|---|
+| Referenz `de_legal_ner` (Lauf 3) | `--org-repeat 2 --epochs 6` | 0.739* | 0.908 / 0.802 | 0.903 / 0.931 | 0.901 / 0.568 | 0.994 |
+| R1 | `--germeval 4000 --germeval-public-o --org-repeat 2 --epochs 6`, nach Epoche 3 abgebrochen | 0.733 (E3) | 0.891 / 0.791 | 0.892 / 0.922 | 0.861 / 0.546 | 0.994 |
+| R2 | `--org-repeat 3 --epochs 10` | **0.748** (E8) | **0.923** / 0.799 | 0.895 / 0.931 | 0.938 / 0.553 | 0.994 |
+| R3 | `--germeval 4000 --germeval-public-o --org-repeat 3 --epochs 10` | 0.735 (E4) | 0.898 / 0.799 | 0.890 / 0.931 | 0.893 / 0.553 | 0.994 |
+
+\* Die Auswahlmetrik von `ner_train.py` misst strikt mit den Regeln von `SpacyRecognizer`; seit ner-v6
+(Anführungszeichen, Firmen nach Branchenwort, Nachname nach Vorname) liegt das Referenzmodell dort bei 0.739 statt
+0.770. Die Zahlen sind daher nur innerhalb dieser Tabelle vergleichbar. R1 wurde nach Epoche 3 abgebrochen, weil die
+Pipeline auf dev in allen Kennzahlen unter der Referenz lag; R3 (dieselben Daten, vollständig) bestätigt, dass
+GermEval hier nicht hilft (Präzision sinkt, ORG-Recall auch).
+
+Einziger Kandidat nach dev: R2 (Präzision höher, Personen-Recall gleich, F1 0.852 -> 0.857), obwohl der
+ORG-Recall auf dev sinkt. Test:
+
+| Test-Splits | Referenz | R2 |
+|---|---|---|
+| LER gesamt P / R / F1 | 0.923 / 0.782 / 0.847 | 0.932 / 0.791 / 0.855 |
+| LER Personen P / R | 0.914 / 0.914 | 0.912 / 0.923 |
+| LER Firmen P / R | 0.883 / 0.538 | 0.907 / 0.538 |
+| LER Orte P / R | 0.967 / 0.864 | 0.981 / 0.881 |
+| PER/ORG/LOC-Treffer auf Gerichten, Normen, Rechtsprechung | 18 | 14 |
+| Courts eingesetzte Werte (859) | 0.995 (Personen 814/818) | 0.994 (813/818) |
+
+**Nicht übernommen.** R2 ist auf LER-Test besser, auf Courts-Test aber um eine Person schlechter ("die Eheleute
+Oldenburg", ein Nachname, der zugleich Stadt ist), und die Personen-Präzision auf LER sinkt leicht. Die Regel
+"besser auf LER-Test und Courts-Test, weder Präzision noch Personen-Recall sinken" ist damit nicht erfüllt;
+`models/de_legal_ner/` bleibt Lauf 3. Für den Firmen-Recall brachte keiner der Läufe etwas: mehr Gewicht auf
+Firmen-Dokumenten verschiebt nur zwischen Präzision und Recall, die verbleibenden Fehler (Verbandskürzel, Marken,
+Nachnamen als Firma) sind für das Modell ohne neue Daten nicht lernbar.
+
+Reproduktion (je ca. 25 bis 60 min auf geteilten 4 CPU-Kernen):
+
+```bash
+python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/courts --synthetic 0 --germeval 0 \
+  --epochs 10 --org-repeat 3 --out local/ner/models/r2_rep3_e10                                         # R2
+python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/courts --synthetic 0 \
+  --germeval 4000 --germeval-public-o --epochs 10 --org-repeat 3 --out local/ner/models/r3_ge4000_rep3_e10   # R3
+# messen: Gewichte nach z. B. local/ner/de_legal_ner_r2/ner kopieren (Pfad muss "de_legal_ner" enthalten), dann
+ANONYMIZER_NER_MODEL_DE="de_core_news_lg+local/ner/de_legal_ner_r2/ner" \
+  python packages/core/scripts/ler_data.py eval --split dev --data <Kopie von datasets/ler>
+```

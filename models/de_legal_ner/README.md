@@ -39,6 +39,10 @@ python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/c
   --germeval 0 --epochs 6 --org-repeat 2 --out local/ner/models/de_legal_ner
 ```
 
+Runs tried on 21.11.2026 after the ner-v6 merge (GermEval 2014 rehearsal, `--org-repeat 3`, 10 epochs) were not
+adopted: none raised organisation recall, and the best one (R2) lost a person on the court test split; see
+[docs/research/org-ner-results.md](../../docs/research/org-ner-results.md).
+
 Run 2 (same without `--org-repeat`) and run 1 (LER only) are described in the git history. `--org-augment N`
 (copies of company documents with synthetic company names without legal form) did not help measurably; see
 [docs/research/org-ner-results.md](../../docs/research/org-ner-results.md).

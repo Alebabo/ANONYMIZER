@@ -2,7 +2,7 @@
   "split": "test",
   "docs": 1113,
   "ner": true,
-  "seconds": 20.7,
+  "seconds": 16.7,
   "entities_partial": {
     "micro": {
       "tp": 635,
@@ -51,12 +51,12 @@
   },
   "entities_strict": {
     "micro": {
-      "tp": 599,
-      "fp": 89,
-      "fn": 213,
-      "precision": 0.871,
-      "recall": 0.738,
-      "f1": 0.799
+      "tp": 595,
+      "fp": 93,
+      "fn": 217,
+      "precision": 0.865,
+      "recall": 0.733,
+      "f1": 0.793
     },
     "labels": {
       "PER": {
@@ -68,12 +68,12 @@
         "f1": 0.84
       },
       "ORG": {
-        "tp": 126,
-        "fp": 28,
-        "fn": 127,
-        "precision": 0.818,
-        "recall": 0.498,
-        "f1": 0.619
+        "tp": 122,
+        "fp": 32,
+        "fn": 131,
+        "precision": 0.792,
+        "recall": 0.482,
+        "f1": 0.6
       },
       "LOC": {
         "tp": 201,
@@ -86,12 +86,12 @@
     },
     "sources": {
       "ler": {
-        "tp": 599,
-        "fp": 89,
-        "fn": 213,
-        "precision": 0.871,
-        "recall": 0.738,
-        "f1": 0.799
+        "tp": 595,
+        "fp": 93,
+        "fn": 217,
+        "precision": 0.865,
+        "recall": 0.733,
+        "f1": 0.793
       }
     }
   },

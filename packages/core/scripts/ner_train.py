@@ -185,7 +185,15 @@ COURTS_NOM = ["Amtsgericht München", "Amtsgericht Hamburg", "Amtsgericht Charlo
               "Amtsgericht Stuttgart"]
 
 
-def load_germeval(path: Path, limit: int, rng: random.Random) -> list[tuple[str, list[tuple[int, int, str]]]]:
+# Public bodies that GermEval tags ORG but legal guidelines (LER: courts GRT, institutions INN) leave out:
+# "Bundesverfassungsgericht", "Staatsanwaltschaft", "Bundestag", "Innenministerium", "Finanzamt", "Polizei".
+_GE_PUBLIC = re.compile(r"(?i)gericht|staatsanwaltschaft|ministeri|bundestag|bundesrat|landtag|parlament|regierung"
+                        r"|polizei|behörde|amt\b|ämter|senat|bundeswehr|kommission|bundesamt|bundesanstalt|kabinett")
+
+
+def load_germeval(path: Path, limit: int, rng: random.Random,
+                  public_o: bool = False) -> list[tuple[str, list[tuple[int, int, str]]]]:
+    """GermEval 2014 sentences. ``public_o``: ORG spans naming courts and public bodies become O, as in LER."""
     sents, toks = [], []
     for line in path.read_text(encoding="utf-8").splitlines() + [""]:
         if not line.strip():
@@ -217,6 +225,8 @@ def load_germeval(path: Path, limit: int, rng: random.Random) -> list[tuple[str,
                 cur[1] = end
             else:
                 cur = None
+        if public_o:
+            spans = [sp for sp in spans if not (sp[2] == "ORG" and _GE_PUBLIC.search(text[sp[0]:sp[1]]))]
         out.append((text, [tuple(s) for s in spans]))
     return out
 
@@ -600,6 +610,8 @@ def main() -> None:
     ap.add_argument("--out", default="local/ner/models/de_custom_ner", type=Path)
     ap.add_argument("--epochs", type=int, default=12)
     ap.add_argument("--germeval", type=int, default=6000, help="GermEval sentences for rehearsal")
+    ap.add_argument("--germeval-public-o", action="store_true",
+                    help="GermEval ORG spans on courts and public bodies become O (legal guidelines, LER)")
     ap.add_argument("--synthetic", type=int, default=4000)
     ap.add_argument("--gold-repeat", type=int, default=3, help="how often the gold train split is repeated")
     ap.add_argument("--partial", type=Path, nargs="*", default=[],
@@ -656,7 +668,8 @@ def main() -> None:
 
     nlp = spacy.load(args.init or "de_core_news_lg")
     examples: list[Example] = []
-    for text, spans in (load_germeval(ge_path, args.germeval, rng) if ge_path.exists() else []):
+    for text, spans in (load_germeval(ge_path, args.germeval, rng, args.germeval_public_o)
+                        if ge_path.exists() else []):
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
     n_ge = len(examples)

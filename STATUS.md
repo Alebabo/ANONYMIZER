@@ -23,13 +23,13 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | Pfad | Inhalt |
 |---|---|
 | `packages/core/` | Python-Paket `anonymizer-core`: Erkennung, Policy, API (FastAPI), MCP, CLI, Tests |
-| `packages/core/src/anonymizer/detect/` | Regeln (`recognizers.py`), Kontextsignale (`context.py`), spaCy-NER (`ner.py`) |
+| `packages/core/src/anonymizer/detect/` | Regeln (`recognizers.py`), Kontextsignale (`context.py`), spaCy-NER (`ner.py`), Firmenlisten/-muster (`orgs.py`), Wortlisten aus GermEval (`data/`) |
 | `packages/core/src/anonymizer/policy/builtin/` | `banking-default`, `support-default`, **`legal-default`** |
 | `packages/core/src/anonymizer/{ler,courts,feedback}.py` | Trainingsdaten (German LER, Gerichtsentscheidungen), Feedback-Speicher |
-| `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py`, `local_eval.py` (Mess-Kit echte Kanzleitexte, `docs/local-eval.md`) |
+| `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py`, `ner_external.py` (syntriq/EasyOctopus Personen), `build_common_nouns.py`, `local_eval.py` (Mess-Kit echte Kanzleitexte, `docs/local-eval.md`) |
 | `app/`, `components/`, `lib/` | Next.js-Dashboard: Tabs **Chat**, **Traces**, **CSV**; Settings: Policies, API Keys, Members, Feedback, Audit Logs |
 | `models/de_legal_ner/` | Feinjustierte NER-Gewichte für Rechtstexte (Git LFS, ~6 MB) |
-| `models/de_custom_ner/` | Feinjustierte NER-Gewichte für Support-Mails/Chats (Git LFS) |
+| `models/de_custom_ner/` | Feinjustierte NER-Gewichte für Support-Mails/Chats (Git LFS), v6 mit MultiCoNER v2 (CC BY 4.0) |
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
@@ -51,13 +51,32 @@ Rechtstexte mit `ANONYMIZER_NER_MODEL_DE="de_core_news_lg+models/de_legal_ner/ne
 | Gerichtsentscheidungen: eingesetzte Werte gefunden | – | 0,995 |
 
 Finanz- und Banktexte (`datasets/finance`, ohne Rechtsmodell): geschützt werden auf syntriq 0,905, EasyOctopus
-0,586, Gretel 0,654 der Werte (vorher 0,808 / 0,398 / 0,636). Neu erkannt: Telefon in allen gängigen Schreibweisen,
+0,586, Gretel 0,673 der Werte (vorher 0,808 / 0,398 / 0,636); Präzisions-Untergrenze 0,549 / 0,702 / 0,379.
+Gretel stieg mit den Firmenregeln aus `feature/ner-v6` (0,655 -> 0,673, Firmen 0,649 -> 0,709, siehe unten). Neu erkannt: Telefon in allen gängigen Schreibweisen,
 IP-Adressen, beschriftete Kundennummern, Ausweis-/Pass-/Führerscheinnummern, Krankenversichertennummer,
 Kfz-Kennzeichen, Steuernummer. Offen: unbeschriftete Kunden-/Auftragsnummern (firmenspezifische Muster).
 
 Personen-Recall 0,84 -> 0,91 (21.11.2026) ohne Neutraining: Richternamen in Unterschriftenzeilen werden einzeln
 nachgeprüft, weitere Richter einer Besetzung übernommen; Fehleranalyse in `docs/research/person-recall.md`.
 Restfehler Personen: Nachnamen im Fließtext ohne Anrede/Rolle, Platzhalter („W ...“), als Firma typisierte Namen.
+
+Stand nach dem Zusammenführen am 21.11.2026 (Branch `claude/peaceful-keller-md3af4`), Test-Splits:
+
+| Schritt | LER P / R | LER Personen P / R | LER Firmen P / R | Courts gesamt (Personen) | Finanz geschützt / P-Untergrenze (gretel, syntriq, EasyOctopus) |
+|---|---|---|---|---|---|
+| Ausgangsstand (person-recall, messkit, backend-cleanup) | 0,923 / 0,782 | 0,914 / 0,914 | 0,883 / 0,538 | 0,995 (814/818) | 0,655 / 0,3717, 0,905 / 0,5495, 0,586 / 0,7018 |
+| + span-fix | unverändert | unverändert | unverändert | unverändert | 0,655 / 0,3717, 0,905 / 0,5495, 0,586 / 0,7018 |
+| + ner-v6 unverändert | 0,912 / 0,782 | 0,914 / 0,914 | 0,840 / 0,538 | 0,995 | 0,673 / 0,379, 0,905 / 0,5455, 0,586 / 0,702 |
+| + ner-v6 angepasst (übernommen) | 0,923 / 0,782 | 0,914 / 0,914 | 0,883 / 0,538 | 0,995 (814/818) | 0,673 / 0,3791, 0,905 / 0,5492, 0,586 / 0,7018 |
+
+Anpassungen an ner-v6: Gerichte und Behörden (Staatsanwaltschaft, Amts-/Landgericht, Finanzamt, Jobcenter,
+Polizeipräsidium; BaFin, Bundeszentralamt für Steuern, Deutsche Rentenversicherung, BKA) sind keine Firmen
+(sie brachten auf LER-Test 8 Fehltreffer), „Schufa“ ist nicht mehr in der Liste bekannter Firmen (81 Treffer auf den
+Finanzdaten, keiner davon ein Wert), Titel beenden einen Firmennamen nach Branchenwort („Zahnarztpraxis Dr. Gude“
+behält die Person), „Holding KG“ ist eine Rolle. Die verbleibende syntriq-Differenz (-0,0003) sind korrekt erkannte,
+in syntriq nicht annotierte Firmen (Hotels, Praxen, Kanzleien); ohne Firmentreffer steigt die syntriq-Präzision
+0,5694 -> 0,5727. LER strikt (exakte Grenzen) sinkt bei Firmen 126 -> 122 Treffer, weil ner-v6 Anführungszeichen
+nicht mehr zum Namen zählt (LER annotiert „Gotham“ mit Zeichen); partiell unverändert.
 
 Messen: `python packages/core/scripts/ler_data.py eval --split test` und `court_data.py eval --split test`
 (Ergebnisse in `datasets/*/eval_test*.json`). Grenzen: gemessen an veröffentlichten Urteilen, nicht an
@@ -71,7 +90,7 @@ pip install -e ".[dev]"
 # spaCy-Modelle (Wheels von github.com/explosion/spacy-models/releases, Version 3.8.0)
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
 git lfs pull                     # NER-Gewichte unter models/
-pytest                           # erwartet: alle grün (384 passed, 2 skipped am 21.11.2026)
+pytest                           # erwartet: alle grün (368 passed am 21.11.2026)
 
 cd ../.. && npm install
 npx tsc --noEmit -p .            # Typecheck Dashboard
@@ -87,35 +106,49 @@ python packages/core/scripts/finance_data.py eval   # Finanzdaten messen
 python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/courts \
   --synthetic 0 --germeval 0 --epochs 6 --out local/ner/models/<name>
 # optional: --feedback feedback.jsonl  (Export aus Settings → Feedback)
+# optional: --germeval N [--germeval-public-o]  (GermEval 2014 unter local/ner/public/germeval14/train.tsv,
+#           z. B. huggingface.co/datasets/stefan-it/germeval14_no_wikipedia, original/NER-de-train.tsv)
+# Zum Messen den Gewichtsordner so ablegen, dass der Pfad "de_legal_ner" enthält (z. B. local/ner/de_legal_ner_x/ner):
+# die Einzelwort-Prüfung für Unterschriftenzeilen läuft nur mit diesem Namen.
 ```
 
 Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Personen darf nicht sinken).
 
-## 5. Laufende Arbeit (Branches, nicht auf main)
+## 5. Laufende Arbeit (Branches)
 
 | Branch | Inhalt | Stand |
 |---|---|---|
-| `claude/epic-thompson-ceb5ng` | Hauptentwicklungsbranch dieser Sitzung, entspricht main | – |
-| `claude/peaceful-keller-md3af4-person-recall` | Personen-Recall (Unterschriftenzeilen, Besetzung), LER-Test Personen R 0,84 -> 0,91 | geprüft, nicht gemergt |
-| `claude/peaceful-keller-md3af4-span-fix` | Aktenzeichen/Adressen enden an Zeile bzw. Satz; Finanz-Präzision -0,0004 | zur Entscheidung |
+| `claude/peaceful-keller-md3af4` | Sammelbranch: person-recall, messkit, backend-cleanup, span-fix und `feature/ner-v6` (angepasst) zusammengeführt; Tests und Typecheck grün, Messung siehe Abschnitt 3 | geprüft, nicht auf main |
+| `claude/peaceful-keller-md3af4-person-recall` | Personen-Recall (Unterschriftenzeilen, Besetzung), LER-Test Personen R 0,84 -> 0,91 | in Sammelbranch |
+| `claude/peaceful-keller-md3af4-span-fix` | Aktenzeichen/Adressen enden an Zeile bzw. Satz; Finanz-Präzision -0,0004 (freigegeben) | in Sammelbranch |
+| `claude/peaceful-keller-md3af4-messkit` | Mess-Kit echte Kanzleitexte (`local_eval.py`) | in Sammelbranch |
+| `claude/peaceful-keller-md3af4-backend-cleanup` | Conversations, Prompts, Gateway, MCP-Proxy entfernt | in Sammelbranch |
+| `feature/ner-v6` | de_custom_ner v6 (MultiCoNER), Firmenregeln `orgs.py`, Wortlisten; Behörden/Schufa für die Zusammenführung herausgenommen | in Sammelbranch |
+
+`main` steht auf 337724e (alles bis einschließlich span-fix); ner-v6 und die Doku dieses Stands liegen nur auf `claude/peaceful-keller-md3af4`.
 
 Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`, `claude/research-*`. Neue Arbeit erst nach Prüfung (Tests grün, Messung besser) nach main mergen.
 
 ## 6. Nächste Schritte (priorisiert)
 
 1. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
-   und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Restfehler sind zu großen Teilen Verbandskürzel und Marken
-   (oft keine personenbezogenen Daten). Noch nicht gemessen: GLiNER als zweiter Detektor, GermEval 2014.
-   Siehe `docs/research/org-ner.md` und `docs/research/org-ner-results.md`.
-2. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
-3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
+   und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Am 21.11.2026 drei weitere Trainingsläufe (GermEval 2014
+   als Rehearsal, `--org-repeat 3`, 10 Epochen): keiner hob den Firmen-Recall (LER-Test 0,538 unverändert), Modell nicht
+   getauscht; Details in `docs/research/org-ner-results.md`. Das Modell ist hier ausgereizt; Restfehler sind
+   Verbandskürzel, Marken und bloße Nachnamen als Firma. Nächste Hebel: GLiNER als zweiter Detektor (Messung läuft
+   separat), Feedback aus echten Texten, Produktentscheidung, ob Verbände/Marken überhaupt pseudonymisiert werden.
+2. **Personen im Fließtext ohne Anrede**: Lauf `--org-repeat 3 --epochs 10` (R2) brachte auf LER-Test Personen-Recall
+   0,914 -> 0,923 und Gesamtpräzision 0,923 -> 0,932 (Personen-Präzision 0,914 -> 0,912), verlor aber auf Courts-Test eine Person (813 statt 814/818) und wurde
+   deshalb nicht übernommen. Kandidat für einen zweiten Seed oder für die Kombination mit Feedback-Daten.
+3. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
+4. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
    `docs/local-eval.md`, `packages/core/scripts/local_eval.py` (Vorannotation, Korrektur im Texteditor, `eval`, `report` nur mit Zahlen).
    Offen: Durchführung in einer Kanzlei.
-4. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
+5. **Ausgangsvorhersage: abgeschlossen, nicht weiterverfolgen.** Kündigungsschutzklagen, 3.226 Urteile,
    TF-IDF + logistische Regression: Macro-F1 0,44 im zeitlichen Split (3 Klassen; binär 0,62), Metadaten-Baselines
    0,29–0,36. Messbares, aber für ein Produkt zu schwaches Signal. Details und Reproduktion ohne Download:
    `datasets/outcome/README.md` (`outcome_experiment.py train --dir local/outcome`).
-5. **Backend-Bereinigung: erledigt** (Branch `claude/peaceful-keller-md3af4-backend-cleanup`). Conversations, Prompts,
+6. **Backend-Bereinigung: erledigt** (im Sammelbranch `claude/peaceful-keller-md3af4`). Conversations, Prompts,
    Gateway (`/v1/chat/completions`) und MCP-Proxy (`/proxy/mcp`, `anonymizer-proxy`) entfernt (keine UI, weniger
    Angriffsfläche). Der Ergebnisfilter des Proxys lebt als `anonymizer/result_filter.py` weiter, weil der CSV-Playground
    ihn nutzt. Playground-Policy jetzt `ANONYMIZER_PLAYGROUND_POLICY` (alter Name `ANONYMIZER_CONVERSATIONS_POLICY` als
@@ -126,7 +159,7 @@ Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`,
 - Keine echten Kunden-/Mandantendaten an Cloud-Modelle; Rohdaten aus Unternehmen nur unter `local/` (gitignoriert).
 - Vor jedem Push: `pytest` und `npx tsc --noEmit -p .` grün; bei rotem Test nicht pushen.
 - Neue Erkennungsregeln immer messen (`ler_data.py eval`, `court_data.py eval`) und mit Tests absichern.
-- Lizenzen: LER CC BY 4.0, Gerichtsdaten ODbL 1.0 (Hinweise in `THIRD_PARTY_NOTICES.md` pflegen); CoNLL-2003 nicht verwenden.
+- Lizenzen: LER CC BY 4.0, Gerichtsdaten ODbL 1.0, GermEval 2014 und MultiCoNER v2 CC BY 4.0 (Hinweise in `THIRD_PARTY_NOTICES.md` pflegen); CoNLL-2003 nicht verwenden.
 - Modellgewichte über Git LFS (`models/**/model`).
 - Netzwerk der Cloud-Umgebung "ANONYMIZER": zusätzlich freigegeben sind rechtsprechung-im-internet.de,
   de.openlegaldata.io (API drosselt stark; 429 respektieren), lfs.github.com, huggingface.co und dessen Download-Hosts.

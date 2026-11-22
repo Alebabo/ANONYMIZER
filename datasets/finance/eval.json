@@ -1,24 +1,24 @@
 {
   "gretel": {
     "docs": 453,
-    "seconds": 10.6,
-    "masked_recall": 0.655,
-    "masked_precision_lower_bound": 0.372,
+    "seconds": 9.7,
+    "masked_recall": 0.673,
+    "masked_precision_lower_bound": 0.379,
     "labels": {
       "name": {
         "total": 530,
-        "masked": 0.764,
-        "typed": 0.738
+        "masked": 0.774,
+        "typed": 0.747
       },
       "company": {
         "total": 436,
-        "masked": 0.649,
-        "typed": 0.606
+        "masked": 0.709,
+        "typed": 0.665
       },
       "street_address": {
         "total": 282,
         "masked": 0.635,
-        "typed": 0.486
+        "typed": 0.489
       },
       "date": {
         "total": 118,
@@ -154,9 +154,9 @@
   },
   "syntriq": {
     "docs": 687,
-    "seconds": 25.1,
+    "seconds": 19.2,
     "masked_recall": 0.905,
-    "masked_precision_lower_bound": 0.55,
+    "masked_precision_lower_bound": 0.549,
     "labels": {
       "PERSON": {
         "total": 2957,
@@ -165,7 +165,7 @@
       },
       "ADDRESS": {
         "total": 1063,
-        "masked": 0.957,
+        "masked": 0.956,
         "typed": 0.94
       },
       "EMAIL_ADDRESS": {
@@ -257,7 +257,7 @@
   },
   "easyoctopus": {
     "docs": 176,
-    "seconds": 0.7,
+    "seconds": 0.6,
     "masked_recall": 0.586,
     "masked_precision_lower_bound": 0.702,
     "labels": {
