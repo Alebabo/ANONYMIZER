@@ -69,3 +69,12 @@ it. Changes: HTML converted to text, sections cut, sentences removed, labels add
 Apache License 2.0, each with its license or dataset card next to the data: syntriq/german-pii-benchmark
 (Syntriq) and EasyOctopus/german-support-pii-data (EasyOctopus; see its NOTICE file). A third,
 gretelai/synthetic_pii_finance_multilingual (Gretel.ai, Apache-2.0), is downloaded on demand and not committed.
+
+## Optional GLiNER models (not distributed)
+
+`packages/core/src/anonymizer/detect/gliner_ner.py` can use a GLiNER model as an optional second NER detector
+(off by default; extra `anonymizer-core[gliner]`, library `gliner`, Apache-2.0). No model weights are included in
+this repository; a model is downloaded by the user from Hugging Face or loaded from a local path. Models measured in
+`docs/research/gliner-results.md`, all Apache-2.0: `urchade/gliner_multi-v2.1` and `urchade/gliner_multi_pii-v1`
+(base encoder `microsoft/mdeberta-v3-base`, MIT), `knowledgator/gliner-x-small` (base encoder `google/mt5-small`,
+Apache-2.0; needs `stanza` and `langdetect`, both Apache-2.0). Do not use `urchade/gliner_multi` (v0, CC BY-NC 4.0).

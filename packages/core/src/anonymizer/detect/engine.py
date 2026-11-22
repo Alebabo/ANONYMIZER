@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from anonymizer.detect.base import Recognizer, supports
 from anonymizer.detect.context import SignalIndex, find_signals
+from anonymizer.detect.gliner_ner import GlinerRecognizer, from_env as _gliner_env, parse_types
 from anonymizer.detect.ner import NERUnavailable, SpacyRecognizer
 from anonymizer.detect.recognizers import NAME_STOPWORDS, builtin_recognizers, custom_recognizer
 from anonymizer.models import (
@@ -26,7 +27,9 @@ SPECIFICITY: dict[str, int] = {
     E.PRIVILEGE_MARKER: 30, E.BUSINESS_SECRET_MARKER: 30, E.LOCATION: 20,
 }
 CUSTOM_RANK = 88
-STATISTICAL_RECOGNIZERS = {"spacy_ner"}
+# Statistical detectors in order of trust: on an overlap rules beat spaCy, spaCy beats GLiNER.
+STATISTICAL_RECOGNIZERS = {"spacy_ner": 1, "gliner": 0}
+RULE_TIER = 2
 
 # Extra tokens that statistical NER mislabels in legal text.
 NER_STOPWORDS = {
@@ -82,6 +85,11 @@ class DetectorConfig(BaseModel):
     # Own brands and products ("ACME" keeps "ACME Bank", "ACME Mastercard"): NER spans starting with one of
     # these words are not personal data and stay unchanged. Rule-based detections are not affected.
     keep_terms: list[str] = Field(default_factory=list)
+    # Optional second NER (GLiNER, see detect/gliner_ner.py). Off unless a model is set; defaults come from
+    # ANONYMIZER_GLINER_MODEL / ANONYMIZER_GLINER_TYPES / ANONYMIZER_GLINER_THRESHOLD.
+    gliner_model: str | None = Field(default_factory=lambda: _gliner_env()["gliner_model"])
+    gliner_types: str = Field(default_factory=lambda: _gliner_env()["gliner_types"])
+    gliner_threshold: float = Field(default_factory=lambda: _gliner_env()["gliner_threshold"], ge=0.0, le=1.0)
 
 
 class Detector:
@@ -93,6 +101,12 @@ class Detector:
         self._ner = (
             SpacyRecognizer(self.config.ner_models, NAME_STOPWORDS | NER_STOPWORDS, keep=self.config.keep_terms)
             if self.config.enable_ner and "spacy_ner" not in self.config.disabled_recognizers else None
+        )
+        stop = NAME_STOPWORDS | NER_STOPWORDS
+        self._gliner = (
+            GlinerRecognizer(self.config.gliner_model, parse_types(self.config.gliner_types),
+                             self.config.gliner_threshold, stop)
+            if self.config.gliner_model and "gliner" not in self.config.disabled_recognizers else None
         )
         self.recognizers: list[Recognizer] = base
 
@@ -117,6 +131,11 @@ class Detector:
                 candidates.extend(self._ner.analyze(text, lang))
             except NERUnavailable as exc:
                 warnings.append(f"NER disabled: {exc}")
+        if self._gliner is not None:
+            try:
+                candidates.extend(self._gliner.analyze(text, lang))
+            except NERUnavailable as exc:
+                warnings.append(f"GLiNER disabled: {exc}")
 
         accepted, _ = resolve_overlaps(candidates)
         candidates.extend(propagate_mentions(text, accepted))
@@ -150,7 +169,7 @@ class Detector:
 def _rank(det: Detection) -> tuple:
     rank = SPECIFICITY.get(det.entity_type, CUSTOM_RANK if det.recognizer.startswith("custom:") else 0)
     # Deterministic rules beat statistical NER on any overlap.
-    return (det.validated is True, det.recognizer not in STATISTICAL_RECOGNIZERS, rank, det.end - det.start,
+    return (det.validated is True, STATISTICAL_RECOGNIZERS.get(det.recognizer, RULE_TIER), rank, det.end - det.start,
             det.confidence)
 
 

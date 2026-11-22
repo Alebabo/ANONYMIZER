@@ -33,7 +33,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
-| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md` |
+| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
@@ -105,7 +105,8 @@ Abgeschlossen und gemergt: `claude/ner-org-recall`, `claude/outcome-experiment`,
 
 1. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
    und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Restfehler sind zu großen Teilen Verbandskürzel und Marken
-   (oft keine personenbezogenen Daten). Noch nicht gemessen: GLiNER als zweiter Detektor, GermEval 2014.
+   (oft keine personenbezogenen Daten). GLiNER als zweiter Detektor gemessen (optional, Standard aus): kein Gewinn,
+   Präzision fällt, 25- bis 125-fache Latenz auf CPU (`docs/research/gliner-results.md`). Noch offen: GermEval 2014.
    Siehe `docs/research/org-ner.md` und `docs/research/org-ner-results.md`.
 2. **Feedback-Schleife nutzen**: Korrekturen aus dem Chat sammeln (Settings → Feedback → Export) und mit `--feedback` nachtrainieren.
 3. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
