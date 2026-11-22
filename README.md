@@ -37,6 +37,7 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $ANONYMIZER_API_KEY"
 - [Anonymization & vault](docs/anonymization.md): pseudonymization, encrypted re-identification vault
 - [Policies](docs/policies.md): deterministic YAML policies, versioning, dry run
 - [Accounts & audit log](docs/accounts.md): login, roles, organization scope, API keys, hash-chained audit log
+- [Windows desktop app](docs/windows-desktop.md) (German): fresh install, double-click app with its own window, shortcuts
 - [MCP server](docs/mcp.md): `anonymizer-mcp` (stdio) and `/mcp` (HTTP) for Claude, Cursor & other agents, with protected document access
 
 ## One model, three ways to use it
