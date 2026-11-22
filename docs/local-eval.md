@@ -10,8 +10,8 @@ nur ein Bericht mit Zahlen.
 
 ## Was Sie brauchen
 
-- Einen Rechner, auf dem OpenAnonymizer bereits eingerichtet ist (Python-Paket, Sprachmodelle, Modellgewichte;
-  einmalig durch die IT, siehe `STATUS.md`, Abschnitt 4). Danach ist keine Internetverbindung nötig.
+- Einen Rechner, auf dem OpenAnonymizer bereits eingerichtet ist und der Selbsttest durchläuft (einmalig durch
+  die IT, siehe nächster Abschnitt). Danach ist keine Internetverbindung nötig.
 - Fünf bis zehn typische Dokumente: Schriftsätze, Mandantenmails, Vermerke. Formate: `.txt`, `.docx`, `.pdf`
   (nur mit Textebene; eingescannte PDFs ohne Text werden gemeldet und können nicht gemessen werden). Mails am
   einfachsten als Text kopieren und als `.txt` speichern.
@@ -20,6 +20,35 @@ nur ein Bericht mit Zahlen.
 
 Bitte vorher prüfen: Der Projektordner darf nicht in einem Cloud-Speicher liegen, der automatisch synchronisiert
 (OneDrive, Dropbox, iCloud). Sonst würden die Texte doch das Gerät verlassen.
+
+## Vorab: Einrichtung durch die IT (einmalig, ca. 20 Minuten)
+
+Benötigt werden Python ab 3.11, Git und Git LFS, etwa 2 GB Speicher und für die Einrichtung einmalig Internet. Im
+Projektordner:
+
+```
+git lfs pull
+python -m venv .venv
+```
+
+Aktivieren: unter Windows `.venv\Scripts\activate`, unter macOS/Linux `source .venv/bin/activate`. Dann:
+
+```
+pip install -e packages/core
+python -m spacy download de_core_news_lg
+python -m spacy download en_core_web_lg
+python packages/core/scripts/local_eval.py selbsttest
+```
+
+Hinter einem Firmen-Proxy brauchen `pip` und der Modell-Download `HTTPS_PROXY` und ggf. das Firmen-CA-Zertifikat
+(`PIP_CERT`, `REQUESTS_CA_BUNDLE`). Wer den Download nicht freigeben kann: die Modellpakete
+`de_core_news_lg-3.8.0` und `en_core_web_lg-3.8.0` von github.com/explosion/spacy-models/releases auf einem anderen
+Rechner laden und mit `pip install <datei>.whl` installieren.
+
+Der Selbsttest misst vier mitgelieferte, ausgedachte Dokumente (`examples/local-eval/`, schon korrigiert) und
+schreibt nichts. Erwartete Ausgabe: `Einrichtung in Ordnung`. Meldet er `PROBLEM`, fehlt das Sprachmodell oder das
+Rechtsmodell (`git lfs pull`); dann nicht mit echten Texten beginnen. Die Beispiele zeigen auch, wie korrigierte
+Dateien aussehen.
 
 ## Schritt 1: Ordner anlegen (1 Minute)
 
@@ -100,6 +129,13 @@ Regeln:
 - Den übrigen Text nicht verändern. Kleine Versehen schaden nicht, gemessen wird immer der Text, wie er in der
   Datei steht.
 - Groß- und Kleinschreibung des Typs ist egal. Die Datei als UTF-8 speichern (Standard in den genannten Editoren).
+- Anrede und Titel („Frau“, „Herrn“, „Dr.“, „Prof.“, „Rechtsanwältin“) gehören nicht zum Namen. Die Erkennung lässt
+  sie lesbar. Wer sie mitmarkiert, macht nichts falsch: Sie werden beim Messen abgeschnitten.
+- Eine Adresse wird als ein Wert markiert, auch über mehrere Zeilen. Die Anschrift eines Gerichts oder einer Behörde
+  wird nicht markiert.
+- Leere Zeilen zwischen Absätzen (bei `.docx` jeder zweite Zeilenumbruch) und `■` oder `�` statt Umlauten nicht
+  „reparieren“. Steht beim `annotate` die Warnung „unlesbare Zeichen“, ist die PDF-Textebene fehlerhaft: Dann
+  besser den Text als `.txt` speichern, das PDF entfernen und `annotate` erneut ausführen.
 
 Eine Kurzfassung steht in `local/messung/annotiert/LIESMICH.txt`.
 
@@ -140,9 +176,11 @@ Die Kennzahlen:
 | verdeckt P (Präzision) | Anteil der Treffer, die auf einem markierten Wert liegen |
 | Typ P / R / F1 | wie oben, aber nur mit richtigem Typ |
 
-Zum Vergleich: Auf veröffentlichten Urteilen liegt der Personen-Recall bei etwa 0,84 (siehe `STATUS.md`).
+Zum Vergleich: Auf veröffentlichten Urteilen liegt der Personen-Recall bei etwa 0,91 (siehe `STATUS.md`). Bei
+kurzen, kleingeschriebenen Mails („hallo frau schmidt“) ist er deutlich niedriger; das ist bekannt und genau der
+Grund für diese Messung.
 
-Optional: Eigene Muster für Mandats- oder Kundennummern (siehe `HANDOVER.md`, Abschnitt 4.4) mitmessen:
+Optional: Eigene Muster für Mandats- oder Kundennummern (siehe `HANDOVER.md`, Abschnitt 4.1) mitmessen:
 `... eval --muster local/patterns.yaml` (ebenso bei `annotate`).
 
 ## Schritt 7: Bericht erzeugen und weitergeben (2 Minuten)
@@ -173,10 +211,15 @@ erneut auszuführen; das Markieren entfällt dann.
 | `WARNUNG: Die Namenserkennung (NER) lief nicht` | Sprachmodell fehlt; IT verständigen, Zahlen nicht verwenden |
 | `Rechtsmodell nicht gefunden` | Modellgewichte fehlen (`git lfs pull`); es wird das Standardmodell gemessen |
 | `PDF ... Seiten ohne Textebene` | eingescanntes PDF; Text nicht auswertbar, Dokument durch `.txt` ersetzen |
+| `... unlesbare Zeichen (■, � ...)` | Textebene fehlerhaft (Schrift ohne Zeichentabelle); Text als `.txt` speichern |
+| `PROBLEM: ...` beim Selbsttest | Einrichtung unvollständig; IT verständigen, nicht mit echten Texten messen |
 
 ## Für Entwickler
 
-Skript: `packages/core/scripts/local_eval.py`, Tests: `packages/core/tests/test_local_eval.py`. Bewertung mit
+Skript: `packages/core/scripts/local_eval.py`, Tests: `packages/core/tests/test_local_eval.py`, Selbsttest-Daten
+(synthetisch, Gold-Markierung): `examples/local-eval/`. Der Selbsttest schlägt fehl, wenn NER nicht läuft, das
+Rechtsmodell fehlt oder der Personen-Recall unter 0,7 liegt (Stand 22.11.2026: Rechtsmodell 0,79, Standardmodell
+0,83 Personen verdeckt; die Beispiele enthalten bewusst kleingeschriebene Mails). Bewertung mit
 `anonymizer.ner_dataset.score_doc` (überlappende Treffer, wie `ler_data.py eval`) und dem Maß „verdeckt“ aus
 `finance_data.py`. Nicht markiert und nicht bewertet werden die Typen, die die Policy `legal-default` lesbar
 lässt (Gerichte, Gesetze, zitierte Aktenzeichen, Datum, Beträge) sowie Schlagwort-Treffer (Gesundheit, Marker).

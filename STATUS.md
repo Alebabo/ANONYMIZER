@@ -90,7 +90,7 @@ pip install -e ".[dev]"
 # spaCy-Modelle (Wheels von github.com/explosion/spacy-models/releases, Version 3.8.0)
 python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
 git lfs pull                     # NER-Gewichte unter models/
-pytest                           # erwartet: alle grün (379 passed am 22.11.2026)
+pytest                           # erwartet: alle grün (388 passed am 22.11.2026)
 
 cd ../.. && npm install
 npx tsc --noEmit -p .            # Typecheck Dashboard
@@ -144,6 +144,10 @@ Bekannte Stolperstellen:
 
 1. **Messung an echten Kanzleitexten** (lokal, berechtigte Person, ohne Cloud). Mess-Kit vorhanden:
    `docs/local-eval.md`, `packages/core/scripts/local_eval.py` (Vorannotation, Korrektur im Texteditor, `eval`, `report` nur mit Zahlen).
+   Am 22.11.2026 mit synthetischen Dokumenten (DOCX, PDF, Mails) komplett durchgespielt und ergänzt: `selbsttest` für die
+   IT (synthetische Gold-Daten in `examples/local-eval/`, prüft NER, Rechtsmodell, Recall), Anrede/Titel werden vor dem
+   Messen abgeschnitten (sonst „teilweise“ statt „vollständig“ verdeckt), Warnung bei fehlerhafter PDF-Textebene (■, �),
+   Einrichtungsabschnitt in der Anleitung.
    Offen: Durchführung in einer Kanzlei. Wichtigster nächster Schritt: alle Zahlen oben stammen aus veröffentlichten Urteilen.
 2. **Firmen-Recall** (0,54 → Ziel ≥ 0,65 bei Präzision ≥ 0,90). Bisher: Regeln (Bindestrich-Rechtsformen, „Firma/Fa.“, e.K.)
    und `--org-repeat 2` halfen, synthetische Firmennamen nicht. Am 21.11.2026 drei weitere Trainingsläufe (GermEval 2014
@@ -151,6 +155,13 @@ Bekannte Stolperstellen:
    getauscht; Details in `docs/research/org-ner-results.md`. Das Modell ist hier ausgereizt; Restfehler sind
    Verbandskürzel, Marken und bloße Nachnamen als Firma. GLiNER als zweiter Detektor gemessen (optional, Standard aus): kein Gewinn,
    Präzision fällt, 25- bis 125-fache Latenz auf CPU (`docs/research/gliner-results.md`). Nächste Hebel: Feedback aus echten Texten, Produktentscheidung, ob Verbände/Marken überhaupt pseudonymisiert werden.
+2a. **Fehler aus dem Selbsttest** (synthetisch, `examples/local-eval/`; einzeln prüfen, jeweils messen):
+   Adresse „Am Rosengarten 7, 51061 Köln“ nach Geburtsdatum nicht erkannt (nur „Köln“ als Ort); Personentreffer
+   „Wollenweber\nRechtsanwältin“ reicht über den Zeilenumbruch in die Berufsbezeichnung; eigenes Aktenzeichen ohne
+   Kontextwort („Aktenvermerk WO-2026/0388“) verpasst; Anschrift des Gerichts unter „Landgericht Köln“ als Adresse
+   markiert; kleingeschriebene Mail („hallo frau wollenweber“, „gruß mehmet aydoğan“) ohne einen einzigen Treffer.
+   Auf diesen vier Dokumenten verdeckt das Standardmodell mehr Personen als das Rechtsmodell (0,83 gegenüber 0,79),
+   allein wegen der Mails; Stichprobe zu klein für eine Entscheidung.
 3. **Personen im Fließtext ohne Anrede**: Lauf `--org-repeat 3 --epochs 10` (R2) brachte auf LER-Test Personen-Recall
    0,914 -> 0,923 und Gesamtpräzision 0,923 -> 0,932 (Personen-Präzision 0,914 -> 0,912), verlor aber auf Courts-Test eine Person (813 statt 814/818) und wurde
    deshalb nicht übernommen. Kandidat für einen zweiten Seed oder für die Kombination mit Feedback-Daten.

@@ -5,6 +5,7 @@
     python packages/core/scripts/local_eval.py check                 # Markierungen prüfen (nach dem Korrigieren)
     python packages/core/scripts/local_eval.py eval                  # Messen; Details nur lokal
     python packages/core/scripts/local_eval.py report                # Kennzahlen ohne Text, zum Weitergeben
+    python packages/core/scripts/local_eval.py selbsttest            # Einrichtung prüfen, nur synthetische Texte
 
 Ablauf (Anleitung: docs/local-eval.md):
 
@@ -45,6 +46,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 BASE = REPO / "local" / "messung"
 LEGAL_NER = REPO / "models" / "de_legal_ner" / "ner"
+SELFTEST = REPO / "examples" / "local-eval"  # synthetic, already corrected annotations (committed)
 SUFFIXES = (".txt", ".md", ".docx", ".pdf")
 
 # Annotation labels (what a reader marks) and the detector types that belong to them.
@@ -73,6 +75,13 @@ NOT_MARKED = {"court", "legal_citation", "date", "money", "privilege_marker", "b
 # Group names that may appear in the shareable report; any other folder name becomes "gruppe_N".
 SAFE_GROUPS = {"schriftsaetze", "schriftsätze", "mails", "emails", "vertraege", "verträge", "gutachten", "briefe",
                "notizen", "protokolle", "urteile", "beschluesse", "beschlüsse", "vermerke", "sonstige", "alle"}
+
+# Salutations and titles in front of a marked name. The detector leaves them readable, so they are cut off before
+# scoring; otherwise a reader who marks "Dr. Erika Musterfrau" would see a fully hidden name counted as partial.
+TITLES = re.compile(r"(?:(?:Herrn?|Frau|Dr\.|Prof\.|Dipl\.-[\wäöü]+\.?|med\.|jur\.|rer\.\s?nat\.|h\.\s?c\.|"
+                    r"RAin|RA|Rechtsanwalt|Rechtsanwältin|Notar|Notarin)\s+)+", re.IGNORECASE)
+# Characters that signal a broken text layer (missing font mapping in a PDF, wrong encoding).
+BROKEN_CHARS = re.compile(r"[\ufffd\u25a0]|\(cid:\d+\)")
 
 MARK = re.compile(r"\[\[(?P<value>(?:(?!\[\[|\]\]).)+?)\|(?P<label>[^\[\]|\n]+?)\]\]", re.S)
 
@@ -137,7 +146,8 @@ def read_document(path: Path) -> tuple[str, list[str]]:
             text = data.decode("utf-8-sig")
         except UnicodeDecodeError:
             text = data.decode("cp1252", errors="replace")  # Windows editors
-        return text.replace("\r\n", "\n").replace("\r", "\n"), []
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+        return text, _broken_text_warning(text)
     if suffix == ".pdf":
         try:
             import pypdf  # noqa: F401, PLC0415
@@ -155,7 +165,15 @@ def read_document(path: Path) -> tuple[str, list[str]]:
         ex = extract(data, path.name)
     except DocumentError as exc:
         raise KitError(f"{path.name}: nicht lesbar ({exc})") from exc
-    return ex.text, list(ex.warnings)
+    return ex.text, [*ex.warnings, *_broken_text_warning(ex.text)]
+
+
+def _broken_text_warning(text: str) -> list[str]:
+    n = len(BROKEN_CHARS.findall(text))
+    if not n:
+        return []
+    return [f"{n} unlesbare Zeichen (■, � oder (cid:..)). Die Textebene ist fehlerhaft, Namen mit Sonderzeichen "
+            "werden falsch gemessen. Das Dokument besser als .txt speichern (Text kopieren) und das Original entfernen."]
 
 
 def find_documents(src: Path) -> list[Path]:
@@ -269,6 +287,10 @@ def parse_markup(markup: str, name: str = "", group: str = "alle") -> Annotated:
                           f"(erlaubt: {', '.join(LABELS)})")
         lead = len(value) - len(value.lstrip())
         core = value.strip()
+        title = TITLES.match(core) if label == "PERSON" else None
+        if title and title.end() < len(core):
+            lead += title.end()
+            core = core[title.end():]
         if label and core:
             spans.append(Span(length + lead, length + lead + len(core), label))
         parts.append(value)
@@ -611,9 +633,40 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_selbsttest(args: argparse.Namespace) -> int:
+    """Check the installation on synthetic, already corrected documents. Writes nothing."""
+    docs = load_annotated(SELFTEST)
+    detector, model, _ = make_detector(args)
+    m, _, ner_ok = score(docs, detector, args.sprache)
+    g, p = m["gesamt"], m["typen"].get("PERSON", {})
+    print(f"Selbsttest mit {len(docs)} synthetischen Dokumenten ({SELFTEST.relative_to(REPO)}), Modell {model}")
+    print(f"Alle Typen: verdeckt {_fmt(g['verdeckt_recall'])}, Präzision {_fmt(g['verdeckt_praezision'])}; "
+          f"Personen verdeckt {_fmt(p.get('verdeckt_recall'))}; {m['sekunden']} s")
+    problems = []
+    if args.ohne_ner:
+        problems.append("Mit --ohne-ner gestartet; die Namenserkennung wurde nicht geprüft.")
+    elif not ner_ok:
+        problems.append("Die Namenserkennung (NER) lief nicht: spaCy-Modell de_core_news_lg fehlt "
+                        "(python -m spacy download de_core_news_lg).")
+    if not args.ohne_ner and args.modell != "standard" and model == "standard":
+        problems.append("Das Rechtsmodell fehlt (git lfs pull). Gemessen würde nur das Standardmodell.")
+    if ner_ok and (p.get("verdeckt_recall") or 0) < SELFTEST_MIN_PERSON_RECALL:
+        problems.append(f"Personen-Recall unter {SELFTEST_MIN_PERSON_RECALL}: Einrichtung prüfen "
+                        "(Modellversion, Git-LFS-Dateien).")
+    for msg in problems:
+        print(f"PROBLEM: {msg}", file=sys.stderr)
+    if problems:
+        return 1
+    print("Einrichtung in Ordnung. Die Messung an echten Texten kann beginnen (Schritt 1 in docs/local-eval.md).")
+    return 0
+
+
+SELFTEST_MIN_PERSON_RECALL = 0.7
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", choices=["setup", "annotate", "check", "eval", "report"])
+    ap.add_argument("cmd", choices=["setup", "annotate", "check", "eval", "report", "selbsttest"])
     ap.add_argument("--dokumente", type=Path, default=BASE / "dokumente", help="Originale (Standard: local/messung/dokumente)")
     ap.add_argument("--annotiert", type=Path, default=BASE / "annotiert", help="markierte Textdateien")
     ap.add_argument("--ergebnis", type=Path, default=BASE / "ergebnis", help="Kennzahlen und Details (lokal)")
@@ -632,7 +685,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.sprache == "auto":
         args.sprache = None
     commands = {"setup": cmd_setup, "annotate": cmd_annotate, "check": cmd_check, "eval": cmd_eval,
-                "report": cmd_report}
+                "report": cmd_report, "selbsttest": cmd_selbsttest}
     try:
         return commands[args.cmd](args)
     except KitError as exc:

@@ -233,3 +233,40 @@ def test_docx_input(tmp_path):
     d.save(path)
     text, warnings = le.read_document(path)
     assert "Musterfrau" in text and "DE89" in text and warnings == []
+
+
+# ----------------------------------------------------------------------------- titles, broken text, self test
+@pytest.mark.parametrize("marked", ["Dr. Erika Musterfrau", "Frau Dr. Erika Musterfrau", "Herrn Prof. Dr. Erika Musterfrau",
+                                    "Rechtsanwältin Erika Musterfrau", "frau Erika Musterfrau"])
+def test_person_titles_are_cut_before_scoring(marked):
+    doc = le.parse_markup(f"Schreiben an [[{marked}|PERSON]].")
+    assert [doc.text[s.start:s.end] for s in doc.spans] == ["Erika Musterfrau"]
+    m, details, _ = le.score([doc], _FakeDetector([("Erika Musterfrau", "person")]), "de")
+    assert m["typen"]["PERSON"]["vollstaendig_verdeckt_recall"] == 1.0 and details == []
+
+
+def test_title_alone_and_other_labels_are_kept():
+    doc = le.parse_markup("[[Dr. Erika|PERSON]] [[Frau|PERSON]] [[Dr. Muster GmbH|FIRMA]]")
+    assert [doc.text[s.start:s.end] for s in doc.spans] == ["Erika", "Frau", "Dr. Muster GmbH"]
+
+
+def test_broken_text_layer_warning(tmp_path):
+    path = tmp_path / "x.txt"
+    path.write_text("Frau Selin Aydo■an und �", encoding="utf-8")
+    _, warnings = le.read_document(path)
+    assert len(warnings) == 1 and "2 unlesbare Zeichen" in warnings[0]
+    path.write_text("Frau Selin Aydoğan", encoding="utf-8")
+    assert le.read_document(path)[1] == []
+
+
+def test_selftest_examples_are_valid():
+    docs = le.load_annotated(le.SELFTEST)
+    assert len(docs) >= 4 and all(d.errors == [] for d in docs)
+    assert {d.group for d in docs} <= le.SAFE_GROUPS
+    labels = {s.label for d in docs for s in d.spans}
+    assert {"PERSON", "FIRMA", "ADRESSE", "AKTENZEICHEN"} <= labels
+
+
+def test_selftest_fails_without_ner(capsys):
+    assert run("selbsttest", "--ohne-ner") == 1
+    assert "PROBLEM" in capsys.readouterr().err
