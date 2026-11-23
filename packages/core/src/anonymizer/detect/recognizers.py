@@ -208,8 +208,11 @@ class DateRecognizer:
     name = "date"
     languages: frozenset[str] = frozenset()
     _patterns = [
-        re.compile(r"(?<![\d.])(?P<d>\d{1,2})\.\s?(?P<m>\d{1,2})\.\s?(?P<y>\d{4}|\d{2})(?![\d.]\d)"),
-        re.compile(r"(?<!\d)(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})(?!\d)"),
+        # A following time of day belongs to the date ("19.10.2026 00:09", "2026-11-09T23:23:34.118546047Z").
+        re.compile(r"(?<![\d.])(?P<d>\d{1,2})\.\s?(?P<m>\d{1,2})\.\s?(?P<y>\d{4}|\d{2})(?![\d.]\d)"
+                   r"(?:,?\s(?:um\s)?\d{1,2}:\d{2}(?::\d{2})?(?:\s?Uhr)?(?!\d))?"),
+        re.compile(r"(?<!\d)(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})(?!\d)"
+                   r"(?:[T ]\d{2}:\d{2}(?::\d{2}(?:[.,]\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?(?![\d:]))?"),
         re.compile(rf"(?<!\d)(?P<d>\d{{1,2}})\.?\s(?P<mn>{_MONTH_NAMES})\s(?P<y>\d{{4}})(?!\d)"),
         re.compile(rf"\b(?P<mn>{_MONTH_NAMES})\s(?P<d>\d{{1,2}})(?:st|nd|rd|th)?,\s(?P<y>\d{{4}})(?!\d)"),
         re.compile(r"(?<![\d/])(?P<m>\d{1,2})/(?P<d>\d{1,2})/(?P<y>\d{4})(?![\d/])"),
@@ -755,12 +758,32 @@ IP_ADDRESS = RegexRecognizer(
 )
 
 
+class NumberRecognizer:
+    """Catch-all for other numbers (account, transaction, customer, card ids, ...): any run of at least 4 digits.
+    Entity type ``number`` has no specificity rank, so every other detection (date, phone, IBAN, amount, ...)
+    wins an overlap. A bare year (1900-2099) is not a number here; dates are handled by the date rules."""
+
+    name = "number"
+    languages: frozenset[str] = frozenset()
+    _candidate = re.compile(r"(?<![\w])\d{4,}(?![\w])")
+    _year = re.compile(r"(?:19|20)\d{2}")
+
+    def analyze(self, text: str, language: str) -> Iterable[Detection]:
+        for m in self._candidate.finditer(text):
+            if self._year.fullmatch(m.group(0)):
+                continue
+            yield make_detection("number", Category.PERSONAL_DATA, m.start(), m.end(), m.group(0), 0.6, self.name)
+
+
+NUMBER = NumberRecognizer()
+
+
 def builtin_recognizers() -> list:
     return [
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
         PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, ORGANIZATION_HYPHEN, FIRM_CUE, PERSON, SELF_INTRO, *LABELLED_IDS,
-        IP_ADDRESS,
+        IP_ADDRESS, NUMBER,
     ]
 
 

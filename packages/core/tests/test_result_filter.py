@@ -80,6 +80,23 @@ def test_identifiers_and_keys_are_not_over_redacted(pipeline):
     assert json.loads(out.content[0].text) == {"customers": ["id", "vorname", "telefon", "iban"], "status": "open"}
 
 
+def test_dates_amounts_and_numbers_in_widget_json(pipeline):
+    msg = json.dumps({"type": "ANSWER_TEXT", "data": {"text": "Ihr Kontostand: 1.234,56 €, Vorgang 88123456"},
+                      "timestamp": "2026-11-09T23:23:34.118546047Z"})
+    rows = [{"Zeitpunkt": "19.10.2026 00:09", "Nachricht": msg,
+             "tx": {"amount": -12.5, "transactionId": "1726431166", "logicalId": 5033872}}]
+    out, _ = make_filter(pipeline).apply(text_result(rows))
+    row = json.loads(out.content[0].text)[0]
+    inner = json.loads(row["Nachricht"])
+    assert inner["timestamp"].startswith("DATE_") and "23:23" not in row["Nachricht"]   # whole timestamp
+    assert row["Zeitpunkt"].startswith("DATE_") and "00:09" not in row["Zeitpunkt"]
+    assert "***56 €" in inner["data"]["text"] and "1.234" not in inner["data"]["text"]  # amount masked
+    assert "NUMBER_" in inner["data"]["text"] and "88123456" not in inner["data"]["text"]
+    assert row["tx"]["amount"] == "***50"
+    assert row["tx"]["transactionId"].startswith("NUMBER_") and row["tx"]["logicalId"] != 5033872
+    assert inner["type"] == "ANSWER_TEXT"
+
+
 def test_data_in_keys_is_protected(pipeline):
     out, _ = make_filter(pipeline).apply(text_result({"max.mustermann@example.org": {"orders": 3}}))
     assert not leaks(out.content[0].text) and "orders" in out.content[0].text
@@ -129,11 +146,14 @@ def test_structured_only_data_is_reported(pipeline):
     assert trace.entity_counts.get("email") == 2 and trace.fields["$.rows[].email"] == {"email": 2}
 
 
-def test_long_numbers_without_hint_are_checked(pipeline):
-    out, report = make_filter(pipeline).apply(text_result({"card": 4111111111111111, "id": 1234567, "ts": 1731600000}))
+def test_numbers_without_hint_are_checked(pipeline):
+    out, report = make_filter(pipeline).apply(text_result({"card": 4111111111111111, "id": 1234567, "ts": 1731600000,
+                                                           "count": 12, "year": 2026}))
     data = json.loads(out.content[0].text)
-    assert "4111111111111111" not in out.content[0].text and data["id"] == 1234567 and data["ts"] == 1731600000
-    assert report.trace().entity_counts == {"credit_card": 1}
+    assert "4111111111111111" not in out.content[0].text
+    assert data["id"].startswith("NUMBER_") and data["ts"].startswith("NUMBER_")   # 4+ digits: placeholder
+    assert data["count"] == 12 and data["year"] == 2026                              # small numbers and years stay
+    assert report.trace().entity_counts == {"credit_card": 1, "number": 2}
 
 
 def fresh_pipeline():

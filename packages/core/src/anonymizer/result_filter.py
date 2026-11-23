@@ -46,6 +46,7 @@ DEFAULT_FIELD_HINTS: dict[str, str] = {
     **dict.fromkeys(["ssn", "socialsecuritynumber",
                      "sozialversicherungsnummer", "svnr"], "social_security_number"),
     **dict.fromkeys(["ip", "ipaddress", "ipadresse"], "ip_address"),
+    **dict.fromkeys(["amount", "betrag", "balance", "saldo", "kontostand", "availablebalance"], "money"),
 }
 
 
@@ -243,10 +244,13 @@ class ResultFilter:
         if value is None or isinstance(value, bool):
             return value
         if isinstance(value, (int, float)) and key and norm_key(key) in self.hints:
-            out = self._leaf(str(value), path, key, report, lang)
-            return value if out == str(value) else out
-        if isinstance(value, int) and abs(value) >= 10 ** 11:
-            # Long numbers can be card or account numbers: same rules as for a string of digits.
+            # Amounts as JSON numbers (-12.5) get two decimals, so masking keeps the cents (***50).
+            text = (f"{value:.2f}" if self.hints[norm_key(key)] == "money" and isinstance(value, float)
+                    else str(value))
+            out = self._leaf(text, path, key, report, lang)
+            return value if out == text else out
+        if isinstance(value, int) and abs(value) >= 1000:
+            # Numbers of 4+ digits can be ids, card or account numbers: same rules as for a string of digits.
             out = self._leaf(str(value), path, key, report, lang)
             return value if out == str(value) else out
         return value

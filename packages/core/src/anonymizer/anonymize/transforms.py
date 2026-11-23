@@ -21,7 +21,24 @@ DEFAULT_MASK_KEEP: dict[str, tuple[int, int]] = {
 }
 
 
+_MONEY_NUMBER = re.compile(r"[-+−]?\s?\d[\d.,  ]*\d|\d")
+
+
+def _mask_money(value: str, char: str) -> str:
+    """Amount hidden except its last two digits; currency and the text around it stay: 1.234,56 € -> ***56 €.
+    The masked part has a fixed width, so the length of the amount does not show."""
+    m = None
+    for m in _MONEY_NUMBER.finditer(value):
+        pass
+    if m is None:
+        return value
+    digits = re.sub(r"\D", "", m.group(0))
+    return f"{value[:m.start()]}{char * 3}{digits[-2:]}{value[m.end():]}"
+
+
 def mask(value: str, entity_type: str, keep: dict[str, tuple[int, int]] | None = None, char: str = "*") -> str:
+    if entity_type == E.MONEY:
+        return _mask_money(value, char)
     if entity_type == E.EMAIL and "@" in value:
         local, domain = value.split("@", 1)
         return f"{local[:1]}{char * 3}@{domain}"

@@ -40,7 +40,7 @@ MAX_COLUMNS = 100
 MAX_LIMIT = 100
 # Part of the stored dashboard views' key: bump it when detection or filtering changes, so pages anonymized
 # by an older version are computed again instead of shown from the store.
-_CACHE_REV = 3
+_CACHE_REV = 4
 _SEP = "\x1f"
 
 csv.field_size_limit(MAX_BYTES)  # chat messages with widget JSON exceed the default 128 KB per field

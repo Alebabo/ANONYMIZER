@@ -8,6 +8,12 @@ $url = "http://localhost:$port"
 $log = Join-Path $env:TEMP "openanonymizer-app.log"
 Set-Location $root
 Add-Type -AssemblyName System.Windows.Forms
+# Portable Node under %USERPROFILE%\tools\node when npm is not on PATH (same fallback as dev-local.ps1).
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+  $nodeDir = Get-ChildItem "$env:USERPROFILE\tools\node" -Directory -ErrorAction SilentlyContinue | Select-Object -Last 1
+  if ($nodeDir) { $env:PATH = "$($nodeDir.FullName);$env:PATH" }
+}
+$api = $null
 
 function Fail($msg) {
   [System.Windows.Forms.MessageBox]::Show("$msg`n`nLog: $log", "OpenAnonymizer", "OK", "Error") | Out-Null
@@ -60,6 +66,21 @@ if ((Test-Path ".env") -and (Get-Command docker -ErrorAction SilentlyContinue)) 
     for ($i = 0; $i -lt 120 -and -not (Test-Url $health); $i++) { Start-Sleep 1; [System.Windows.Forms.Application]::DoEvents() }
   }
   if (Test-Url $health) { $env:ANONYMIZER_API_URL = "http://127.0.0.1:8080" } else { Status "API not reachable, demo mode." }
+} elseif ((Test-Path ".env") -and (Test-Path ".venv\Scripts\anonymizer-api.exe")) {
+  # No Docker: run the API locally from .venv (like dev-local.ps1). It stops together with the dashboard.
+  if (-not (Test-Url $health)) {
+    Status "Starting local API..."
+    Get-Content ".env" | Where-Object { $_ -match '^\s*[^#\s][^=]*=' } | ForEach-Object {
+      $k, $v = $_ -split '=', 2
+      Set-Item "env:$($k.Trim())" $v.Trim().Trim('"')
+    }
+    $env:ANONYMIZER_PORT = "8080"
+    New-Item -ItemType Directory -Force "logs" | Out-Null
+    $api = Start-Process (Join-Path $root ".venv\Scripts\anonymizer-api.exe") -WorkingDirectory (Join-Path $root "packages\core") `
+      -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root "logs\api-local.log") -RedirectStandardError (Join-Path $root "logs\api-local.err.log")
+    for ($i = 0; $i -lt 120 -and -not (Test-Url $health); $i++) { Start-Sleep 1; [System.Windows.Forms.Application]::DoEvents() }
+  }
+  if (Test-Url $health) { $env:ANONYMIZER_API_URL = "http://127.0.0.1:8080" } else { Status "API not reachable, demo mode." }
 }
 
 if (-not (Test-Path "node_modules")) { Status "Installing dependencies..."; cmd /c "npm install --no-audit --no-fund >> `"$log`" 2>&1" }
@@ -79,9 +100,14 @@ Status "Starting dashboard..."
 $server = Start-Process cmd -ArgumentList "/c npx next start -H 127.0.0.1 -p $port >> `"$log`" 2>&1" -WindowStyle Hidden -PassThru
 for ($i = 0; $i -lt 120 -and -not (Test-Dashboard); $i++) { Start-Sleep -Milliseconds 500; [System.Windows.Forms.Application]::DoEvents() }
 $splash.Close()
-if (-not (Test-Dashboard)) { taskkill /PID $server.Id /T /F | Out-Null; Fail "Dashboard did not start." }
+if (-not (Test-Dashboard)) {
+  taskkill /PID $server.Id /T /F | Out-Null
+  if ($api) { taskkill /PID $api.Id /T /F | Out-Null }
+  Fail "Dashboard did not start."
+}
 
 Open-Window | Wait-Process
 # Wait for any further windows opened by a second double-click (they share the profile, so they share msedge.exe).
 while (Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -like "*$profileDir*" }) { Start-Sleep 2 }
 taskkill /PID $server.Id /T /F | Out-Null
+if ($api) { taskkill /PID $api.Id /T /F | Out-Null }

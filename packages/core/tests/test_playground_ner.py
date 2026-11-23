@@ -53,10 +53,12 @@ def test_same_value_same_placeholder_in_column_and_free_text(rows):
     assert f"Frau {rows[1]['nachname']} " in rows[1]["anliegen"]
 
 
-def test_common_nouns_and_ids_are_not_redacted(rows):
+def test_common_nouns_are_not_redacted_and_ids_get_number_placeholders(rows):
     assert rows[0]["anliegen"].endswith("möchte sein Dispolimit erhöhen, bitte Rückruf.")
     assert rows[1]["anliegen"].startswith("Karte gesperrt nach Urlaub in ")
-    assert [r["kunden_id"] for r in rows] == ["K-1001", "K-1002", "K-1003"]
+    # numbers of 4+ digits are placeholders (support-default "numbers"); the id prefix stays readable
+    ids = [r["kunden_id"] for r in rows]
+    assert all(i.startswith("K-NUMBER_") for i in ids) and len(set(ids)) == 3
 
 
 def test_real_names_still_detected(rows):

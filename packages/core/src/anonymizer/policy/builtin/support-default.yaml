@@ -23,12 +23,13 @@ rules:
   - id: identifiers
     entity: [iban, credit_card, bic, tax_id, tax_number, social_security_number, vat_id]
     action: redact
+  # Dates, including time stamps, become placeholders (DATE_001): the same date keeps the same placeholder.
   - id: date_of_birth
     entity: date_of_birth
-    action: generalize
+    action: pseudonymize
   - id: dates
     entity: date
-    action: generalize
+    action: pseudonymize
 
   # Special categories (Art. 9/10 GDPR): the whole message is withheld from external models.
   # Change to `redact` only after checking recall on real data; keyword detection misses synonyms.
@@ -42,9 +43,15 @@ rules:
     destinations: [local]
     action: allow
 
+  # Amounts: currency and the last two digits stay readable (1.234,56 € -> ***56 €).
   - id: amounts
     entity: money
-    action: allow
+    action: mask
+
+  # Any other number of 4+ digits (account, transaction, card or customer ids): placeholder NUMBER_001.
+  - id: numbers
+    entity: number
+    action: pseudonymize
 
 default_action: redact
 critical_floor: true

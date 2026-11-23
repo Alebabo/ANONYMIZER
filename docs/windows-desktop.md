@@ -64,6 +64,8 @@ Doppelklick auf `OpenAnonymizer`. `scripts/start-app.ps1` macht dann:
 3. Dashboard bauen, falls sich Quellen geändert haben, und auf `http://localhost:3000` starten (nur localhost)
 4. Dashboard in einem Edge-App-Fenster öffnen (eigenes Profil unter `%LOCALAPPDATA%\OpenAnonymizer\edge-profile`)
 
+Ohne Docker startet das Script die API stattdessen lokal aus `.venv` (wie `scripts/dev-local.ps1`, Logs in `logs\api-local*.log`); sie stoppt zusammen mit dem Dashboard. Ist `npm` nicht im PATH, wird ein portables Node unter `%USERPROFILE%\tools\node` genutzt.
+
 Ein kleines Fenster zeigt den Fortschritt. Wird das App-Fenster geschlossen, stoppt der Dashboard-Server. Die API (`127.0.0.1:8080`, inkl. MCP unter `/mcp`) läuft im Container weiter. Ein zweiter Doppelklick bei laufender App öffnet nur ein weiteres Fenster.
 
 Log: `%TEMP%\openanonymizer-app.log`

@@ -21,4 +21,5 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image|icon.svg|brand/).*)"] };
+// Icons and the manifest stay public: the browser fetches them before login (taskbar icon of the app window).
+export const config = { matcher: ["/((?!_next/static|_next/image|icon\\.svg|icon1\\.png|manifest\\.webmanifest|brand/).*)"] };
