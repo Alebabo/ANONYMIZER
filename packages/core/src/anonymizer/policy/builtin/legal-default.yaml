@@ -33,13 +33,19 @@ rules:
     entity: [court, legal_citation]
     action: allow
 
-  # Deadlines and amounts matter in legal work; a date of birth is coarsened to the year.
-  - id: dates_and_amounts
-    entity: [date, money]
-    action: allow
-  - id: date_of_birth
-    entity: date_of_birth
-    action: generalize
+  # Dates (also a date of birth) become placeholders (DATE_001); the same date keeps the same placeholder, so
+  # deadlines stay comparable. Amounts keep currency and last two digits (1.234,56 € -> ***56 €).
+  - id: dates
+    entity: [date, date_of_birth]
+    action: pseudonymize
+  - id: amounts
+    entity: money
+    action: mask
+
+  # Any other number of 4+ digits (customer, order, account numbers): placeholder NUMBER_001.
+  - id: numbers
+    entity: number
+    action: pseudonymize
 
   # Payment and government identifiers carry no legal value.
   - id: identifiers
@@ -51,7 +57,8 @@ rules:
     entity: [privilege_marker, business_secret_marker]
     action: allow
 
-  # Special categories (Art. 9/10 GDPR: health, criminal records, …) never go to an external model.
+  # Special categories (Art. 9/10 GDPR: health, criminal records, …) never go to an external model. To send the
+  # document with only the term redacted, change the action to `redact` in your own policy version.
   - id: special_categories_external
     category: special_category
     destinations: [external]

@@ -23,11 +23,23 @@ rules:
   - id: identifiers
     entity: [credit_card, tax_id, tax_number, social_security_number]
     action: redact
-  - id: date_of_birth
-    entity: date_of_birth
-    action: generalize
+  # Dates, including time stamps, become placeholders (DATE_001): the same date keeps the same placeholder.
+  - id: dates
+    entity: [date, date_of_birth]
+    action: pseudonymize
 
-  # Special categories (Art. 9/10 GDPR) must never go to an external model.
+  # Amounts: currency and the last two digits stay readable (1.234,56 € -> ***56 €).
+  - id: amounts
+    entity: money
+    action: mask
+
+  # Any other number of 4+ digits (account, transaction, card or customer ids): placeholder NUMBER_001.
+  - id: numbers
+    entity: number
+    action: pseudonymize
+
+  # Special categories (Art. 9/10 GDPR) must never go to an external model. To send the text with only the
+  # term redacted, change the action to `redact` in your own policy version.
   - id: special_categories_external
     category: special_category
     destinations: [external]
@@ -38,9 +50,9 @@ rules:
     destinations: [local]
     action: allow
 
-  # Bank identifiers, amounts, dates and public business identifiers stay readable.
+  # Bank identifiers and public business identifiers stay readable.
   - id: public_references
-    entity: [bic, money, date, vat_id]
+    entity: [bic, vat_id]
     action: allow
   - id: confidentiality_markers
     entity: [business_secret_marker]
