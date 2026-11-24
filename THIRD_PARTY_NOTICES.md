@@ -87,6 +87,28 @@ https://huggingface.co/datasets/MultiCoNER/multiconer_v2), licensed under CC BY 
 mapped to PER/ORG/LOC (`load_multiconer` in `packages/core/scripts/ner_train.py`). The data itself is not part of
 this repository. CoNLL-2003 is not used anywhere in this repository (licence for research only).
 
+## Public PII and NER datasets (CC BY 4.0, MIT, Apache-2.0)
+
+`datasets/public/` contains the German parts of four datasets in converted form (`{id, text, entities}` per
+document, labels mapped to OpenAnonymizer types, person spans without salutation or title, labels without personal
+data dropped; `packages/core/scripts/public_pii.py`). They are used to measure the detector and, through
+`ner_train.py --public`, as NER training data.
+
+- SmartData Corpus (Schiersch, Mironova, Schmitt, Thomas, Gabryszak, Hennig 2018, DFKI,
+  https://huggingface.co/datasets/DFKI-SLT/smartdata-corpus), CC BY 4.0. Changes: tokens detokenized,
+  labels mapped; validation split not included.
+- MAPA EUR-Lex corpus (MAPA project 2022, https://mapa-project.eu,
+  Hugging Face conversion https://huggingface.co/datasets/joelniklaus/mapa), CC BY 4.0. Changes: German sentences
+  only, tokens detokenized, coarse labels mapped, titles/roles/nationalities removed from person spans.
+- E3-JSI/synthetic-multi-pii-ner-v1 (Jožef Stefan Institute, https://huggingface.co/datasets/E3-JSI/synthetic-multi-pii-ner-v1),
+  MIT License. Changes: German documents only, token spans converted to character offsets, labels mapped, every
+  fifth document (by text hash) held out as test split.
+- urchade/synthetic-pii-ner-mistral-v1 (Urchade Zaratiana, https://huggingface.co/datasets/urchade/synthetic-pii-ner-mistral-v1),
+  Apache License 2.0. Changes: German documents only (picked by function words), tokens detokenized, labels
+  mapped, every fifth document (by text hash) held out as test split.
+
+Not used: ai4privacy/open-pii-masking-500k (Llama Community License terms and written permission for commercial use).
+
 ## Optional GLiNER models (not distributed)
 
 `packages/core/src/anonymizer/detect/gliner_ner.py` can use a GLiNER model as an optional second NER detector

@@ -33,6 +33,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
+| `datasets/public/` | Deutsche Teile von SmartData (CC BY 4.0, Firmen als eigener Typ), MAPA EUR-Lex (CC BY 4.0), E3-JSI und urchade (synthetisch, MIT/Apache-2.0): Messung `public_pii.py eval`, Training `ner_train.py --public` |
 | `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md`, `newmean-pii.md`, `unified-ner-md.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 

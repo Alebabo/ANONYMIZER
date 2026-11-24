@@ -630,6 +630,9 @@ def main() -> None:
     ap.add_argument("--feedback-repeat", type=int, default=3)
     ap.add_argument("--multiconer", type=Path, help="MultiCoNER v2 German train file (de_train.conll)")
     ap.add_argument("--multiconer-limit", type=int, default=4000)
+    ap.add_argument("--public", type=Path, help="datasets/public: train splits from public_pii.py (PER/ORG/LOC)")
+    ap.add_argument("--public-sources", nargs="*", default=["smartdata", "mapa", "e3jsi", "urchade"])
+    ap.add_argument("--public-limit", type=int, default=0, help="documents from --public (0 = all)")
     ap.add_argument("--base", default="de_core_news_lg",
                     help="spaCy base model to fine-tune, e.g. de_core_news_md (60 MB instead of 610 MB)")
     ap.add_argument("--dev", choices=["auto", "both"], default="auto",
@@ -684,6 +687,16 @@ def main() -> None:
             if (ex := to_example(nlp, text, spans, missing)) is not None:
                 examples.append(ex)
                 n_mc += 1
+    n_pub = 0
+    if args.public:
+        from public_pii import ner_spans  # noqa: PLC0415 - same scripts folder
+
+        pub = ner_spans(args.public, args.public_sources)
+        rng.shuffle(pub)
+        for text, spans, missing in pub[:args.public_limit or None]:
+            if (ex := to_example(nlp, text, spans, missing)) is not None:
+                examples.append(ex)
+                n_pub += 1
     filler = Filler(rng, names, orgs, locs)
     filler.held_out = held_out
     for i in range(args.synthetic):
@@ -691,7 +704,7 @@ def main() -> None:
         text, spans = filler.fill(template)
         if (ex := to_example(nlp, text, spans)) is not None:
             examples.append(ex)
-    n_syn = len(examples) - n_ge - n_mc
+    n_syn = len(examples) - n_ge - n_mc - n_pub
     gold_examples = []
     for d in train_docs:
         spans = [(s.start, s.end, s.label) for s in d.spans if s.label != "ADDR"]
@@ -739,7 +752,7 @@ def main() -> None:
             court_ex += [ex for ex in court_examples(nlp, court_aug) if any(
                 t.startswith(("U-ORG", "B-ORG")) for t in ex.to_dict()["doc_annotation"]["entities"])]
     examples += court_ex * args.courts_repeat
-    print(f"examples: germeval {n_ge}, multiconer {n_mc}, synthetic {n_syn}, "
+    print(f"examples: germeval {n_ge}, multiconer {n_mc}, public {n_pub}, synthetic {n_syn}, "
           f"gold train {len(gold_examples)} x{args.gold_repeat}, "
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
           f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}, "
@@ -772,7 +785,7 @@ def main() -> None:
                 best = epoch + 1
     (args.out / "training.json").write_text(json.dumps({
         "seed": SEED, "base": args.base, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
-        "data": {"germeval": n_ge, "multiconer": n_mc, "synthetic": n_syn, "gold_train": len(gold_examples),
+        "data": {"germeval": n_ge, "multiconer": n_mc, "public": n_pub, "synthetic": n_syn, "gold_train": len(gold_examples),
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,

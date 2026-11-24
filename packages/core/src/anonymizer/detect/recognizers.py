@@ -128,7 +128,7 @@ TAX_NUMBER = RegexRecognizer(
 
 VAT_ID = RegexRecognizer(
     "vat_id", E.VAT_ID,
-    [Pattern(r"\b(?:DE\s?\d{9}|ATU\d{8}|FR[A-Z0-9]{2}\d{9}|NL\d{9}B\d{2})\b", 0.85)],
+    [Pattern(r"\b(?:DE ?\d{9}|DE ?\d{3}(?: \d{3}){2}|ATU ?\d{8}|FR[A-Z0-9]{2}\d{9}|NL\d{9}B\d{2})\b", 0.85)],
     context_words=[r"ust-?id(?:nr)?\.?", r"umsatzsteuer", r"vat"],
 )
 

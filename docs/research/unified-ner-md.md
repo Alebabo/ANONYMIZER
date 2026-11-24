@@ -45,6 +45,9 @@ Die Regel „Richter“ ist neu, die Messlatte stammt von vorher. Für einen fai
 Regel nachmessen.
 
 ## Weitere offene Punkte
-- USt-IdNr. mit Leerzeichen (`DE 298 765 432`) erkennt die Regel `vat_id` nicht (newmean schon).
+- Erledigt (24.11.): USt-IdNr. mit Leerzeichen (`DE 298 765 432`, `ATU 12345678`) erkennt die Regel `vat_id` jetzt.
+- Neue öffentliche Trainingsdaten in `datasets/public/` (SmartData, MAPA, E3-JSI, urchade; `public_pii.py`). Für den
+  nächsten Lauf `--public datasets/public` anhängen (ca. 6.300 Dokumente, PER/ORG/LOC; Behörden/Gerichte und
+  Adressen bleiben aus dem Loss). Ohne interne Daten unter `local/` geht ein Lauf damit nur auf öffentlichen Quellen.
 - Bekannte Personen-Restfehler auf Dev: Nachname nach Artikel ohne Anrede („der Günther“), LER-Platzhalter.
 - Das Modell selbst ist nicht im Repo (trainiert auch auf internen Daten unter `local/`). Ohne diese Daten nur mit öffentlichen Quellen trainieren (LER, Gerichtsentscheidungen, GermEval, MultiCoNER, synthetisch).
