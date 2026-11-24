@@ -21,7 +21,9 @@ from anonymizer.models import Category, Detection, EntityType as E, make_detecti
 
 # ANONYMIZER_NER_MODEL_DE selects another German model, e.g. the fine-tuned support NER:
 # "de_core_news_lg+models/de_custom_ner/ner" (base model plus NER weights, see models/de_custom_ner/README.md).
-DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or "de_core_news_lg", "en": "en_core_web_lg"}
+# ANONYMIZER_NER_MODEL_EN selects another English model, e.g. "en_core_web_sm" (15 MB instead of 425 MB).
+DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or "de_core_news_lg",
+                  "en": os.environ.get("ANONYMIZER_NER_MODEL_EN") or "en_core_web_lg"}
 
 _LABELS = {
     "PER": (E.PERSON, Category.PERSONAL_DATA, 0.8),

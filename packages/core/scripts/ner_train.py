@@ -587,14 +587,14 @@ def court_examples(nlp, docs, max_chars: int = 2500) -> list[Example]:
     return out
 
 
-def evaluate(nlp_path_or_obj, docs) -> dict:
-    rec = SpacyRecognizer({"de": "de_core_news_lg", "en": "en_core_web_lg"}, NAME_STOPWORDS | NER_STOPWORDS,
+def evaluate(nlp_path_or_obj, docs, base: str = "de_core_news_lg") -> dict:
+    rec = SpacyRecognizer({"de": base, "en": "en_core_web_lg"}, NAME_STOPWORDS | NER_STOPWORDS,
                           keep=list(DEFAULT_KEEP))
     if not isinstance(nlp_path_or_obj, str):
         from anonymizer.detect import ner as ner_mod  # noqa: PLC0415
         # A "+" name, like a shipped fine-tuned model, so the pipeline applies the same rules (lower-case chat).
-        ner_mod._MODEL_CACHE["de_core_news_lg+__candidate__"] = nlp_path_or_obj
-        rec = SpacyRecognizer({"de": "de_core_news_lg+__candidate__", "en": "en_core_web_lg"},
+        ner_mod._MODEL_CACHE[f"{base}+__candidate__"] = nlp_path_or_obj
+        rec = SpacyRecognizer({"de": f"{base}+__candidate__", "en": "en_core_web_lg"},
                               NAME_STOPWORDS | NER_STOPWORDS, keep=list(DEFAULT_KEEP))
     keep = keep_pattern(DEFAULT_KEEP)
     per_doc = []
@@ -630,6 +630,10 @@ def main() -> None:
     ap.add_argument("--feedback-repeat", type=int, default=3)
     ap.add_argument("--multiconer", type=Path, help="MultiCoNER v2 German train file (de_train.conll)")
     ap.add_argument("--multiconer-limit", type=int, default=4000)
+    ap.add_argument("--base", default="de_core_news_lg",
+                    help="spaCy base model to fine-tune, e.g. de_core_news_md (60 MB instead of 610 MB)")
+    ap.add_argument("--dev", choices=["auto", "both"], default="auto",
+                    help="model selection: auto = gold dev split if present, else LER dev; both = gold dev + LER dev")
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
                     "epochs that beat its dev score are saved")
     args = ap.parse_args()
@@ -648,7 +652,8 @@ def main() -> None:
         sys.exit(f"no data: {gold_path} is missing and --ler is not set")
     train_docs = [d for d in gold if d.split == "train"]
     # Model selection: the company dev split if there is one, otherwise LER dev.
-    dev_docs = [d for d in gold if d.split == "dev"] or ler_dev
+    gold_dev = [d for d in gold if d.split == "dev"]
+    dev_docs = gold_dev + ler_dev if args.dev == "both" else gold_dev or ler_dev
     held_out = {d.text[s.start:s.end].lower() for d in [*gold, *ler_dev, *ler_test]
                 if d.split in ("dev", "test") for s in d.spans if s.label in ("PER", "ORG", "LOC")}
 
@@ -666,7 +671,7 @@ def main() -> None:
     orgs, locs = unseen(ORGS), unseen(LOCS)
     print(f"gazetteers after removing dev/test strings: {len(names)} names, {len(orgs)} orgs, {len(locs)} places")
 
-    nlp = spacy.load(args.init or "de_core_news_lg")
+    nlp = spacy.load(args.init or args.base)
     examples: list[Example] = []
     for text, spans in (load_germeval(ge_path, args.germeval, rng, args.germeval_public_o)
                         if ge_path.exists() else []):
@@ -741,7 +746,7 @@ def main() -> None:
           f"org-augmented ler docs {len(ler_aug)}, ler docs with ORG {len(org_ex)} x{args.org_repeat} extra")
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
-    base = evaluate(nlp, dev_docs) if args.init else evaluate("de_core_news_lg", dev_docs)
+    base = evaluate(nlp, dev_docs, args.base) if args.init else evaluate(args.base, dev_docs, args.base)
     print(f"dev start micro F1={base['micro']['f1']} P={base['micro']['precision']} R={base['micro']['recall']}",
           flush=True)
     best, best_f1, history = 0, (base["micro"]["f1"] or 0.0) if args.init else -1.0, []
@@ -755,7 +760,7 @@ def main() -> None:
         for batch in minibatch(examples, size=compounding(8.0, 32.0, 1.001)):
             nlp.update(batch, sgd=optimizer, drop=0.25, losses=losses, exclude=others)
         with nlp.use_params(optimizer.averages):
-            score = evaluate(nlp, dev_docs)
+            score = evaluate(nlp, dev_docs, args.base)
             f1 = score["micro"]["f1"] or 0.0
             history.append({"epoch": epoch + 1, "loss": round(float(losses.get("ner", 0.0)), 1), "dev": score["micro"]})
             print(f"epoch {epoch + 1}: loss {losses.get('ner', 0.0):.1f} dev F1={f1} "
@@ -766,14 +771,14 @@ def main() -> None:
                 nlp.to_disk(args.out)
                 best = epoch + 1
     (args.out / "training.json").write_text(json.dumps({
-        "seed": SEED, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
+        "seed": SEED, "base": args.base, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
         "data": {"germeval": n_ge, "multiconer": n_mc, "synthetic": n_syn, "gold_train": len(gold_examples),
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
                  "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
                  "courts": len(court_ex), "courts_repeat": args.courts_repeat,
                  "org_repeat": args.org_repeat, "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
-                 "dev": "gold.jsonl" if gold else "ler_dev"},
+                 "dev": "gold.jsonl + ler_dev" if args.dev == "both" else "gold.jsonl" if gold_dev else "ler_dev"},
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
 

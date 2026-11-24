@@ -95,3 +95,12 @@ this repository; a model is downloaded by the user from Hugging Face or loaded f
 `docs/research/gliner-results.md`, all Apache-2.0: `urchade/gliner_multi-v2.1` and `urchade/gliner_multi_pii-v1`
 (base encoder `microsoft/mdeberta-v3-base`, MIT), `knowledgator/gliner-x-small` (base encoder `google/mt5-small`,
 Apache-2.0; needs `stanza` and `langdetect`, both Apache-2.0). Do not use `urchade/gliner_multi` (v0, CC BY-NC 4.0).
+
+## Optional newmean-pii models (not distributed)
+
+`packages/core/src/anonymizer/detect/newmean_ner.py` can use newmean-pii as an optional second detector (off by
+default; extra `anonymizer-core[newmean]`, package `newmean-pii` by newmean.ai, Apache-2.0, https://github.com/newmean-ai/pii).
+No model files are included in this repository; the package downloads them on first use from Hugging Face
+(`newmean-ai/pii-nano`, `-small`, `-medium`, `-large`, Apache-2.0) and checks pinned SHA-256 values. newmean.ai asks
+for, but does not require, a "Powered by newmean.ai" mention. Its public test set `newmean-ai/pii-dataset` is
+CC BY-NC 4.0 and is not used or included here.
