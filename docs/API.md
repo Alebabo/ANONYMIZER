@@ -90,6 +90,14 @@ curl -s localhost:8080/v1/protect -H "Authorization: Bearer $KEY" -H 'Content-Ty
 
 If the outcome is `review`, `local_only` or `block`, the response has `allowed: false` and `text: null`.
 
+Only the anonymized text: add `"output": "text"`. The response is `text/plain` with the anonymized text (trace id in the `X-Trace-Id` header). If the policy does not allow the text, the status is `403` and the body names the outcome. Not combinable with `dry_run`.
+
+```bash
+curl -s localhost:8080/v1/protect -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' \
+  -d '{"text":"Unser Mandant Herr Max Mustermann bittet um Rückruf.","output":"text"}'
+# Unser Mandant Herr PERSON_001 bittet um Rückruf.
+```
+
 ## Data protection in the API
 
 - **Responses contain no detected raw values.** `scan` and `classify` return offsets; the client already has the text.
