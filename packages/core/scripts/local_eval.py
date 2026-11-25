@@ -45,7 +45,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = REPO / "local" / "messung"
-LEGAL_NER = REPO / "models" / "de_legal_ner" / "ner"
+CATO = REPO / "models" / "cato-1.1"
 SELFTEST = REPO / "examples" / "local-eval"  # synthetic, already corrected annotations (committed)
 SUFFIXES = (".txt", ".md", ".docx", ".pdf")
 
@@ -196,11 +196,11 @@ def model_choice(choice: str) -> tuple[dict[str, str] | None, str]:
     """(ner_models for DetectorConfig, short name for the report)."""
     if choice == "standard":
         return None, "standard"
-    legal_ok = (LEGAL_NER / "model").exists() and (LEGAL_NER / "model").stat().st_size > 100_000
+    legal_ok = (CATO / "ner" / "model").exists() and (CATO / "ner" / "model").stat().st_size > 100_000
     if choice == "recht" and not legal_ok:
-        raise KitError(f"Rechtsmodell fehlt unter {LEGAL_NER} (Git LFS: 'git lfs pull').")
+        raise KitError(f"Modell Cato fehlt unter {CATO} (Git LFS: 'git lfs pull').")
     if legal_ok:
-        return {"de": f"de_core_news_lg+{LEGAL_NER}", "en": "en_core_web_lg"}, "de_core_news_lg+de_legal_ner"
+        return {"de": str(CATO), "en": "en_core_web_lg"}, "cato-1.1"
     print("Hinweis: Rechtsmodell nicht gefunden, es wird das Standardmodell verwendet.", file=sys.stderr)
     return None, "standard"
 
@@ -672,7 +672,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--ergebnis", type=Path, default=BASE / "ergebnis", help="Kennzahlen und Details (lokal)")
     ap.add_argument("--bericht", type=Path, default=BASE / "bericht.md", help="Bericht zum Weitergeben")
     ap.add_argument("--modell", choices=["auto", "recht", "standard"], default="auto",
-                    help="NER-Modell: recht = de_legal_ner (Standard, wenn vorhanden)")
+                    help="NER-Modell: recht = Cato 1.1 (Standard, wenn vorhanden)")
     ap.add_argument("--muster", type=Path, default=None, help="eigene Muster (YAML), z. B. local/patterns.yaml")
     ap.add_argument("--sprache", default="de", help="de, en oder auto (Standard: de)")
     ap.add_argument("--ohne-ner", action="store_true", help="nur Regeln (schnell, für Tests)")

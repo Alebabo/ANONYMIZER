@@ -52,8 +52,8 @@ class Settings:
     ANONYMIZER_TRACE_CONTENT   "1" also stores protected text and original values per trace
                                (clear-text personal data, admins only; test data only)
     ANONYMIZER_KEEP_TERMS      comma-separated own brands/products kept unchanged by NER (e.g. "ACME")
-    ANONYMIZER_NER_MODEL_DE    German spaCy model; "de_core_news_lg+models/de_custom_ner/ner" uses the fine-tuned
-                               support NER (base model plus NER weights)
+    ANONYMIZER_NER_MODEL_DE    German spaCy model (default models/cato-1.1 if present, else de_core_news_lg);
+                               a package name, a pipeline directory or "base+ner_dir"
     ANONYMIZER_NER_MODEL_EN    English spaCy model (default en_core_web_lg; en_core_web_sm is 15 MB instead of 425 MB)
     ANONYMIZER_CUSTOM_PATTERNS YAML file with deployment-specific patterns (order numbers, customer ids, ...)
     ANONYMIZER_MCP_HTTP        "1" serves the MCP server over HTTP at /mcp (bearer: a OpenAnonymizer API key)

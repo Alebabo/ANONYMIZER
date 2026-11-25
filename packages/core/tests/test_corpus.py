@@ -38,3 +38,16 @@ def test_corpus_anonymization_leaves_no_protected_value(doc):
     for spec in doc.get("expected", []):
         if DEFAULT_METHODS.get(spec["type"], Method.REDACT) != Method.KEEP and len(spec["text"]) >= 3:
             assert spec["text"] not in out.text, spec
+
+
+def test_value_inside_kept_value_is_no_leak():
+    from anonymizer.models import Category, EntityType, make_detection
+
+    text = "Kläger aus 50667 Köln. Zuständig ist das Arbeitsgericht Köln."
+    city = text.index("Köln")
+    court = text.index("Arbeitsgericht Köln")
+    dets = [make_detection(EntityType.LOCATION, Category.PERSONAL_DATA, city, city + 4, "Köln", 0.8, "test"),
+            make_detection(EntityType.COURT, Category.PUBLIC_REFERENCE, court, court + 19, "Arbeitsgericht Köln",
+                           0.9, "test")]
+    out = OpenAnonymizer().anonymize(text, dets)  # strict
+    assert "Arbeitsgericht Köln" in out.text and "50667 Köln" not in out.text

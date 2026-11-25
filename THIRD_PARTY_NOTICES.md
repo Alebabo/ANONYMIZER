@@ -77,11 +77,11 @@ from the train split of the GermEval 2014 NER dataset (Benikova, Biemann, Reznic
 https://sites.google.com/site/germeval2014ner/), licensed under CC BY 4.0
 (https://creativecommons.org/licenses/by/4.0/). Changes: only word forms with their frequency outside entities
 were kept (`packages/core/scripts/build_common_nouns.py`); no sentences are included. GermEval 2014 sentences
-were also used to train the NER weights in `models/de_custom_ner/` (not distributed as text).
+were also used to train the NER weights in `models/cato-1.1/` (not distributed as text).
 
 ## MultiCoNER v2 (CC BY 4.0)
 
-The NER weights in `models/de_custom_ner/` (version v6) were trained, among other data, on 4,000 sentences of the
+The NER weights in `models/cato-1.1/` were trained, among other data, on 4,000 sentences of the
 German part of MultiCoNER v2 (Fetahu, Chen, Kar, Rokhlenko, Malmasi 2023, https://multiconer.github.io,
 https://huggingface.co/datasets/MultiCoNER/multiconer_v2), licensed under CC BY 4.0. Changes: fine-grained labels
 mapped to PER/ORG/LOC (`load_multiconer` in `packages/core/scripts/ner_train.py`). The data itself is not part of
@@ -126,3 +126,12 @@ No model files are included in this repository; the package downloads them on fi
 (`newmean-ai/pii-nano`, `-small`, `-medium`, `-large`, Apache-2.0) and checks pinned SHA-256 values. newmean.ai asks
 for, but does not require, a "Powered by newmean.ai" mention. Its public test set `newmean-ai/pii-dataset` is
 CC BY-NC 4.0 and is not used or included here.
+
+## spaCy de_core_news_lg (MIT)
+
+`models/cato-1.1/` is derived from the spaCy pipeline `de_core_news_lg` 3.8.0 (Explosion AI,
+https://github.com/explosion/spacy-models, MIT licence, Copyright (c) Explosion AI). Changes: word vectors pruned
+from 500,000 to 20,000 rows (`packages/core/scripts/ner_prune_base.py`), parser, lemmatizer and senter removed,
+string store emptied (`packages/core/scripts/ner_compact.py`), NER component fine-tuned. The tok2vec, tagger,
+morphologizer and attribute_ruler components and the remaining vectors are unchanged from the original. The MIT
+licence text: https://github.com/explosion/spacy-models/blob/master/LICENSE.

@@ -1,0 +1,107 @@
+{
+  "seed": 24,
+  "base": "local/ner/bases/lg_p20k_de_legal_ner",
+  "best_epoch": 5,
+  "dev_baseline": {
+    "tp": 688,
+    "fp": 162,
+    "fn": 337,
+    "precision": 0.809,
+    "recall": 0.671,
+    "f1": 0.734
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 34509.2,
+      "dev": {
+        "tp": 729,
+        "fp": 143,
+        "fn": 296,
+        "precision": 0.836,
+        "recall": 0.711,
+        "f1": 0.769
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 27625.9,
+      "dev": {
+        "tp": 734,
+        "fp": 138,
+        "fn": 291,
+        "precision": 0.842,
+        "recall": 0.716,
+        "f1": 0.774
+      }
+    },
+    {
+      "epoch": 3,
+      "loss": 24602.8,
+      "dev": {
+        "tp": 745,
+        "fp": 134,
+        "fn": 280,
+        "precision": 0.848,
+        "recall": 0.727,
+        "f1": 0.783
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 22638.2,
+      "dev": {
+        "tp": 745,
+        "fp": 132,
+        "fn": 280,
+        "precision": 0.849,
+        "recall": 0.727,
+        "f1": 0.783
+      }
+    },
+    {
+      "epoch": 5,
+      "loss": 20925.7,
+      "dev": {
+        "tp": 749,
+        "fp": 130,
+        "fn": 276,
+        "precision": 0.852,
+        "recall": 0.731,
+        "f1": 0.787
+      }
+    },
+    {
+      "epoch": 6,
+      "loss": 19475.9,
+      "dev": {
+        "tp": 742,
+        "fp": 133,
+        "fn": 283,
+        "precision": 0.848,
+        "recall": 0.724,
+        "f1": 0.781
+      }
+    }
+  ],
+  "data": {
+    "germeval": 6000,
+    "multiconer": 4000,
+    "public": 6293,
+    "synthetic": 4000,
+    "gold_train": 430,
+    "gold_repeat": 3,
+    "partial": 340,
+    "partial_repeat": 2,
+    "ler": 8898,
+    "ler_repeat": 1,
+    "feedback": 0,
+    "feedback_repeat": 3,
+    "courts": 4097,
+    "courts_repeat": 1,
+    "org_repeat": 2,
+    "org_augment": 0,
+    "org_augmented_ler": 0,
+    "dev": "gold.jsonl + ler_dev"
+  }
+}

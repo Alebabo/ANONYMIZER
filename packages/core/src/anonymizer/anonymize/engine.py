@@ -158,7 +158,8 @@ class OpenAnonymizer:
                 replacements[d.id] = self._replacement(d, methods[d.id], canonical[d.id], vault, ns, counters, lang)
 
         out, transformations = self._apply(text, active, methods, replacements)
-        leaks = self._leaks(out, active)
+        kept = [d.text for d in detections if methods[d.id] == Method.KEEP]
+        leaks = self._leaks(out, active, kept)
         if leaks and self.config.strict:
             raise LeakError(f"{len(leaks)} original value(s) still present after anonymization")
         return AnonymizationResult(text=out, transformations=transformations,
@@ -267,8 +268,12 @@ class OpenAnonymizer:
         return "".join(parts), transformations
 
     @staticmethod
-    def _leaks(out: str, active: list[Detection]) -> list[str]:
+    def _leaks(out: str, active: list[Detection], kept: list[str] | None = None) -> list[str]:
         folded = normalize(out)
+        # Values kept on purpose stay readable and may contain a replaced value: the city "Köln" of an address
+        # inside the court name "Arbeitsgericht Köln". Such an occurrence is not a leak.
+        for value in sorted({normalize(k) for k in kept or [] if k}, key=len, reverse=True):
+            folded = folded.replace(value, " " * len(value))
         verdict: dict[str, bool] = {}  # one search per distinct value
         leaks = []
         for d in active:

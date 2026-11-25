@@ -98,17 +98,15 @@ Signals don't decide anything. The classification engine (step 2) combines them 
 
 The limitations are tracked as `known_false_negatives` / `known_false_positives` in the test corpus. If one gets fixed, the test fails and the entry has to be moved to `expected`, so the documentation can't silently drift out of date.
 
-## Fine-tuned German models
+## German model: Cato
 
-`ANONYMIZER_NER_MODEL_DE` swaps the German NER weights; vectors and tagger stay from `de_core_news_lg`.
+The German default is Cato 1.1 (`models/cato-1.1`, about 43 MB, standalone, see its
+[README](../models/cato-1.1/README.md)): one model for court decisions, pleadings, legal letters and support
+mails/chats. It replaces the earlier `de_legal_ner` and `de_custom_ner`. Without the model files (Git LFS) the
+stock `de_core_news_lg` is used. `ANONYMIZER_NER_MODEL_DE` selects another model: a package name, a pipeline
+directory, or `base+ner_dir` (base model plus fine-tuned NER weights).
 
-| Model | Use | Trained on |
-|---|---|---|
-| `de_core_news_lg` (default) | general | spaCy's news corpus |
-| `de_core_news_lg+models/de_legal_ner/ner` | court decisions, pleadings, legal letters | German LER and local court decisions with synthetic names ([datasets/ler](../datasets/ler/README.md), [datasets/courts](../datasets/courts/README.md)) |
-| `de_core_news_lg+models/de_custom_ner/ner` | support mails and chats | company support data |
-
-For legal texts combine the legal model with the built-in policy `legal-default`: parties, addresses and the
+For legal texts combine Cato with the built-in policy `legal-default`: parties, addresses and the
 own case numbers become placeholders, courts, statutes and cited federal decisions stay readable.
 
 ## Evaluation

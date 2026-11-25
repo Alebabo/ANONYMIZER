@@ -639,8 +639,11 @@ def main() -> None:
                     help="model selection: auto = gold dev split if present, else LER dev; both = gold dev + LER dev")
     ap.add_argument("--init", type=Path, help="continue from a saved model instead of de_core_news_lg; only "
                     "epochs that beat its dev score are saved")
+    ap.add_argument("--seed", type=int, default=SEED,
+                    help="seed for example order, sampling and dropout (the held-out name pool always uses SEED)")
     args = ap.parse_args()
-    rng = random.Random(SEED)
+    rng = random.Random(args.seed)
+    spacy.util.fix_random_seed(args.seed)
 
     gold_path = args.dir / "gold.jsonl"
     gold = read_gold(gold_path) if gold_path.exists() else []
@@ -783,8 +786,9 @@ def main() -> None:
                 args.out.mkdir(parents=True, exist_ok=True)
                 nlp.to_disk(args.out)
                 best = epoch + 1
+    args.out.mkdir(parents=True, exist_ok=True)  # also when no epoch beat the starting point
     (args.out / "training.json").write_text(json.dumps({
-        "seed": SEED, "base": args.base, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
+        "seed": args.seed, "base": args.base, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
         "data": {"germeval": n_ge, "multiconer": n_mc, "public": n_pub, "synthetic": n_syn, "gold_train": len(gold_examples),
                  "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
                  "ler": len(ler_examples), "ler_repeat": args.ler_repeat,

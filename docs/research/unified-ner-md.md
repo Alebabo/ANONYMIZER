@@ -1,4 +1,21 @@
-# Gemeinsames NER-Modell auf de_core_news_md: Zwischenstand 24.11.2026
+# Gemeinsames NER-Modell: von de_core_news_md zu Cato 1.1
+
+## Ergebnis 25.11.2026
+Übernommen als **Cato 1.1** (`models/cato-1.1`, 43 MB, Werte und Bau im README dort). Varianten, alle mit
+`--public datasets/public` und Einzelwort-Prüfung gemessen (Test-Splits, LER P/R, Finanz R):
+
+| Variante | Dev F1 | LER | LER Personen R | Gretel R | EasyOctopus R |
+|---|---|---|---|---|---|
+| md, Start `de_unified_ner_md`, Epoche 5 | 0,768 | 0,902 / 0,771 | 0,898 | 0,694 | 0,875 |
+| lg-Vektoren auf 20.000 Zeilen, Start `de_legal_ner`, Epoche 2 | 0,774 | 0,905 / 0,766 | 0,898 | 0,693 | 0,879 |
+| **dieselbe, Epoche 5 (Cato 1.1)** | **0,787** | **0,917 / 0,775** | **0,904** | **0,697** | **0,891** |
+| lg-Vektoren gekürzt, Start `de_custom_ner` | 0,763 (Epoche 3) | nicht gemessen | | | |
+
+Die gekürzten lg-Vektoren behalten den Vektorraum, auf dem `de_legal_ner` trainiert war; das zahlte sich nach
+mehreren Epochen aus. Die Übernahmeregel (Recall nirgends unter dem besten Spezialmodell) ist nicht erfüllt
+(Gretel −4,7, LER/Gerichte/syntriq −0,3 bis −1,6 Punkte; auf Gretel liegt auch `de_core_news_lg` mit 0,724 vorn); auf Wunsch trotzdem übernommen.
+
+# Zwischenstand 24.11.2026 (Verlauf)
 
 ## Git
 - Branch `feature/newmean-detector`, gepusht (Commits 168415d, aa2bc8b). Lokal nur `logs/` offen.
@@ -43,6 +60,26 @@ Messlatte (Recall mindestens gleich, Precision höchstens 2 Punkte darunter):
 
 Die Regel „Richter“ ist neu, die Messlatte stammt von vorher. Für einen fairen Vergleich die Baseline mit der neuen
 Regel nachmessen.
+
+## Kompaktes Modell unter 50 MB (25.11.)
+`packages/core/scripts/ner_compact.py` macht aus der trainierten Pipeline ein eigenständiges Verzeichnis ohne
+installiertes `de_core_news_md`: Parser, Lemmatizer und Senter fallen weg (der Anonymizer braucht nur NER und POS),
+`vocab/strings.json` wird geleert (20 MB Text der 500.000 Vektor-Schlüssel; der Vektor-Lookup läuft über den Hash).
+Vektoren und Gewichte bleiben unverändert.
+
+- Epoche-2-Modell: 65,2 MB auf 43,6 MB.
+- Prüfung im Skript (`--check`): 830 Texte aus LER-Dev, SmartData- und MAPA-Test, Entitäten und POS identisch.
+- `finance_data.py eval --limit 150` mit `de_core_news_md+…/ner` und mit dem Kompaktmodell: Ergebnisse identisch.
+- Nutzung: `ANONYMIZER_NER_MODEL_DE=<Kompaktordner>`. `meta.json` trägt `"anonymizer": {"casual": true}`, damit
+  der Recognizer es wie ein feinjustiertes `base+ner`-Modell behandelt (kleingeschriebene Spans bleiben).
+
+```bash
+python -I packages/core/scripts/ner_compact.py local/ner/models/de_unified_ner_md_e6 \
+  local/ner/models/de_unified_ner_md_compact --check datasets/ler/ler_dev.jsonl.gz datasets/public/smartdata/test.jsonl.gz
+```
+
+Weitere Reserve, falls nötig: seltene Vektor-Schlüssel streichen (`key2row` 6 MB) oder Vektoren auf weniger Zeilen
+kürzen. Beides ändert die Vorhersagen und muss dann neu gemessen werden.
 
 ## Weitere offene Punkte
 - Erledigt (24.11.): USt-IdNr. mit Leerzeichen (`DE 298 765 432`, `ATU 12345678`) erkennt die Regel `vat_id` jetzt.
