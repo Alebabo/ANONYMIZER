@@ -124,6 +124,7 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
   alles andere ans Dashboard.
 - Secrets: `DEPLOY_SSH_KEY` (Pflicht), `ADMIN_EMAIL`/`ADMIN_PASSWORD` (erster Dashboard-Admin).
   `/opt/anonymizer/.env` liegt nur auf dem Server; `ANONYMIZER_VAULT_KEY` daraus extern sichern.
+- Details, Betrieb und Fehlerbilder: [docs/deployment.md](docs/deployment.md).
 
 ## 5. Laufende Arbeit (Branches)
 
