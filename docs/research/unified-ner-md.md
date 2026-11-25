@@ -1,7 +1,7 @@
 # Gemeinsames NER-Modell: von de_core_news_md zu Cato 1.1
 
 ## Ergebnis 25.11.2026
-Übernommen als **Cato 1.1** (`models/cato-1.1`, 43 MB, Werte und Bau im README dort). Varianten, alle mit
+Übernommen als **Cato 1.1** (`packages/core/models/cato-1.1`, 43 MB, Werte und Bau im README dort). Varianten, alle mit
 `--public datasets/public` und Einzelwort-Prüfung gemessen (Test-Splits, LER P/R, Finanz R):
 
 | Variante | Dev F1 | LER | LER Personen R | Gretel R | EasyOctopus R |

@@ -41,7 +41,7 @@ npm install
 
 cd packages\core
 python -m pip install -e ".[dev]"
-python -m spacy download de_core_news_lg
+git lfs pull   # German NER model Cato (packages/core/models/cato-1.1)
 python -m spacy download en_core_web_lg
 ```
 

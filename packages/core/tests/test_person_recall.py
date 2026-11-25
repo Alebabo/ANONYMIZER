@@ -8,7 +8,7 @@ from anonymizer.detect import Detector, DetectorConfig
 from anonymizer.detect.ner import _ISOLATED, _ADJECTIVE_END
 from anonymizer.detect.recognizers import PERSON
 
-CATO = Path(__file__).resolve().parents[3] / "models" / "cato-1.1"
+CATO = Path(__file__).resolve().parents[1] / "models" / "cato-1.1"
 
 
 def persons(text: str) -> list[str]:

@@ -1,5 +1,8 @@
 # newmean-pii als optionaler zweiter Detektor
 
+> Der optionale newmean-Detektor wurde am 25.11.2026 wieder entfernt (nur noch Cato 1.1). Code im Git-Verlauf
+> (Commit 168415d). Die Messungen unten bleiben als Recherche stehen.
+
 Stand: 24.11.2026, Paket `newmean-pii` 1.6.1, Modelle v1.1.0.
 
 ## Was es ist

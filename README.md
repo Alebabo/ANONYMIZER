@@ -58,7 +58,7 @@ Step-by-step handover for testing and adapting OpenAnonymizer in a company envir
 ```bash
 cd packages/core
 pip install -e ".[dev]"
-python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
+git lfs pull && python -m spacy download en_core_web_lg   # German: Cato (Git LFS)
 pytest                       # incl. corpus, leak and API tests
 anonymizer eval tests/corpus       # detection/classification against the synthetic corpus
 

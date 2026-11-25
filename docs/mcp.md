@@ -47,7 +47,7 @@ Install:
 
 ```bash
 pip install -e packages/core
-python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
+git lfs pull && python -m spacy download en_core_web_lg   # German: Cato (Git LFS)
 ```
 
 **Claude Code:**

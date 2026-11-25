@@ -28,7 +28,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `packages/core/src/anonymizer/{ler,courts,feedback}.py` | Trainingsdaten (German LER, Gerichtsentscheidungen), Feedback-Speicher |
 | `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py`, `ner_external.py` (syntriq/EasyOctopus Personen), `build_common_nouns.py`, `local_eval.py` (Mess-Kit echte Kanzleitexte, `docs/local-eval.md`) |
 | `app/`, `components/`, `lib/` | Next.js-Dashboard: Tabs **Chat**, **Traces**, **CSV**; Settings: Policies, API Keys, Members, Feedback, Audit Logs |
-| `models/cato-1.1/` | **Cato 1.1**: ein deutsches NER-Modell für Rechtstexte und Support-Mails/Chats, eigenständige spaCy-Pipeline, 43 MB (Git LFS), deutscher Standard. Ersetzt `de_legal_ner` und `de_custom_ner` (beide brauchten `de_core_news_lg`, 610 MB) |
+| `packages/core/models/cato-1.1/` | **Cato 1.1**: ein deutsches NER-Modell für Rechtstexte und Support-Mails/Chats, eigenständige spaCy-Pipeline, 43 MB (Git LFS), einziges deutsches Modell (auch im Docker-Image). Ersetzt `de_legal_ner` und `de_custom_ner` (beide brauchten `de_core_news_lg`, 610 MB) |
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
@@ -39,7 +39,7 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
 
 Seit 25.11.2026 ist Cato 1.1 das deutsche Standardmodell. Werte gegen die früheren Spezialmodelle:
-[models/cato-1.1/README.md](models/cato-1.1/README.md). Cato liegt beim Recall 0,3 bis 1,6 Punkte (LER, Gerichte, syntriq),
+[packages/core/models/cato-1.1/README.md](packages/core/models/cato-1.1/README.md). Cato liegt beim Recall 0,3 bis 1,6 Punkte (LER, Gerichte, syntriq),
 auf Gretel 4,7 Punkte unter dem jeweils besten Spezialmodell; bewusst übernommen für ein Modell statt zwei und
 43 statt 616 MB.
 
@@ -134,8 +134,10 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 
 ## 5. Laufende Arbeit (Branches)
 
-25.11.2026: `feature/newmean-detector` in `main` zusammengeführt (Cato 1.1, öffentliche PII-Datensätze, optionaler
-newmean-Detektor, `ner_compact.py`, `ner_prune_base.py`). Die Absätze darunter sind älter.
+25.11.2026: `feature/newmean-detector` in `main` zusammengeführt und gelöscht (Cato 1.1, öffentliche PII-Datensätze,
+`ner_compact.py`, `ner_prune_base.py`). Danach: Cato ist einziges deutsches Modell (kein Rückfall auf
+`de_core_news_lg`, Docker-Image und CI mit Git LFS), der optionale newmean-Detektor ist wieder entfernt. Keine offenen
+Arbeitsbranches. Die Absätze darunter sind älter.
 
 `main` steht auf `e2a3c4e` und enthält alles aus der Sitzung vom 21./22.11.2026. Keine offenen Arbeitsbranches.
 

@@ -1,9 +1,8 @@
 """spaCy NER recognizer (enabled by default).
 
-Models are loaded lazily and must be installed separately
-(``python -m spacy download de_core_news_lg en_core_web_lg``; the Docker
-image ships them). If spaCy or a model is missing, the engine records a
-warning and continues with rule-based detection only.
+German uses Cato 1.1 (``packages/core/models/cato-1.1``, Git LFS, shipped in the Docker image); English needs
+``python -m spacy download en_core_web_lg``. If spaCy or a model is missing, the engine records a warning and
+continues with rule-based detection only.
 
 NER results never override rule-based detections (see ``engine._rank``).
 """
@@ -20,20 +19,12 @@ from typing import Any
 from anonymizer.detect.orgs import headed_orgs, known_orgs, legal_entities
 from anonymizer.models import Category, Detection, EntityType as E, make_detection
 
-# German default: Cato (models/cato-1.1, a standalone pipeline of about 43 MB, see its README) when the repository
-# checkout has it, else the stock de_core_news_lg. ANONYMIZER_NER_MODEL_DE selects another model: a package name, a
-# pipeline directory, or "base+ner_dir" (base model plus fine-tuned NER weights).
+# German: Cato, a standalone spaCy pipeline of about 43 MB (see its README). Location: ANONYMIZER_CATO_PATH, else
+# packages/core/models/cato-1.1 next to the source (editable install, repository checkout).
+# ANONYMIZER_NER_MODEL_DE overrides the German model only to measure a candidate (training scripts, evaluations).
 # ANONYMIZER_NER_MODEL_EN selects another English model, e.g. "en_core_web_sm" (15 MB instead of 425 MB).
-CATO = Path(__file__).resolve().parents[5] / "models" / "cato-1.1"
-
-
-def _default_de() -> str:
-    """Cato if the checkout has its weights (not only Git LFS pointers), else the stock model."""
-    weights = CATO / "ner" / "model"
-    return str(CATO) if weights.is_file() and weights.stat().st_size > 100_000 else "de_core_news_lg"
-
-
-DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or _default_de(),
+CATO = Path(os.environ.get("ANONYMIZER_CATO_PATH") or Path(__file__).resolve().parents[3] / "models" / "cato-1.1")
+DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or str(CATO),
                   "en": os.environ.get("ANONYMIZER_NER_MODEL_EN") or "en_core_web_lg"}
 
 _LABELS = {
@@ -338,6 +329,9 @@ class SpacyRecognizer:
                 raise NERUnavailable("spaCy is not installed") from exc
             # "base+ner_dir": base model with fine-tuned NER weights; vectors, tagger etc. come from the base model.
             base, _, ner_dir = model.partition("+")
+            weights = Path(base) / "ner" / "model"
+            if weights.is_file() and weights.stat().st_size < 10_000:
+                raise NERUnavailable(f"model '{base}' holds only Git LFS pointers (run 'git lfs pull')")
             try:
                 nlp = spacy.load(base, disable=["parser", "lemmatizer"])
             except OSError as exc:

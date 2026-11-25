@@ -11,7 +11,7 @@ docker compose up -d --build
 curl -s localhost:8080/health
 ```
 
-- The image contains the spaCy models `de_core_news_lg` and `en_core_web_lg`. It is large (several GB) and the first build takes a while.
+- The image contains the German NER model Cato 1.1 (43 MB, needs `git lfs pull` before the build) and `en_core_web_lg`.
 - Behind a TLS-intercepting proxy, pass the proxy's CA bundle as a build secret: `docker build --secret id=ca_bundle,src=ca.crt ...`.
 - Container hardening:
   - Runs as a non-root user.
@@ -24,7 +24,7 @@ Without Docker:
 ```bash
 cd packages/core
 pip install -e .
-python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
+git lfs pull && python -m spacy download en_core_web_lg   # German: Cato (Git LFS)
 ANONYMIZER_API_KEYS=... anonymizer-api          # binds to 127.0.0.1:8080
 ```
 

@@ -5,7 +5,7 @@ Status: Phase 1 complete (detection, classification, anonymization + vault, poli
 
 ```bash
 pip install -e ".[dev]"
-python -m spacy download de_core_news_lg
+git lfs pull   # German NER model Cato (models/cato-1.1)
 python -m spacy download en_core_web_lg
 pytest
 anonymizer scan document.txt           # detections as JSON, no raw values

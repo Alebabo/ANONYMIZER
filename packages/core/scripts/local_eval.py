@@ -45,7 +45,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 BASE = REPO / "local" / "messung"
-CATO = REPO / "models" / "cato-1.1"
+CATO = REPO / "packages" / "core" / "models" / "cato-1.1"
 SELFTEST = REPO / "examples" / "local-eval"  # synthetic, already corrected annotations (committed)
 SUFFIXES = (".txt", ".md", ".docx", ".pdf")
 

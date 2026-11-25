@@ -52,7 +52,7 @@ Voraussetzungen: Python ≥ 3.11, Git, Git LFS, ca. 2 GB Platz für die Sprachmo
 git clone https://github.com/Alebabo/ANONYMIZER.git && cd ANONYMIZER
 python -m venv .venv && source .venv/bin/activate
 pip install -e "packages/core[dev]" -e sdk/python
-python -m spacy download de_core_news_lg && python -m spacy download en_core_web_lg
+git lfs pull && python -m spacy download en_core_web_lg   # German: Cato (Git LFS)
 ```
 
 Hinter einem Firmen-Proxy: `pip` und der spaCy-Download brauchen `HTTPS_PROXY` und ggf. `REQUESTS_CA_BUNDLE`/`PIP_CERT` mit dem Firmen-CA-Zertifikat.
@@ -264,7 +264,7 @@ Bekanntes Verhalten:
 | `ANONYMIZER_DEFAULT_POLICY` | `banking-default` | für Kanzleien `legal-default`, sonst eigene Policy (4.3) |
 | `ANONYMIZER_PLAYGROUND_POLICY` | `support-default` | Policy für CSV-Abfragen (früher `ANONYMIZER_CONVERSATIONS_POLICY`, wird noch gelesen) |
 | `ANONYMIZER_CUSTOM_PATTERNS` | – | `local/patterns.yaml` |
-| `ANONYMIZER_NER_MODEL_DE` | `de_core_news_lg` | Rechtstexte: `de_core_news_lg+models/de_legal_ner/ner` |
+| `ANONYMIZER_CATO_PATH` | `packages/core/models/cato-1.1` | Deutsches NER-Modell Cato 1.1 (einziges deutsches Modell) |
 | `ANONYMIZER_MCP_HTTP` | 0 | `1` = MCP unter `/mcp` |
 | `ANONYMIZER_MCP_ALLOWED_HOSTS` | – | eure OpenAnonymizer-Domain |
 | `ANONYMIZER_VAULT_KEY` | – | **in Betrieb setzen**: stabile Platzhalter, Admin kann zurückübersetzen |
@@ -283,7 +283,7 @@ Vollständige Liste: `.env.example` und `packages/core/src/anonymizer/api/settin
 | `/mcp` gibt 404 | `ANONYMIZER_MCP_HTTP` nicht gesetzt | `ANONYMIZER_MCP_HTTP=1`, neu starten |
 | Start bricht ab mit Policy-Fehler | `ANONYMIZER_DEFAULT_POLICY` / `ANONYMIZER_PLAYGROUND_POLICY` existiert nicht | Policy hochladen (4.3) oder Name korrigieren |
 | Start bricht ab mit Pattern-Fehler | Ungültiges YAML oder Regex in `ANONYMIZER_CUSTOM_PATTERNS` | Meldung nennt das Pattern |
-| `NER disabled` in Warnungen | spaCy-Modelle fehlen | `python -m spacy download de_core_news_lg en_core_web_lg` |
+| `NER disabled` in Warnungen | NER-Modelle fehlen | `git lfs pull` (Cato), `python -m spacy download en_core_web_lg` |
 | Dashboard zeigt „Example data“ | `ANONYMIZER_API_URL` nicht gesetzt | `ANONYMIZER_API_URL=http://127.0.0.1:8080 npm run dev` |
 
 ---

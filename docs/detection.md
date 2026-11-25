@@ -7,7 +7,7 @@ The engine lives in `packages/core/src/anonymizer/detect/`. It's deterministic: 
 1. **Language**: a stopword heuristic decides between `de`, `en` and `unknown`. With `unknown`, all recognizers run.
 2. **Recognizers**: each recognizer produces candidates with a type, offsets, confidence and an optional checksum result (`validated`).
    - Rule-based recognizers always run.
-   - spaCy NER runs by default (`de_core_news_lg`, `en_core_web_lg`). Its spans are cleaned up first: leading honorifics are cut off; spans across line breaks, role words and code fragments are dropped.
+   - spaCy NER runs by default (German: Cato 1.1, English: `en_core_web_lg`). Its spans are cleaned up first: leading honorifics are cut off; spans across line breaks, role words and code fragments are dropped.
 3. **Overlap resolution** (`resolve_overlaps`): when candidates overlap, a greedy pass keeps the best one. Losers go into `ScanResult.suppressed` with the id of the winner, so they stay auditable. Candidates are ranked by these criteria, in order:
    1. A valid checksum.
    2. Rule-based before statistical (NER never overrides a rule-based detection).
@@ -89,7 +89,7 @@ Signals don't decide anything. The classification engine (step 2) combines them 
 
 ## Known limitations (rule-only mode)
 
-- **Bare names without a cue** (no honorific, no role) are only found by spaCy NER. If the models are missing (`python -m spacy download de_core_news_lg en_core_web_lg`), the scan continues in rule-only mode and puts a warning in `ScanResult.warnings`. The API must surface this warning. Rule-only mode is not suitable for production.
+- **Bare names without a cue** (no honorific, no role) are only found by spaCy NER. If the models are missing (`git lfs pull` for Cato, `python -m spacy download en_core_web_lg`), the scan continues in rule-only mode and puts a warning in `ScanResult.warnings`. The API must surface this warning. Rule-only mode is not suitable for production.
 - **NER is statistical.** It isn't deterministic in the sense of a fixed rule set, and legal jargon is outside its training domain. That's why NER only adds detections and never removes or reclassifies a rule-based one.
 - **Capitalized German nouns after honorifics** ("Herr Ober") are recognized as names.
 - **Addresses without a street suffix** ("Am Rosengarten 7a") are not recognized.
@@ -100,11 +100,11 @@ The limitations are tracked as `known_false_negatives` / `known_false_positives`
 
 ## German model: Cato
 
-The German default is Cato 1.1 (`models/cato-1.1`, about 43 MB, standalone, see its
-[README](../models/cato-1.1/README.md)): one model for court decisions, pleadings, legal letters and support
-mails/chats. It replaces the earlier `de_legal_ner` and `de_custom_ner`. Without the model files (Git LFS) the
-stock `de_core_news_lg` is used. `ANONYMIZER_NER_MODEL_DE` selects another model: a package name, a pipeline
-directory, or `base+ner_dir` (base model plus fine-tuned NER weights).
+German NER uses Cato 1.1 (`packages/core/models/cato-1.1`, about 43 MB, standalone, see its
+[README](../packages/core/models/cato-1.1/README.md)): one model for court decisions, pleadings, legal letters and
+support mails/chats. It replaces the earlier `de_legal_ner` and `de_custom_ner`; `de_core_news_lg` is no longer
+needed. The model files come with Git LFS (`git lfs pull`) and are part of the Docker image.
+`ANONYMIZER_CATO_PATH` points to another copy; `ANONYMIZER_NER_MODEL_DE` is only for measuring candidate models.
 
 For legal texts combine Cato with the built-in policy `legal-default`: parties, addresses and the
 own case numbers become placeholders, courts, statutes and cited federal decisions stay readable.

@@ -4,11 +4,8 @@ Cato replaces the two earlier fine-tuned models `de_legal_ner` (legal texts) and
 chats), which both needed the 610 MB `de_core_news_lg`. Cato is a standalone spaCy 3.8 pipeline of about 43 MB
 (tok2vec, tagger, morphologizer, attribute_ruler, ner); no spaCy model package has to be installed.
 
-It is the German default when this directory is present with its Git LFS files (`git lfs pull`). Explicitly:
-
-```bash
-ANONYMIZER_NER_MODEL_DE=models/cato-1.1
-```
+It is the only German model of OpenAnonymizer and part of the Docker image. The files come with Git LFS
+(`git lfs pull`); `ANONYMIZER_CATO_PATH` points to another copy.
 
 `meta.json` marks it as fine-tuned on chat text (`"anonymizer": {"casual": true}`), so lower-case chat entities are
 kept, and the path contains `cato`, so the isolated-word check for signature lines runs (see `detect/ner.py`).

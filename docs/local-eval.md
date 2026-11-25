@@ -35,19 +35,19 @@ Aktivieren: unter Windows `.venv\Scripts\activate`, unter macOS/Linux `source .v
 
 ```
 pip install -e packages/core
-python -m spacy download de_core_news_lg
+git lfs pull   # German NER model Cato (packages/core/models/cato-1.1)
 python -m spacy download en_core_web_lg
 python packages/core/scripts/local_eval.py selbsttest
 ```
 
 Hinter einem Firmen-Proxy brauchen `pip` und der Modell-Download `HTTPS_PROXY` und ggf. das Firmen-CA-Zertifikat
 (`PIP_CERT`, `REQUESTS_CA_BUNDLE`). Wer den Download nicht freigeben kann: die Modellpakete
-`de_core_news_lg-3.8.0` und `en_core_web_lg-3.8.0` von github.com/explosion/spacy-models/releases auf einem anderen
+`en_core_web_lg-3.8.0` (Cato kommt mit dem Repo) von github.com/explosion/spacy-models/releases auf einem anderen
 Rechner laden und mit `pip install <datei>.whl` installieren.
 
 Der Selbsttest misst vier mitgelieferte, ausgedachte Dokumente (`examples/local-eval/`, schon korrigiert) und
-schreibt nichts. Erwartete Ausgabe: `Einrichtung in Ordnung`. Meldet er `PROBLEM`, fehlt das Sprachmodell oder das
-Rechtsmodell (`git lfs pull`); dann nicht mit echten Texten beginnen. Die Beispiele zeigen auch, wie korrigierte
+schreibt nichts. Erwartete Ausgabe: `Einrichtung in Ordnung`. Meldet er `PROBLEM`, fehlt das Sprachmodell oder
+Cato (`git lfs pull`); dann nicht mit echten Texten beginnen. Die Beispiele zeigen auch, wie korrigierte
 Dateien aussehen.
 
 ## Schritt 1: Ordner anlegen (1 Minute)

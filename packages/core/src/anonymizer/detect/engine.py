@@ -12,7 +12,6 @@ from anonymizer.detect.base import Recognizer, supports
 from anonymizer.detect.context import SignalIndex, find_signals
 from anonymizer.detect.gliner_ner import GlinerRecognizer, from_env as _gliner_env, parse_types
 from anonymizer.detect.ner import NERUnavailable, SpacyRecognizer
-from anonymizer.detect.newmean_ner import NewmeanRecognizer, from_env as _newmean_env
 from anonymizer.detect.recognizers import NAME_STOPWORDS, builtin_recognizers, custom_recognizer
 from anonymizer.models import (
     INNER_WS, Category, Detection, EntityType as E, ScanResult, Signal, Suppressed, make_detection,
@@ -28,8 +27,8 @@ SPECIFICITY: dict[str, int] = {
     E.PRIVILEGE_MARKER: 30, E.BUSINESS_SECRET_MARKER: 30, E.LOCATION: 20,
 }
 CUSTOM_RANK = 88
-# Statistical detectors in order of trust: on an overlap rules beat spaCy, spaCy beats GLiNER and newmean.
-STATISTICAL_RECOGNIZERS = {"spacy_ner": 1, "gliner": 0, "newmean": 0}
+# Statistical detectors in order of trust: on an overlap rules beat spaCy, spaCy beats GLiNER.
+STATISTICAL_RECOGNIZERS = {"spacy_ner": 1, "gliner": 0}
 RULE_TIER = 2
 
 # Extra tokens that statistical NER mislabels in legal text.
@@ -97,13 +96,6 @@ class DetectorConfig(BaseModel):
     gliner_model: str | None = Field(default_factory=lambda: _gliner_env()["gliner_model"])
     gliner_types: str = Field(default_factory=lambda: _gliner_env()["gliner_types"])
     gliner_threshold: float = Field(default_factory=lambda: _gliner_env()["gliner_threshold"], ge=0.0, le=1.0)
-    # Optional second NER (newmean-pii, see detect/newmean_ner.py). Off unless a size (nano, small, medium, large)
-    # is set; defaults come from ANONYMIZER_NEWMEAN_MODEL / _LABELS / _SENSITIVITY / _MODEL_DIR.
-    newmean_model: str | None = Field(default_factory=lambda: _newmean_env()["newmean_model"])
-    newmean_labels: str = Field(default_factory=lambda: _newmean_env()["newmean_labels"])
-    newmean_sensitivity: float = Field(default_factory=lambda: _newmean_env()["newmean_sensitivity"], ge=-1.0,
-                                       le=1.0)
-    newmean_model_dir: str | None = Field(default_factory=lambda: _newmean_env()["newmean_model_dir"])
 
 
 class Detector:
@@ -121,11 +113,6 @@ class Detector:
             GlinerRecognizer(self.config.gliner_model, parse_types(self.config.gliner_types),
                              self.config.gliner_threshold, stop)
             if self.config.gliner_model and "gliner" not in self.config.disabled_recognizers else None
-        )
-        self._newmean = (
-            NewmeanRecognizer(self.config.newmean_model, self.config.newmean_labels, self.config.newmean_sensitivity,
-                              self.config.newmean_model_dir, stop)
-            if self.config.newmean_model and "newmean" not in self.config.disabled_recognizers else None
         )
         self.recognizers: list[Recognizer] = base
 
@@ -155,11 +142,6 @@ class Detector:
                 candidates.extend(self._gliner.analyze(text, lang))
             except NERUnavailable as exc:
                 warnings.append(f"GLiNER disabled: {exc}")
-        if self._newmean is not None:
-            try:
-                candidates.extend(self._newmean.analyze(text, lang))
-            except NERUnavailable as exc:
-                warnings.append(f"newmean disabled: {exc}")
 
         accepted, _ = resolve_overlaps(candidates)
         candidates.extend(propagate_mentions(text, accepted))
