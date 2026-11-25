@@ -6,6 +6,7 @@ name: Deploy
 # Benötigte Repository-Secrets:
 #   DEPLOY_HOST     optional, Standard: 178.105.31.110
 #   DEPLOY_SSH_KEY  privater SSH-Schlüssel (öffentlicher Teil in authorized_keys des Servers)
+#   ADMIN_EMAIL, ADMIN_PASSWORD  optional: erster Dashboard-Admin (nur solange noch kein Nutzer existiert)
 # Optional (Repository-Variablen):
 #   DEPLOY_USER     Standard: root
 #   DEPLOY_PATH     Standard: /opt/anonymizer
@@ -104,7 +105,12 @@ jobs:
             --exclude '*' \
             ./ "$USER@$HOST:$DEST/"
 
-      - name: .env beim ersten Mal anlegen, Container bauen und starten
+      - name: Dashboard-Image bauen und übertragen
+        run: |
+          docker build -f deploy/dashboard.Dockerfile -t anonymizer-dashboard:latest .
+          docker save anonymizer-dashboard:latest | gzip | ssh "$USER@$HOST" 'gunzip | docker load'
+
+      - name: .env beim ersten Mal anlegen
         run: |
           ssh "$USER@$HOST" "DEST='$DEST' bash -s" <<'EOF'
           set -euo pipefail
@@ -118,14 +124,39 @@ jobs:
             } > .env
             echo ".env neu angelegt"
           fi
+          EOF
+
+      - name: Ersten Dashboard-Admin eintragen (nur falls noch nicht vorhanden)
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ]; then
+            echo "Secrets ADMIN_EMAIL/ADMIN_PASSWORD nicht gesetzt, übersprungen"; exit 0
+          fi
+          printf 'ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=%s\nANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD=%s\n' "$ADMIN_EMAIL" "$ADMIN_PASSWORD" \
+            | ssh "$USER@$HOST" "cd '$DEST' && if grep -q '^ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=' .env; then cat >/dev/null; echo 'bereits vorhanden'; else cat >> .env; echo 'eingetragen'; fi"
+
+      - name: Container bauen und starten
+        run: |
+          ssh "$USER@$HOST" "DEST='$DEST' bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$DEST"
           export COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.prod.yml
           docker compose up -d --build --remove-orphans
           docker image prune -f >/dev/null
+          ok=""
           for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
-              echo "Health-Check ok"; docker compose ps; exit 0
-            fi
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then ok=1; break; fi
             sleep 5
           done
-          echo "Health-Check fehlgeschlagen"; docker compose logs --tail 100 api; exit 1
+          [ -n "$ok" ] || { echo "API-Health-Check fehlgeschlagen"; docker compose logs --tail 100 api; exit 1; }
+          echo "API ok"
+          DOMAIN=openanonymizer.tma-it-solution.de
+          for i in $(seq 1 24); do
+            code=$(curl -ks -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/login" || true)
+            if [ "$code" = "200" ]; then echo "Dashboard ok"; docker compose ps; exit 0; fi
+            sleep 5
+          done
+          echo "Dashboard-Check fehlgeschlagen (HTTP $code)"; docker compose logs --tail 60 dashboard caddy; exit 1
           EOF

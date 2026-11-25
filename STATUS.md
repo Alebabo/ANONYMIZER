@@ -114,6 +114,17 @@ python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/c
 
 Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Personen darf nicht sinken).
 
+## 4a. Produktivbetrieb (Hetzner)
+
+- Server: Hetzner Cloud `178.105.31.110` (1 vCPU, 1 GB RAM, 2 GB Swap; vorläufig), erreichbar unter
+  `https://openanonymizer.tma-it-solution.de` (DNS-A-Record bei IONOS).
+- Jeder Push auf `main` wird nach grüner CI automatisch ausgerollt (`.github/workflows/deploy.yml`, manuell über
+  "Run workflow"). API wird auf dem Server gebaut, das Dashboard in GitHub Actions (Next.js standalone) und per
+  `docker load` übertragen. Caddy (`deploy/Caddyfile`) terminiert TLS: `/v1/*`, `/health`, `/mcp` gehen an die API,
+  alles andere ans Dashboard.
+- Secrets: `DEPLOY_SSH_KEY` (Pflicht), `ADMIN_EMAIL`/`ADMIN_PASSWORD` (erster Dashboard-Admin).
+  `/opt/anonymizer/.env` liegt nur auf dem Server; `ANONYMIZER_VAULT_KEY` daraus extern sichern.
+
 ## 5. Laufende Arbeit (Branches)
 
 `main` steht auf `e2a3c4e` und enthält alles aus der Sitzung vom 21./22.11.2026. Keine offenen Arbeitsbranches.

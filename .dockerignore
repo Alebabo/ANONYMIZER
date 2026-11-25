@@ -1,0 +1,11 @@
+# Nur für deploy/dashboard.Dockerfile (Build-Kontext = Repo-Root)
+.git
+node_modules
+.next
+packages
+sdk
+datasets
+models
+local
+data
+.env*

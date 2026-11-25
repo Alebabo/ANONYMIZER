@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 // Playground CSV uploads go through a server action and the middleware (limit matches the API: 100 MB of CSV).
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Docker image for self-hosting (deploy/dashboard.Dockerfile) sets NEXT_OUTPUT=standalone.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   experimental: {
     serverActions: { bodySizeLimit: "101mb" }, middlewareClientMaxBodySize: "101mb",
     // Reuse a visited page for 30 s when switching back to it; server actions still refresh it right away.

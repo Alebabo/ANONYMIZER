@@ -5,9 +5,27 @@ services:
     environment:
       ANONYMIZER_MCP_ALLOWED_HOSTS: openanonymizer.tma-it-solution.de
 
+  dashboard:
+    # Image wird in GitHub Actions gebaut und per SSH geladen (docker load).
+    image: anonymizer-dashboard:latest
+    pull_policy: never
+    depends_on: [api]
+    environment:
+      ANONYMIZER_API_URL: http://api:8080
+      ANONYMIZER_PUBLIC_API_URL: https://openanonymizer.tma-it-solution.de
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1000,gid=1000
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
   caddy:
     image: caddy:2.8-alpine
-    depends_on: [api]
+    depends_on: [api, dashboard]
     environment:
       ANONYMIZER_DOMAIN: openanonymizer.tma-it-solution.de
     ports:
