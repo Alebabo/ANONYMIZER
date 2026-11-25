@@ -58,6 +58,12 @@ jobs:
           if ! command -v docker >/dev/null; then
             curl -fsSL https://get.docker.com | $SUDO sh
           fi
+          # Swap als Puffer für kleine Server (spaCy-Modelle + Docker-Build)
+          if [ "$(swapon --show --noheadings | wc -l)" -eq 0 ]; then
+            $SUDO fallocate -l 2G /swapfile && $SUDO chmod 600 /swapfile
+            $SUDO mkswap /swapfile >/dev/null && $SUDO swapon /swapfile
+            grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | $SUDO tee -a /etc/fstab >/dev/null
+          fi
           if ! command -v rsync >/dev/null; then
             $SUDO apt-get update -qq && $SUDO apt-get install -y -qq rsync
           fi
