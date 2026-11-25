@@ -27,6 +27,9 @@ dev = ["pytest>=8", "httpx>=0.27"]
 # Optional second NER detector (off by default, see docs/research/gliner-results.md). Pulls in PyTorch;
 # for CPU-only: pip install torch --index-url https://download.pytorch.org/whl/cpu first.
 gliner = ["gliner>=0.2.16"]
+# Optional second NER detector newmean-pii (off by default, see docs/research/newmean-pii.md). No further
+# dependencies; model files (2.6-15.5 MB) are downloaded from Hugging Face on first use.
+newmean = ["newmean-pii>=1.6.1,<2"]
 
 [project.scripts]
 anonymizer = "anonymizer.cli:main"

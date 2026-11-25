@@ -128,6 +128,19 @@ def test_protect_dry_run_returns_no_text(client):
     assert r["allowed"] and r["text"] is None and r["decision"]["dry_run"]
 
 
+def test_protect_output_text_only(client):
+    r = client.post("/v1/protect", json={"text": "Herr Max Mustermann bittet um Rückruf.", "output": "text"},
+                    headers=USER)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/plain")
+    assert r.text.startswith("Herr ") and "Mustermann" not in r.text and r.headers["X-Trace-Id"]
+    held = client.post("/v1/protect", json={"text": "Herr Max Mustermann leidet an einer Depression.",
+                                            "output": "text"}, headers=USER)
+    assert held.status_code == 403 and "local_only" in held.text and "Mustermann" not in held.text
+    both = client.post("/v1/protect", json={"text": "Herr Max Mustermann.", "output": "text", "dry_run": True},
+                       headers=USER)
+    assert both.status_code == 400
+
+
 def test_namespace_without_vault_is_rejected(tmp_path):
     settings = Settings.from_env({"ANONYMIZER_API_KEYS": API_KEY, "ANONYMIZER_POLICY_DIR": str(tmp_path / "p"), "ANONYMIZER_ACCOUNTS_DB": ":memory:", "ANONYMIZER_AUDIT_DB": ":memory:", "ANONYMIZER_TRACE_DB": ":memory:"})
     c = TestClient(create_app(settings))

@@ -20,6 +20,7 @@ local/
 datasets/ler/errors_*.md
 datasets/courts/errors_*.md
 datasets/finance/errors.md
+datasets/public/errors.md
 datasets/finance/raw/gretel/*.parquet
 
 # SDK-Tests schreiben lokale SQLite-Dateien

@@ -10,6 +10,7 @@ NER results never override rule-based detections (see ``engine._rank``).
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Iterable
@@ -19,9 +20,21 @@ from typing import Any
 from anonymizer.detect.orgs import headed_orgs, known_orgs, legal_entities
 from anonymizer.models import Category, Detection, EntityType as E, make_detection
 
-# ANONYMIZER_NER_MODEL_DE selects another German model, e.g. the fine-tuned support NER:
-# "de_core_news_lg+models/de_custom_ner/ner" (base model plus NER weights, see models/de_custom_ner/README.md).
-DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or "de_core_news_lg", "en": "en_core_web_lg"}
+# German default: Cato (models/cato-1.1, a standalone pipeline of about 43 MB, see its README) when the repository
+# checkout has it, else the stock de_core_news_lg. ANONYMIZER_NER_MODEL_DE selects another model: a package name, a
+# pipeline directory, or "base+ner_dir" (base model plus fine-tuned NER weights).
+# ANONYMIZER_NER_MODEL_EN selects another English model, e.g. "en_core_web_sm" (15 MB instead of 425 MB).
+CATO = Path(__file__).resolve().parents[5] / "models" / "cato-1.1"
+
+
+def _default_de() -> str:
+    """Cato if the checkout has its weights (not only Git LFS pointers), else the stock model."""
+    weights = CATO / "ner" / "model"
+    return str(CATO) if weights.is_file() and weights.stat().st_size > 100_000 else "de_core_news_lg"
+
+
+DEFAULT_MODELS = {"de": os.environ.get("ANONYMIZER_NER_MODEL_DE") or _default_de(),
+                  "en": os.environ.get("ANONYMIZER_NER_MODEL_EN") or "en_core_web_lg"}
 
 _LABELS = {
     "PER": (E.PERSON, Category.PERSONAL_DATA, 0.8),
@@ -223,6 +236,17 @@ def _name_like(doc: Any, start: int, end: int, pos: dict[int, str] | None = None
 _TAG_MARGIN = 8
 
 
+def _casual_meta(model: str) -> bool:
+    """True for a pipeline directory whose meta.json marks it as fine-tuned on chat text (see ner_compact.py)."""
+    meta = Path(model) / "meta.json"
+    if not meta.is_file():
+        return False
+    try:
+        return bool(json.loads(meta.read_text(encoding="utf-8")).get("anonymizer", {}).get("casual"))
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def _ner_only(nlp: Any) -> list[str]:
     """Pipes to skip for the NER pass; empty if NER listens to the shared tok2vec and cannot run alone."""
     if "ner" not in nlp.pipe_names:
@@ -269,10 +293,10 @@ _ISOLATED = re.compile(
 )
 # Adjectives opening a sentence ("Statthafte Klageart", "Gleichheitsrechtliche Anforderungen").
 _ADJECTIVE_END = re.compile(r"(?:lich|haft|isch|ig|bar|sam|los|end)(?:e[nmrs]?)?$")
-# Only models trained on such lines check isolated words: de_legal_ner learnt from LER, where a judge's signature is a
+# Only models trained on such lines check isolated words: Cato (and the former de_legal_ner) learnt from LER, where a judge's signature is a
 # sentence of its own. The stock and the support model call almost any single word a person ("Kreditkartenauszug",
 # "Loan"); with them the check would only add false positives.
-_ISOLATED_MODELS = ("de_legal_ner",)
+_ISOLATED_MODELS = ("de_legal_ner", "cato")
 # Words that appear alone in signature blocks and court copies and that the model takes for names on their own.
 _ISOLATED_STOP = {"Beglaubigt", "Ausgefertigt", "Siegel", "Urkundsbeamter", "Urkundsbeamtin", "Justizangestellte",
                   "Justizbeschäftigte", "Justizsekretärin", "Justizsekretär"}
@@ -300,7 +324,8 @@ class SpacyRecognizer:
         self._keep = re.compile(rf"^(?:{'|'.join(terms)})(?![^\W_])", re.IGNORECASE) if terms else None
         self.languages = frozenset(self.models)
         # Fine-tuned support models ("base+ner_dir") were trained on lower-case chat; their lower-case spans are kept.
-        self._casual = {lang for lang, model in self.models.items() if "+" in model}
+        # Compact standalone pipelines from ner_compact.py mark this in meta.json ("anonymizer": {"casual": true}).
+        self._casual = {lang for lang, model in self.models.items() if "+" in model or _casual_meta(model)}
         self._docs: dict[tuple[str, str], Any] = {}
         self._isolated = {lang for lang, model in self.models.items() if any(k in model for k in _ISOLATED_MODELS)}
 
@@ -311,8 +336,7 @@ class SpacyRecognizer:
                 import spacy  # noqa: PLC0415
             except ImportError as exc:  # pragma: no cover - depends on environment
                 raise NERUnavailable("spaCy is not installed") from exc
-            # "de_core_news_lg+models/de_custom_ner/ner": base model with fine-tuned NER weights. Only the NER
-            # component is shipped; vectors, tagger etc. come from the base model.
+            # "base+ner_dir": base model with fine-tuned NER weights; vectors, tagger etc. come from the base model.
             base, _, ner_dir = model.partition("+")
             try:
                 nlp = spacy.load(base, disable=["parser", "lemmatizer"])

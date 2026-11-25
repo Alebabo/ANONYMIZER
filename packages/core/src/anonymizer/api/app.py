@@ -359,10 +359,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/v1/protect", response_model=ProtectResponse, tags=["privacy"])
     def protect(req: ProtectRequest, p: User) -> ProtectResponse:
-        """Full pipeline. ``text`` is only returned when the policy allows sending it to ``destination``."""
+        """Full pipeline. ``text`` is only returned when the policy allows sending it to ``destination``.
+        ``output: "text"`` returns only the anonymized text as text/plain (403 when the policy does not allow it)."""
         check_size(req.text)
         if req.namespace and state.vault is None:
             raise HTTPException(status_code=400, detail="namespace given but no vault configured (ANONYMIZER_VAULT_KEY)")
+        if req.output == "text" and req.dry_run:
+            raise HTTPException(status_code=400, detail="output 'text' cannot be combined with dry_run (no text)")
         policy = state.policy_for(req.policy, req.policy_version, req.tenant, req.team)
         pipeline = Pipeline(policy, detector=state.detector, classifier=state.classifier,
                             vault=state.vault if req.namespace else None)
@@ -375,6 +378,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                                         original=req.text, **usage(p)), p.org_id)
             trace_id = trace.id
         text = None if req.dry_run else result.text
+        if req.output == "text":
+            # Only the anonymized text. Not allowed: 403 with the outcome, so callers never mistake it for text.
+            headers = {"X-Trace-Id": trace_id} if trace_id else None
+            if not result.allowed or text is None:
+                return Response(f"not allowed by policy (outcome: {result.decision.outcome.value})", status_code=403,
+                                media_type="text/plain; charset=utf-8", headers=headers)
+            return Response(text, media_type="text/plain; charset=utf-8", headers=headers)
         return ProtectResponse(outcome=result.decision.outcome, allowed=result.allowed, text=text, trace_id=trace_id,
                                risk=result.classification.risk, decision=result.decision,
                                classification=result.classification)

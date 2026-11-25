@@ -128,7 +128,7 @@ TAX_NUMBER = RegexRecognizer(
 
 VAT_ID = RegexRecognizer(
     "vat_id", E.VAT_ID,
-    [Pattern(r"\b(?:DE\s?\d{9}|ATU\d{8}|FR[A-Z0-9]{2}\d{9}|NL\d{9}B\d{2})\b", 0.85)],
+    [Pattern(r"\b(?:DE ?\d{9}|DE ?\d{3}(?: \d{3}){2}|ATU ?\d{8}|FR[A-Z0-9]{2}\d{9}|NL\d{9}B\d{2})\b", 0.85)],
     context_words=[r"ust-?id(?:nr)?\.?", r"umsatzsteuer", r"vat"],
 )
 
@@ -584,6 +584,10 @@ NAME_STOPWORDS = {
 }
 
 
+# Stop words that are also frequent German surnames ("Joanna Richter", "Herr Vogt" is not affected).
+_SURNAME_STOPWORDS = {"Richter"}
+
+
 def _role_for(term: str) -> str | None:
     for regex, role in _ROLE_LOOKUP:
         if regex.match(term):
@@ -618,17 +622,18 @@ class PersonRecognizer:
             tokens = m.group("name").split(" ")
             start = m.start("name")
             # Strip leading/trailing stop words ("Klage", "Sie", ...)
-            while tokens and tokens[0] in NAME_STOPWORDS:
+            trigger = m.group("trigger")
+            role = _role_for(trigger)
+            while tokens and tokens[0] in NAME_STOPWORDS and not (len(tokens) == 1
+                                                                  and self._surname_kept(tokens, trigger, role)):
                 start += len(tokens[0]) + 1
                 tokens = tokens[1:]
-            while tokens and tokens[-1] in NAME_STOPWORDS:
+            while tokens and tokens[-1] in NAME_STOPWORDS and not self._surname_kept(tokens, trigger, role):
                 tokens = tokens[:-1]
             if not tokens or all(re.fullmatch(_PARTICLE, t) for t in tokens):
                 continue
             value = " ".join(tokens)
             end = start + len(value)
-            trigger = m.group("trigger")
-            role = _role_for(trigger)
             if role is None:
                 before = self._role_before.search(text[max(0, m.start() - 40):m.start()])
                 after = self._role_after.search(text[end:end + 40]) or self._role_rubrum.search(text[end:end + 120])
@@ -641,6 +646,17 @@ class PersonRecognizer:
             if role == "judge" and self._bench_start.search(text, max(0, m.start() - 5), m.start()) \
                     and not text[m.end("trigger"):m.start("name")].startswith(","):
                 yield from self._bench(text, end, attributes)
+
+    @staticmethod
+    def _surname_kept(tokens: list[str], trigger: str, role: str | None) -> bool:
+        """A stop word that is also a common surname stays part of the name: after a first name ("der Angeklagte
+        Krzysztof Richter"), after Herr/Frau ("Herr Richter") or after a party role ("des Angeklagten Richter").
+        After a judge role it stays a job title ("Vorsitzende Richter")."""
+        if tokens[-1] not in _SURNAME_STOPWORDS:
+            return False
+        if len(tokens) > 1 and tokens[-2] not in NAME_STOPWORDS:
+            return True
+        return re.fullmatch(r"Herrn?|Frau|Hr\.|Fr\.", trigger) is not None or role not in (None, "judge")
 
     # The rest of a bench after the first judge: "der Richter Jacobi und Schödel", "die Richter Merzbach,
     # Dr. Meiser und Schödel". Only after an article ("für Richter, Staatsanwälte und Rechtspfleger" is no bench).

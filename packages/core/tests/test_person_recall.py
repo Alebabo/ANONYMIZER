@@ -8,7 +8,7 @@ from anonymizer.detect import Detector, DetectorConfig
 from anonymizer.detect.ner import _ISOLATED, _ADJECTIVE_END
 from anonymizer.detect.recognizers import PERSON
 
-LEGAL_NER = Path(__file__).resolve().parents[3] / "models" / "de_legal_ner" / "ner"
+CATO = Path(__file__).resolve().parents[3] / "models" / "cato-1.1"
 
 
 def persons(text: str) -> list[str]:
@@ -65,11 +65,12 @@ def test_adjectives_are_no_isolated_names():
 
 @pytest.fixture(scope="module")
 def legal_detector() -> Detector:
-    if not (LEGAL_NER / "model").exists() or (LEGAL_NER / "model").stat().st_size < 10_000:
-        pytest.skip("de_legal_ner weights not available (git lfs pull)")
-    det = Detector(DetectorConfig(ner_models={"de": f"de_core_news_lg+{LEGAL_NER}"}))
+    model = CATO / "ner" / "model"
+    if not model.exists() or model.stat().st_size < 10_000:
+        pytest.skip("Cato weights not available (git lfs pull)")
+    det = Detector(DetectorConfig(ner_models={"de": str(CATO)}))
     if det.scan("Herr Max Mustermann", "de").warnings:
-        pytest.skip("spaCy model de_core_news_lg not installed")
+        pytest.skip("Cato could not be loaded")
     return det
 
 
@@ -85,5 +86,6 @@ def test_isolated_check_only_with_the_legal_model():
     from anonymizer.detect.ner import SpacyRecognizer
 
     assert SpacyRecognizer({"de": "de_core_news_lg"})._isolated == set()
-    assert SpacyRecognizer({"de": "de_core_news_lg+models/de_custom_ner/ner"})._isolated == set()
+    assert SpacyRecognizer({"de": "de_core_news_lg+local/support_ner/ner"})._isolated == set()
+    assert SpacyRecognizer({"de": "models/cato-1.1"})._isolated == {"de"}
     assert SpacyRecognizer({"de": "de_core_news_lg+models/de_legal_ner/ner"})._isolated == {"de"}

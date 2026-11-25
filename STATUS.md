@@ -1,6 +1,6 @@
 # Projektstand OpenAnonymizer
 
-Stand: 22.11.2026. Übergabe für die Weiterarbeit, auch durch andere Coding-Agents (Codex, Claude Code).
+Stand: 25.11.2026. Übergabe für die Weiterarbeit, auch durch andere Coding-Agents (Codex, Claude Code).
 Hintergrund und Architekturentscheidungen: [plan.md](plan.md). Betrieb in einer Firma:
 [HANDOVER.md](HANDOVER.md).
 
@@ -28,17 +28,22 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `packages/core/src/anonymizer/{ler,courts,feedback}.py` | Trainingsdaten (German LER, Gerichtsentscheidungen), Feedback-Speicher |
 | `packages/core/scripts/` | `ler_data.py`, `court_data.py` (Daten bauen/messen), `ner_train.py` (Training), `ner_gold.py`, `ner_external.py` (syntriq/EasyOctopus Personen), `build_common_nouns.py`, `local_eval.py` (Mess-Kit echte Kanzleitexte, `docs/local-eval.md`) |
 | `app/`, `components/`, `lib/` | Next.js-Dashboard: Tabs **Chat**, **Traces**, **CSV**; Settings: Policies, API Keys, Members, Feedback, Audit Logs |
-| `models/de_legal_ner/` | Feinjustierte NER-Gewichte für Rechtstexte (Git LFS, ~6 MB) |
-| `models/de_custom_ner/` | Feinjustierte NER-Gewichte für Support-Mails/Chats (Git LFS), v6 mit MultiCoNER v2 (CC BY 4.0) |
+| `models/cato-1.1/` | **Cato 1.1**: ein deutsches NER-Modell für Rechtstexte und Support-Mails/Chats, eigenständige spaCy-Pipeline, 43 MB (Git LFS), deutscher Standard. Ersetzt `de_legal_ner` und `de_custom_ner` (beide brauchten `de_core_news_lg`, 610 MB) |
 | `datasets/ler/` | German LER (CC BY 4.0): Rohdaten `raw/`, Gold-JSONL, Auswertungen |
 | `datasets/courts/` | 1.240 Entscheidungen von Open Legal Data (ODbL 1.0): Rohdaten `raw/`, Gold-JSONL mit synthetischen Werten |
 | `datasets/finance/` | Drei synthetische Finanz-/Bank-/Support-Datensätze (Apache-2.0) zur Messung, `finance_data.py eval` |
-| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md` |
+| `datasets/public/` | Deutsche Teile von SmartData (CC BY 4.0, Firmen als eigener Typ), MAPA EUR-Lex (CC BY 4.0), E3-JSI und urchade (synthetisch, MIT/Apache-2.0): Messung `public_pii.py eval`, Training `ner_train.py --public` |
+| `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md`, `newmean-pii.md`, `unified-ner-md.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
 
-Rechtstexte mit `ANONYMIZER_NER_MODEL_DE="de_core_news_lg+models/de_legal_ner/ner"`:
+Seit 25.11.2026 ist Cato 1.1 das deutsche Standardmodell. Werte gegen die früheren Spezialmodelle:
+[models/cato-1.1/README.md](models/cato-1.1/README.md). Cato liegt beim Recall 0,3 bis 1,6 Punkte (LER, Gerichte, syntriq),
+auf Gretel 4,7 Punkte unter dem jeweils besten Spezialmodell; bewusst übernommen für ein Modell statt zwei und
+43 statt 616 MB.
+
+Die Tabelle unten stammt noch vom früheren Rechtsmodell `de_legal_ner` (`de_core_news_lg+models/de_legal_ner/ner`):
 
 | | vorher | jetzt |
 |---|---|---|
@@ -108,8 +113,9 @@ python packages/core/scripts/ner_train.py --ler datasets/ler --courts datasets/c
 # optional: --feedback feedback.jsonl  (Export aus Settings → Feedback)
 # optional: --germeval N [--germeval-public-o]  (GermEval 2014 unter local/ner/public/germeval14/train.tsv,
 #           z. B. huggingface.co/datasets/stefan-it/germeval14_no_wikipedia, original/NER-de-train.tsv)
-# Zum Messen den Gewichtsordner so ablegen, dass der Pfad "de_legal_ner" enthält (z. B. local/ner/de_legal_ner_x/ner):
+# Zum Messen den Modellordner so benennen, dass der Pfad "cato" (oder "de_legal_ner") enthält:
 # die Einzelwort-Prüfung für Unterschriftenzeilen läuft nur mit diesem Namen.
+# Danach verkleinern: ner_compact.py <out> models/cato-x.y --name cato --version x.y.0 --check datasets/ler/ler_dev.jsonl.gz
 ```
 
 Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Personen darf nicht sinken).
@@ -127,6 +133,9 @@ Ein neues Modell nur übernehmen, wenn auf beiden Test-Splits besser (Recall-Per
 - Details, Betrieb und Fehlerbilder: [docs/deployment.md](docs/deployment.md).
 
 ## 5. Laufende Arbeit (Branches)
+
+25.11.2026: `feature/newmean-detector` in `main` zusammengeführt (Cato 1.1, öffentliche PII-Datensätze, optionaler
+newmean-Detektor, `ner_compact.py`, `ner_prune_base.py`). Die Absätze darunter sind älter.
 
 `main` steht auf `e2a3c4e` und enthält alles aus der Sitzung vom 21./22.11.2026. Keine offenen Arbeitsbranches.
 

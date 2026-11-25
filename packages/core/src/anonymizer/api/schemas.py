@@ -64,6 +64,8 @@ class ProtectRequest(TextRequest):
     tenant: str | None = None
     team: str | None = None
     dry_run: bool = False
+    output: Literal["full", "text"] = Field(
+        "full", description="full: JSON with decision and classification; text: only the anonymized text as text/plain")
 
 
 class ProtectResponse(BaseModel):

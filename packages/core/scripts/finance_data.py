@@ -87,14 +87,17 @@ def load(data: Path, source: str) -> list[tuple[str, str, list[tuple[int, int, s
     return out
 
 
-def cmd_eval(data: Path, sources: list[str], limit: int | None) -> dict:
+def cmd_eval(data: Path, sources: list[str], limit: int | None, load_fn=None, type_map=None,
+             title: str = "finance") -> dict:
+    """``load_fn``, ``type_map``, ``title``: other datasets in the same format (public_pii.py)."""
+    load_fn, type_map = load_fn or load, type_map or TYPE_MAP
     from anonymizer.detect import Detector  # noqa: PLC0415
 
     det = Detector()
     report: dict = {}
     misses: list[str] = []
     for source in sources:
-        docs = load(data, source)[:limit] if limit else load(data, source)
+        docs = load_fn(data, source)[:limit] if limit else load_fn(data, source)
         total, masked, typed = Counter(), Counter(), Counter()
         n_pred = n_pred_hit = 0
         t0 = time.perf_counter()
@@ -106,7 +109,7 @@ def cmd_eval(data: Path, sources: list[str], limit: int | None) -> dict:
                 total[label] += 1
                 over = [d for d in dets if d.start < e and s < d.end]
                 masked[label] += bool(over)
-                if label in TYPE_MAP and any(d.entity_type in TYPE_MAP[label] for d in over):
+                if label in type_map and any(d.entity_type in type_map[label] for d in over):
                     typed[label] += 1
                 if not over and len(misses) < 400:
                     misses.append(f"- {source} {label} `{text[s:e]}` in …{text[max(0, s - 60):e + 30]}…".replace("\n", " "))
@@ -116,11 +119,11 @@ def cmd_eval(data: Path, sources: list[str], limit: int | None) -> dict:
             "masked_recall": r(sum(masked.values()), sum(total.values())),
             "masked_precision_lower_bound": r(n_pred_hit, n_pred),
             "labels": {k: {"total": total[k], "masked": r(masked[k], total[k]),
-                           "typed": r(typed[k], total[k]) if k in TYPE_MAP else None}
+                           "typed": r(typed[k], total[k]) if k in type_map else None}
                        for k, _ in total.most_common()},
         }
     (data / "eval.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    (data / "errors.md").write_text("# Missed values (finance)\n\n" + "\n".join(misses) + "\n", encoding="utf-8")
+    (data / "errors.md").write_text(f"# Missed values ({title})\n\n" + "\n".join(misses) + "\n", encoding="utf-8")
     return report
 
 
