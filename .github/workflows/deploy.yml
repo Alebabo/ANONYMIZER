@@ -1,0 +1,98 @@
+name: Deploy
+
+# Deployt die API (docker-compose.yml) auf den Hetzner-Server, sobald die CI
+# auf main grün ist. Manuell startbar über "Run workflow".
+#
+# Benötigte Repository-Secrets:
+#   DEPLOY_HOST     IP oder Domain des Servers
+#   DEPLOY_SSH_KEY  privater SSH-Schlüssel (öffentlicher Teil in authorized_keys des Servers)
+# Optional (Repository-Variablen):
+#   DEPLOY_USER     Standard: root
+#   DEPLOY_PATH     Standard: /opt/anonymizer
+#
+# Beim ersten Lauf installiert der Job Docker (falls fehlend) und legt eine .env
+# mit zufälligen Schlüsseln an. Die .env bleibt ausschließlich auf dem Server und
+# wird nie überschrieben. ANONYMIZER_VAULT_KEY daraus extern sichern.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.DEPLOY_HOST }}
+      USER: ${{ vars.DEPLOY_USER || 'root' }}
+      DEST: ${{ vars.DEPLOY_PATH || '/opt/anonymizer' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: SSH einrichten
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$HOST" || { echo "Secret DEPLOY_HOST fehlt"; exit 1; }
+          test -n "$KEY" || { echo "Secret DEPLOY_SSH_KEY fehlt"; exit 1; }
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 -t ed25519 "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Server vorbereiten (Docker, Verzeichnis)
+        run: |
+          ssh "$USER@$HOST" "DEST='$DEST' bash -s" <<'EOF'
+          set -euo pipefail
+          SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO="sudo"
+          if ! command -v docker >/dev/null; then
+            curl -fsSL https://get.docker.com | $SUDO sh
+          fi
+          $SUDO mkdir -p "$DEST"
+          $SUDO chown "$(id -u):$(id -g)" "$DEST"
+          EOF
+
+      - name: Code übertragen
+        run: |
+          rsync -az --delete \
+            --exclude '.env' --exclude '__pycache__' --exclude '.pytest_cache' \
+            --include 'docker-compose.yml' \
+            --include 'packages/' --include 'packages/core/***' \
+            --include 'examples/***' \
+            --exclude '*' \
+            ./ "$USER@$HOST:$DEST/"
+
+      - name: .env beim ersten Mal anlegen, Container bauen und starten
+        run: |
+          ssh "$USER@$HOST" "DEST='$DEST' bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$DEST"
+          if [ ! -f .env ]; then
+            umask 077
+            {
+              echo "ANONYMIZER_API_KEYS=anonymizer_$(openssl rand -hex 24)"
+              echo "ANONYMIZER_ADMIN_KEYS=anonymizer_$(openssl rand -hex 24)"
+              echo "ANONYMIZER_VAULT_KEY=$(openssl rand -base64 32)"
+            } > .env
+            echo ".env neu angelegt"
+          fi
+          docker compose up -d --build --remove-orphans
+          docker image prune -f >/dev/null
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8080/health >/dev/null; then
+              echo "Health-Check ok"; docker compose ps; exit 0
+            fi
+            sleep 5
+          done
+          echo "Health-Check fehlgeschlagen"; docker compose logs --tail 100 api; exit 1
+          EOF
