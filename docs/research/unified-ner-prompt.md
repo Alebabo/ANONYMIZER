@@ -14,8 +14,9 @@ Den Block unten in Claude Code einfügen, gestartet im Ordner des geklonten Repo
 6. Daten im Repo (Git, kein Download nötig): `datasets/ler/*.jsonl.gz`, `datasets/courts/*.jsonl.gz`,
    `datasets/finance/raw/syntriq`, `datasets/finance/raw/easyoctopus`.
    Download nötig: Gretel mit `python packages/core/scripts/finance_data.py download`.
-   Optional, öffentlich: GermEval 2014 nach `local/ner/public/germeval14/train.tsv`, MultiCoNER v2 Deutsch
-   (`de_train.conll`) nach `local/ner/public/hf/multiconer2/`.
+   Öffentliche Trainingskorpora (GermEval 2014, MultiCoNER v2 Deutsch, beide CC BY 4.0) mit
+   `python packages/core/scripts/public_ner_data.py download` nach `local/ner/public/` laden (SHA-256 geprüft;
+   `check` zeigt den Stand).
 7. NICHT vorhanden und nie ins Repo: interne Trainingsdaten (`local/ner/gold.jsonl`, OCR-Briefe). Ohne sie wird
    nur mit öffentlichen Daten trainiert. Das ist so gewollt, nicht nach ihnen suchen.
 
@@ -72,8 +73,10 @@ Modellpfad `de_legal_ner` enthält. Beim gemeinsamen Modell mit und ohne messen.
 python packages/core/scripts/ner_train.py --base de_core_news_md \
   --ler datasets/ler --courts datasets/courts --org-repeat 2 --epochs 6 \
   --out local/ner/models/de_unified_ner_md_public
-# optional: --multiconer local/ner/public/hf/multiconer2/de_train.conll --multiconer-limit 4000
-# GermEval wird automatisch genutzt, wenn local/ner/public/germeval14/train.tsv existiert
+# nach public_ner_data.py download zusätzlich:
+#   --multiconer local/ner/public/hf/multiconer2/de_train.conll --multiconer-limit 4000
+# GermEval (local/ner/public/germeval14/train.tsv) nutzt ner_train.py automatisch, sobald die Datei da ist.
+# Die zu Hause eingebauten Datensätze unter datasets/public kommen mit --public dazu (siehe datasets/public/README.md).
 ```
 Ohne interne Daten fehlt der Support-Anteil. Deshalb `--synthetic` (Vorlagen in `ner_train.py`) nutzen und auf den
 Finanzdatensätzen gegenprüfen.
