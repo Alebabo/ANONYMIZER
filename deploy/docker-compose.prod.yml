@@ -1,0 +1,25 @@
+# Ergänzung zu docker-compose.yml für den Hetzner-Server (siehe .github/workflows/deploy.yml):
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+services:
+  api:
+    environment:
+      ANONYMIZER_MCP_ALLOWED_HOSTS: openanonymizer.tma-it-solution.de
+
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on: [api]
+    environment:
+      ANONYMIZER_DOMAIN: openanonymizer.tma-it-solution.de
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro  # Pfade relativ zum Projektverzeichnis (Repo-Root)
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

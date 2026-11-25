@@ -100,6 +100,7 @@ jobs:
             --include 'docker-compose.yml' \
             --include 'packages/' --include 'packages/core/***' \
             --include 'examples/***' \
+            --include 'deploy/***' \
             --exclude '*' \
             ./ "$USER@$HOST:$DEST/"
 
@@ -117,6 +118,7 @@ jobs:
             } > .env
             echo ".env neu angelegt"
           fi
+          export COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.prod.yml
           docker compose up -d --build --remove-orphans
           docker image prune -f >/dev/null
           for i in $(seq 1 40); do
