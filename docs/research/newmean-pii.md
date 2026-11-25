@@ -85,7 +85,7 @@ Einordnung:
 - Rechtsprechungszitate werden öfter als Person markiert (`PER on RS` 29 -> 75).
 - Laufzeit: rund 1 s je 1.000 Zeichen statt rund 0,03 s. Für lange Schriftsätze im Chat oder über MCP nicht vertretbar.
 
-Handverlesene Legal-Fälle (Rubrum, Spruchkörper, Normzitate, Mandantenmail, Handelsregister, Zeuge, Bankverbindung):
+Handverlesene Legal-Fälle (`packages/core/scripts/newmean_legal_cases.py`; Rubrum, Spruchkörper, Normzitate, Mandantenmail, Handelsregister, Zeuge, Bankverbindung):
 newmean allein findet Namen, Adressen, Telefon, Steuer-ID, IBAN und BIC, aber keine Gerichte, Aktenzeichen, Normzitate
 oder Gesundheitsangaben, im Rubrum weder die beklagte GmbH noch ihren Geschäftsführer. Einziger Zusatztreffer gegenüber
 OpenAnonymizer: eine USt-IdNr. mit Leerzeichen (`DE 298 765 432`), die die Regel `vat_id` nicht erkennt.
@@ -95,6 +95,15 @@ newmean): LER Precision / Recall 0,923 / 0,782, Personen 296 richtig / 28 falsch
 Gerichtsentscheidungen 814 von 818 Personen. Sie liegt damit bei Personen deutlich vor newmean (262 richtig / 568 falsch).
 
 Empfehlung: für Legal aus lassen. Die USt-IdNr.-Lücke besser in der Regel schließen.
+
+## Wo liegt was
+
+- Modelldateien: nicht im Repo. `newmean-pii` lädt sie beim ersten Start von Hugging Face nach
+  `~/.cache/newmean-pii` (medium und large zusammen 28 MB) oder liest sie aus `ANONYMIZER_NEWMEAN_MODEL_DIR`.
+- Trainingsdaten von newmean: nicht öffentlich (nur auf Anfrage beim Hersteller), hier nie genutzt.
+- Testdatensatz von newmean (`newmean-ai/pii-dataset`): CC BY-NC 4.0, hier nicht genutzt.
+- Unsere Testdaten: `datasets/ler`, `datasets/courts`, `datasets/finance` (Gretel per `finance_data.py download`),
+  `datasets/public`.
 
 ## Links
 
