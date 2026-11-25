@@ -4,7 +4,7 @@ name: Deploy
 # auf main grün ist. Manuell startbar über "Run workflow".
 #
 # Benötigte Repository-Secrets:
-#   DEPLOY_HOST     IP oder Domain des Servers
+#   DEPLOY_HOST     optional, Standard: 178.105.31.110
 #   DEPLOY_SSH_KEY  privater SSH-Schlüssel (öffentlicher Teil in authorized_keys des Servers)
 # Optional (Repository-Variablen):
 #   DEPLOY_USER     Standard: root
@@ -32,7 +32,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     env:
-      HOST: ${{ secrets.DEPLOY_HOST }}
+      HOST: ${{ secrets.DEPLOY_HOST || '178.105.31.110' }}
       USER: ${{ vars.DEPLOY_USER || 'root' }}
       DEST: ${{ vars.DEPLOY_PATH || '/opt/anonymizer' }}
     steps:
