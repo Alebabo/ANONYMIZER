@@ -50,15 +50,23 @@ jobs:
           # Schlüssel normalisieren: beim Kopieren (z. B. am Handy) gehen oft
           # Zeilenumbrüche verloren oder es kommen \r bzw. Leerzeichen hinzu.
           python3 - > ~/.ssh/id_ed25519 <<'PY'
-          import os, re, textwrap
-          k = os.environ["KEY"].replace("\r", "")
-          m = re.search(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----", k, re.S)
-          if not m:
-              raise SystemExit("DEPLOY_SSH_KEY: BEGIN/END-Zeilen nicht gefunden")
-          body = re.sub(r"\s+", "", m.group(2))
-          print(f"-----BEGIN {m.group(1)}-----")
+          import base64, os, re, sys, textwrap
+          k = os.environ["KEY"]
+          # Toleriert fehlende Umbrüche, \r, Leerzeichen und iOS-"Smart Punctuation"
+          # (aus "-----" werden Gedankenstriche). Fehlen BEGIN/END, gilt alles als Inhalt.
+          m = re.search(r"BEGIN\s*OPENSSH\s*PRIVATE\s*KEY(.*?)END\s*OPENSSH\s*PRIVATE\s*KEY", k, re.S)
+          body = m.group(1) if m else k
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", body)
+          print(f"Markierungen gefunden: {bool(m)}, Länge Inhalt: {len(body)}", file=sys.stderr)
+          try:
+              ok = base64.b64decode(body + "=" * (-len(body) % 4)).startswith(b"openssh-key-v1\0")
+          except Exception:
+              ok = False
+          if not ok:
+              raise SystemExit("DEPLOY_SSH_KEY ist kein gültiger OpenSSH-Schlüssel (unvollständig kopiert?)")
+          print("-----BEGIN OPENSSH PRIVATE KEY-----")
           print("\n".join(textwrap.wrap(body, 70)))
-          print(f"-----END {m.group(1)}-----")
+          print("-----END OPENSSH PRIVATE KEY-----")
           PY
           chmod 600 ~/.ssh/id_ed25519
           echo "Fingerprint des Deploy-Keys:"; ssh-keygen -lf ~/.ssh/id_ed25519
