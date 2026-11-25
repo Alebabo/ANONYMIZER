@@ -47,7 +47,7 @@ function Answer({ r, onCorrect }: { r?: ChatResult; onCorrect?: () => void }) {
 }
 
 /** Type a text, get back what the model would receive. Each message is one traced call (client "dashboard"). */
-export function Chat({ policies, defaultPolicy }: { policies: string[]; defaultPolicy: string }) {
+export function Chat({ policies, defaultPolicy, model }: { policies: string[]; defaultPolicy: string; model?: string }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [correcting, setCorrecting] = useState<number | null>(null);
   const [text, setText] = useState("");
@@ -111,6 +111,7 @@ export function Chat({ policies, defaultPolicy }: { policies: string[]; defaultP
                 {policies.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </label>
+            {model && <span title="German NER model of the API">Model {model}</span>}
             <span>Enter to send · Shift+Enter for a new line</span>
             {turns.length > 0 && (
               <button type="button" onClick={() => setTurns([])} className={cn("hover:text-foreground ml-auto inline-flex items-center gap-1")}>

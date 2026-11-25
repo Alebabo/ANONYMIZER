@@ -254,6 +254,7 @@ def test_openapi_schema_available(client):
 def test_info(client):
     body = client.get("/v1/info", headers=USER).json()
     assert body["vault"] and body["admin_endpoints"] and body["ner"] in {"available", "unavailable"}
+    assert set(body["ner_model"]) == {"de", "en"} and all(body["ner_model"].values())
     assert json.dumps(body).find(API_KEY) == -1
 
 

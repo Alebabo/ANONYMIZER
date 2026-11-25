@@ -18,7 +18,8 @@ export default async function ChatPage() {
     <div className="flex h-full flex-col">
       <PageHeader title="Chat" description="Test the model: type a text and see what an AI model receives. Every message is traced." />
       <SourceBanner source={source} />
-      <Chat policies={names} defaultPolicy={fallback} />
+      <Chat policies={names} defaultPolicy={fallback}
+            model={info.ner === "available" ? info.ner_model?.de ?? "available" : info.ner === "disabled" ? "NER off" : "NER unavailable"} />
       <div className="border-t px-4 py-2 md:px-6">
         <Collapsible title="Use the same model via API or MCP" className="mx-auto max-w-3xl border-0 bg-transparent">
           <p className="text-muted-foreground text-xs">API key from Settings → API Keys. Every call appears under Traces with channel and key.</p>

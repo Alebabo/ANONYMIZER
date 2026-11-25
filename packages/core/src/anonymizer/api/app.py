@@ -51,6 +51,7 @@ from anonymizer.api.settings import Settings
 from anonymizer.anonymize.engine import AnonymizationResult, RestoreResult
 from anonymizer.classify import Classifier, DocumentClassification
 from anonymizer.detect import Detector, DetectorConfig, load_custom_patterns
+from anonymizer.detect.ner import DEFAULT_MODELS, model_label
 from anonymizer.feedback import FeedbackError, FeedbackStore
 from anonymizer.pipeline import Pipeline, ProtectResult
 from anonymizer.policy.edit import apply_changes
@@ -307,6 +308,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "version": anonymizer.__version__,
             "ner": "disabled" if not settings.enable_ner else ner_status["de"],
+            # Display names of the NER models, e.g. {"de": "Cato 1.1", "en": "en_core_web_lg"}.
+            "ner_model": {lang: model_label(m) for lang, m in (state.detector.config.ner_models or DEFAULT_MODELS).items()},
             "vault": state.vault is not None,
             "admin_endpoints": admin_keys_exist(),
             "default_policy": settings.default_policy,

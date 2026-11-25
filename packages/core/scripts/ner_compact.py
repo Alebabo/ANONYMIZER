@@ -68,6 +68,12 @@ def compact(src: Path, out: Path, name: str = "", version: str = "") -> None:
         if out.exists():
             shutil.rmtree(out)
         slim.to_disk(out)
+    # spaCy rewrites the name on save; set it in meta.json directly.
+    meta_path = out / "meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["name"] = name or out.name
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "
+", encoding="utf-8")
 
 
 def check(src: Path, out: Path, texts: list[str]) -> int:

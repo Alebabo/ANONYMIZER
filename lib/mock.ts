@@ -5,7 +5,7 @@ import type {
 
 export const exampleInfo: Info = {
   version: "0.1.0", ner: "available", vault: true, admin_endpoints: true, default_policy: "banking-default",
-  trace_content: false, trace_retention_days: 30,
+  trace_content: false, trace_retention_days: 30, ner_model: { de: "Cato 1.1", en: "en_core_web_lg" },
 };
 
 const base = Date.now() / 1000;

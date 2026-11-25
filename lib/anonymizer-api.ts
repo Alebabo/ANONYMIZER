@@ -45,6 +45,8 @@ export type TraceContent = {
 export type Info = {
   version: string; ner: "available" | "unavailable" | "disabled"; vault: boolean; admin_endpoints: boolean;
   default_policy: string; trace_content?: boolean; trace_retention_days?: number;
+  /** Display names of the NER models per language, e.g. { de: "Cato 1.1", en: "en_core_web_lg" }. */
+  ner_model?: Record<string, string>;
 };
 
 export type PolicySummary = { name: string; version: number; hash: string; scope: Record<string, unknown> };

@@ -227,6 +227,19 @@ def _name_like(doc: Any, start: int, end: int, pos: dict[int, str] | None = None
 _TAG_MARGIN = 8
 
 
+def model_label(model: str) -> str:
+    """Display name: "Cato 1.1" for a pipeline directory with name and version in meta.json, else the model id."""
+    meta = Path(model) / "meta.json"
+    try:
+        data = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
+    except (OSError, ValueError):
+        data = {}
+    name, version = str(data.get("name") or ""), str(data.get("version") or "")
+    if name and version:
+        return f"{name[:1].upper()}{name[1:]} {'.'.join(version.split('.')[:2])}"
+    return Path(model).name if Path(model).is_dir() else model
+
+
 def _casual_meta(model: str) -> bool:
     """True for a pipeline directory whose meta.json marks it as fine-tuned on chat text (see ner_compact.py)."""
     meta = Path(model) / "meta.json"
