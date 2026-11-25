@@ -1,10 +1,10 @@
 # HTTPS-Proxy für den Hetzner-Server. Caddy holt und verlängert das
 # Let's-Encrypt-Zertifikat selbst; Voraussetzung: DNS-A-Record der Domain
 # zeigt auf den Server, Ports 80 und 443 sind offen.
-# API: /v1/*, /health, /mcp; alles andere: Dashboard.
+# API: /v1/*, /health, /mcp, /docs, /openapi.json, /redoc; alles andere: Dashboard.
 {$ANONYMIZER_DOMAIN} {
 	encode zstd gzip
-	@api path /v1/* /health /mcp /mcp/*
+	@api path /v1/* /health /mcp /mcp/* /docs /docs/* /openapi.json /redoc
 	handle @api {
 		reverse_proxy api:8080
 	}

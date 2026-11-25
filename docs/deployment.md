@@ -8,6 +8,7 @@ Produktivbetrieb von API und Dashboard auf einem Hetzner-Cloud-Server, automatis
 - Jeder Push auf `main` wird nach grüner CI automatisch deployt. Ist die CI rot, bleibt die laufende Version.
 - Manuell: GitHub → Actions → **Deploy** → "Run workflow" (Branch `main`).
 - Dauer: etwa 2–3 Minuten CI plus 1–3 Minuten Deploy.
+- Interaktive API-Doku: `https://openanonymizer.tma-it-solution.de/docs` (Swagger UI; "Authorize" mit einem API-Key aus dem Dashboard).
 
 ## Architektur
 
@@ -16,7 +17,7 @@ Browser / API-Client / MCP-Client
         │ HTTPS (443)
         ▼
   Caddy (TLS, Let's Encrypt)            deploy/Caddyfile
-   ├─ /v1/*, /health, /mcp  ──►  api:8080        packages/core (FastAPI, spaCy)
+   ├─ /v1/*, /health, /mcp, /docs, /openapi.json  ──►  api:8080   packages/core (FastAPI, spaCy)
    └─ alles andere          ──►  dashboard:3000  Next.js standalone
                                    └─ spricht intern mit http://api:8080
 ```
@@ -124,6 +125,11 @@ vorherigen Stand aus. Alternativ in Actions einen älteren erfolgreichen Deploy-
 
 **Daten**: Vault, Accounts, Audit-Log, Traces und Policies liegen im Docker-Volume `anonymizer-data`, Zertifikate in
 `caddy-data`. Beide überstehen Deploys. Backups sind noch nicht eingerichtet (Hetzner-Backups oder Volume-Export).
+
+## Hilfs-Workflows (manuell unter Actions)
+
+- **Diagnose**: Container, Speicher, Variablennamen der `.env`, Nutzeranzahl, API-Logs, Login-Test mit den Secrets. Gibt keine Werte aus.
+- **Admin-Passwort setzen**: setzt das Passwort des Nutzers `ADMIN_EMAIL` auf `ADMIN_PASSWORD` (legt ihn als Admin an, falls er fehlt) und prüft den Login.
 
 ## Fehlerbilder
 
