@@ -66,3 +66,30 @@ def test_committed_data_loads():
             assert all(0 <= s < e <= len(text) and lab in pp.TYPE_MAP | {"public_body": 0, "id_number": 0,
                                                                         "account_number": 0, "insurance_number": 0}
                        for s, e, lab in gold)
+
+
+def test_join_names():
+    text = "Kontakt: Birthe Schmiedt, Birthe und Max"
+    spans = [{"start": 9, "end": 15, "label": "person"}, {"start": 16, "end": 24, "label": "person"},
+             {"start": 26, "end": 32, "label": "person"}, {"start": 37, "end": 40, "label": "person"}]
+    assert pp._join_names(text, spans) == [{"start": 9, "end": 24, "label": "person"},
+                                           {"start": 26, "end": 32, "label": "person"},
+                                           {"start": 37, "end": 40, "label": "person"}]
+
+
+def test_source_labels():
+    text = "Klinikum Kiel und Knappe Schmidt AG"
+    assert pp._span(text, 0, 13, "ORGANIZATION", "medical")["label"] == "public_body"
+    assert pp._span(text, 18, 35, "organization", "nobody")["label"] == "organization"
+    assert pp._span(text, 18, 35, "COMPANY_NAME", "nym")["label"] == "organization"
+
+
+def test_nym_unlabelled_companies_are_missing(tmp_path):
+    text = "An die Buchhaltung der RideSharePlus AG, Birthe Schmiedt"
+    path = tmp_path / "nym" / "train.jsonl.gz"
+    path.parent.mkdir()
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write(json.dumps({"id": "1", "text": text, "entities": [{"start": 41, "end": 56, "label": "person"}]}) + "\n")
+    [(_, spans, missing)] = pp.ner_spans(tmp_path, ["nym"])
+    assert spans == [(41, 56, "PER")]
+    assert [text[s:e] for s, e in missing] == ["RideSharePlus AG"]

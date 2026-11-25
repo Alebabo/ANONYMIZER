@@ -604,7 +604,7 @@ def evaluate(nlp_path_or_obj, docs, base: str = "de_core_news_lg") -> dict:
     return summarize(per_doc)
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", default="local/ner", type=Path)
     ap.add_argument("--out", default="local/ner/models/de_custom_ner", type=Path)
@@ -641,10 +641,12 @@ def main() -> None:
                     "epochs that beat its dev score are saved")
     ap.add_argument("--seed", type=int, default=SEED,
                     help="seed for example order, sampling and dropout (the held-out name pool always uses SEED)")
-    args = ap.parse_args()
-    rng = random.Random(args.seed)
-    spacy.util.fix_random_seed(args.seed)
+    return ap
 
+
+def collect(args: argparse.Namespace, nlp, rng: random.Random) -> tuple[list[Example], list, dict]:
+    """Training examples (tokenized with ``nlp``), dev docs for model selection and the data counts.
+    Also used by tf_train.py, so the transformer sees exactly the same data."""
     gold_path = args.dir / "gold.jsonl"
     gold = read_gold(gold_path) if gold_path.exists() else []
     ler_train, ler_dev, ler_test = [], [], []
@@ -677,7 +679,6 @@ def main() -> None:
     orgs, locs = unseen(ORGS), unseen(LOCS)
     print(f"gazetteers after removing dev/test strings: {len(names)} names, {len(orgs)} orgs, {len(locs)} places")
 
-    nlp = spacy.load(args.init or args.base)
     examples: list[Example] = []
     for text, spans in (load_germeval(ge_path, args.germeval, rng, args.germeval_public_o)
                         if ge_path.exists() else []):
@@ -760,6 +761,22 @@ def main() -> None:
           f"partial {len(partial)} x{args.partial_repeat}, ler {len(ler_examples)} x{args.ler_repeat}, "
           f"feedback {len(fb)} x{args.feedback_repeat}, courts {len(court_ex)} x{args.courts_repeat}, "
           f"org-augmented ler docs {len(ler_aug)}, ler docs with ORG {len(org_ex)} x{args.org_repeat} extra")
+    data = {"germeval": n_ge, "multiconer": n_mc, "public": n_pub, "synthetic": n_syn, "gold_train": len(gold_examples),
+            "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
+            "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
+            "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
+            "courts": len(court_ex), "courts_repeat": args.courts_repeat,
+            "org_repeat": args.org_repeat, "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
+            "dev": "gold.jsonl + ler_dev" if args.dev == "both" else "gold.jsonl" if gold_dev else "ler_dev"}
+    return examples, dev_docs, data
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    rng = random.Random(args.seed)
+    spacy.util.fix_random_seed(args.seed)
+    nlp = spacy.load(args.init or args.base)
+    examples, dev_docs, data = collect(args, nlp, rng)
 
     # The starting point is scored with the model already in memory (no second copy of the 600 MB vectors).
     base = evaluate(nlp, dev_docs, args.base) if args.init else evaluate(args.base, dev_docs, args.base)
@@ -789,13 +806,7 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)  # also when no epoch beat the starting point
     (args.out / "training.json").write_text(json.dumps({
         "seed": args.seed, "base": args.base, "best_epoch": best, "dev_baseline": base["micro"], "history": history,
-        "data": {"germeval": n_ge, "multiconer": n_mc, "public": n_pub, "synthetic": n_syn, "gold_train": len(gold_examples),
-                 "gold_repeat": args.gold_repeat, "partial": len(partial), "partial_repeat": args.partial_repeat,
-                 "ler": len(ler_examples), "ler_repeat": args.ler_repeat,
-                 "feedback": len(fb), "feedback_repeat": args.feedback_repeat,
-                 "courts": len(court_ex), "courts_repeat": args.courts_repeat,
-                 "org_repeat": args.org_repeat, "org_augment": args.org_augment, "org_augmented_ler": len(ler_aug),
-                 "dev": "gold.jsonl + ler_dev" if args.dev == "both" else "gold.jsonl" if gold_dev else "ler_dev"},
+        "data": data,
     }, indent=2), encoding="utf-8")
     print(f"best epoch {best}, dev F1 {best_f1}; model saved to {args.out}")
 

@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from anonymizer.detect.hf_ner import is_hf_model, replace_ner
 from anonymizer.detect.orgs import headed_orgs, known_orgs, legal_entities
 from anonymizer.models import Category, Detection, EntityType as E, make_detection
 
@@ -349,7 +350,12 @@ class SpacyRecognizer:
                 nlp = spacy.load(base, disable=["parser", "lemmatizer"])
             except OSError as exc:
                 raise NERUnavailable(f"spaCy model '{base}' is not installed") from exc
-            if ner_dir:
+            if ner_dir and is_hf_model(ner_dir):  # experimental transformer NER (detect/hf_ner.py)
+                try:
+                    replace_ner(nlp, ner_dir)
+                except (ImportError, OSError, ValueError) as exc:
+                    raise NERUnavailable(f"transformer NER '{ner_dir}' could not be loaded: {exc}") from exc
+            elif ner_dir:
                 try:
                     nlp.get_pipe("ner").from_disk(ner_dir, exclude=["vocab"])
                 except (OSError, ValueError) as exc:

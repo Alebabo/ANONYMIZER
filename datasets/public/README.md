@@ -16,7 +16,19 @@ python packages/core/scripts/ner_train.py ... --public datasets/public [--public
 | [E3-JSI/synthetic-multi-pii-ner-v1](https://huggingface.co/datasets/E3-JSI/synthetic-multi-pii-ner-v1) | MIT | Synthetic texts: banking, finance, health, legal, general | 333 / 99 |
 | [urchade/synthetic-pii-ner-mistral-v1](https://huggingface.co/datasets/urchade/synthetic-pii-ner-mistral-v1) | Apache-2.0 | Synthetic texts with many identifiers; German ones picked by function words | 2,644 / 671 |
 
-E3-JSI and urchade have no test split upstream: every fifth document (by text hash) is held out.
+| [naeyn/nobody-pii-synth-de](https://huggingface.co/datasets/naeyn/nobody-pii-synth-de) | Apache-2.0 | Template texts with Faker values (mails, tickets, chats, letters, contracts); companies include bare surnames | 5,649 / 296 |
+| [Wismut/nym-pii-multilingual-data](https://huggingface.co/datasets/Wismut/nym-pii-multilingual-data) | MIT | Synthetic support, IT and finance texts, ~20 % with OCR noise; German rows by function words, without documents holding keys or passwords | 24,995 / 1,305 |
+| [masterofaudio2077/medical-pii-multilingual](https://huggingface.co/datasets/masterofaudio2077/medical-pii-multilingual) | Apache-2.0 | LLM-written German letters, forms, reports over a generated fact sheet; hospitals are `public_body` | 2,228 / 543 |
+
+E3-JSI, urchade and medical have no test split upstream: every fifth document (by text hash) is held out.
+nym labels companies only sometimes: in NER training, unlabelled names with a legal form ("RideSharePlus AG") are
+left out of the loss instead of being taught as O.
+
+Searched on Hugging Face (25.11.2026) and not used: ai4privacy openpii-1m/1.5m and their CC BY 4.0 "mini" subsets
+(own licence upstream), abubasith86/pii-dataset-de-v1 (licence "other", mostly ai4privacy rows), Babelscape
+multinerd/wikineural (CC BY-NC-SA), nvidia/Nemotron-PII and gravitee-io/pii-detection-dataset (English only),
+betterdataai/gliner-multilingual-ner-silver-v1 (LLM silver labels, "high recall, some noise expected"),
+tudarmstadt-lt/germaner (GermEval 2014, already used).
 Not used: ai4privacy/open-pii-masking-500k (Llama Community License, commercial use needs written permission).
 
 ## Conversion

@@ -106,8 +106,24 @@ data dropped; `packages/core/scripts/public_pii.py`). They are used to measure t
 - urchade/synthetic-pii-ner-mistral-v1 (Urchade Zaratiana, https://huggingface.co/datasets/urchade/synthetic-pii-ner-mistral-v1),
   Apache License 2.0. Changes: German documents only (picked by function words), tokens detokenized, labels
   mapped, every fifth document (by text hash) held out as test split.
+- naeyn/nobody-pii-synth-de (https://huggingface.co/datasets/naeyn/nobody-pii-synth-de), Apache License 2.0
+  (LICENSE and NOTICE in the dataset repository). Changes: German rows only, token spans converted to character
+  offsets, labels mapped; train and validation split used as train.
+- Wismut/nym-pii-multilingual-data (https://huggingface.co/datasets/Wismut/nym-pii-multilingual-data), MIT License.
+  Changes: German rows only (picked by function words), labels mapped, given name and surname joined to one person
+  span; train and validation split used as train.
+- masterofaudio2077/medical-pii-multilingual (https://huggingface.co/datasets/masterofaudio2077/medical-pii-multilingual),
+  Apache License 2.0. Changes: German file only, labels mapped (hospitals and practices as public bodies), every
+  fifth document (by text hash) held out as test split.
 
-Not used: ai4privacy/open-pii-masking-500k (Llama Community License terms and written permission for commercial use).
+Not used: ai4privacy/open-pii-masking-500k (Llama Community License terms and written permission for commercial use),
+ai4privacy openpii-1m/1.5m and subsets (own licence), Babelscape multinerd/wikineural (CC BY-NC-SA 4.0).
+
+## Optional transformer encoders (not distributed)
+
+`packages/core/scripts/tf_train.py` fine-tunes a Hugging Face encoder that the user downloads; no weights are part
+of this repository. Measured: `deepset/gbert-base` (MIT). Libraries `torch` (BSD-3-Clause) and `transformers`
+(Apache-2.0) are not part of the default install.
 
 ## Optional GLiNER models (not distributed)
 

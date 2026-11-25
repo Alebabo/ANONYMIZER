@@ -12,9 +12,19 @@ Sources (German part only, converted to datasets/public/<source>/{train,test}.js
              No test split upstream: every fifth document is held out.
   urchade    urchade/synthetic-pii-ner-mistral-v1 (Apache-2.0): synthetic texts, German ones picked by function
              words. No test split upstream: every fifth document is held out.
+  nobody     naeyn/nobody-pii-synth-de (Apache-2.0): template texts (mails, tickets, chats, letters, contracts)
+             with Faker values; companies include bare surnames ("Bohnbach, vertreten durch ..."). German rows.
+  nym        Wismut/nym-pii-multilingual-data (MIT): synthetic support/IT/finance texts, ~20 % with OCR noise.
+             German rows picked by function words; given name + surname are joined to one person. Documents with keys or
+             passwords are dropped. Companies are labelled only sometimes, so unlabelled legal-form names are left out of the NER loss.
+  medical    masterofaudio2077/medical-pii-multilingual (Apache-2.0): synthetic German letters, forms and
+             reports written by an LLM over a generated fact sheet. Hospitals and practices are public_body.
+             No test split upstream: every fifth document is held out.
 
 Not included: ai4privacy open-pii-masking-500k (Llama community licence: model naming, "Built with Llama",
-commercial use needs written permission).
+commercial use needs written permission); ai4privacy openpii-1m/1.5m (own licence; the CC BY 4.0 "mini" subsets
+are cut from it); abubasith86/pii-dataset-de-v1 (licence "other", mostly ai4privacy rows); Babelscape
+multinerd/wikineural (CC BY-NC-SA); nvidia/Nemotron-PII (English only).
 
 Labels are mapped to our entity types at download (person, organization, location, address, date, ...);
 labels without personal data (professions, diseases, triggers, numbers) are dropped. Courts, EU institutions and
@@ -36,7 +46,7 @@ import urllib.request
 from pathlib import Path
 
 HF = "https://huggingface.co/datasets"
-SOURCES = ["smartdata", "mapa", "e3jsi", "urchade"]
+SOURCES = ["smartdata", "mapa", "e3jsi", "urchade", "nobody", "nym", "medical"]
 
 # Source label (lower case) -> our label. Missing labels are dropped.
 LABELS: dict[str, str] = {
@@ -66,6 +76,23 @@ LABELS: dict[str, str] = {
     "personal identification number": "id_number", "personal id number": "id_number", "id number": "id_number",
     "driver's license number": "id_number", "health insurance id number": "insurance_number",
     "health insurance number": "insurance_number", "insurance number": "insurance_number",
+    # nobody
+    "iban": "iban",
+    # nym (upper case in the source)
+    "given_name": "person", "surname": "person", "company_name": "organization", "street_address": "address",
+    "street_name": "address", "building_number": "address", "zip_code": "address", "secondary_address": "address",
+    "date_of_birth": "date_of_birth", "phone": "phone", "fax_number": "phone", "customer_id": "id_number",
+    "employee_id": "id_number", "passport": "id_number", "drivers_license": "id_number", "government_id": "id_number",
+    "ssn": "social_security_number", "tax_id": "tax_id", "medical_record_number": "id_number",
+    "credit_debit_card": "credit_card", "account_number": "account_number", "swift_bic": "bic",
+    "license_plate": "license_plate", "username": "username", "ip_address": "ip_address",
+    # medical
+    "zipcode": "address", "kvnr": "insurance_number", "lanr": "id_number", "medicalrecordnum": "id_number",
+}
+# Per source, where a label means something else than above.
+SOURCE_LABELS: dict[str, dict[str, str]] = {
+    "nobody": {"organization": "organization"},  # Faker companies, not public bodies
+    "medical": {"organization": "public_body", "street": "address"},  # hospitals, practices
 }
 
 # Our label -> detector types that count as the right type (eval "typed").
@@ -74,7 +101,8 @@ TYPE_MAP: dict[str, set[str]] = {
     "address": {"address", "location"}, "date": {"date", "date_of_birth"}, "date_of_birth": {"date_of_birth", "date"},
     "phone": {"phone"}, "email": {"email"}, "iban": {"iban"}, "bic": {"bic"}, "credit_card": {"credit_card"},
     "money": {"money"}, "tax_id": {"tax_id", "tax_number"}, "tax_number": {"tax_number", "tax_id"},
-    "social_security_number": {"social_security_number"},
+    "social_security_number": {"social_security_number"}, "ip_address": {"ip_address"},
+    "license_plate": {"license_plate"}, "username": {"username"},
 }
 
 # Our label -> NER training label; None = left out of the loss ("missing"), absent = O.
@@ -83,6 +111,8 @@ NER_LABELS: dict[str, str | None] = {"person": "PER", "organization": "ORG", "lo
 
 _TITLE = re.compile(r"^(?:(?:Frau|Herrn?|Hr\.|Fr\.|Dr\.|Prof\.|med\.|jur\.|rer\.|nat\.|Mr\.|Mrs\.|Ms\.)\s+)+")
 _MAPA_NOT_PERSON = {"TITLE", "ROLE", "NATIONALITY", "PROFESSION", "AGE", "MARITAL STATUS", "SEX", "ETHNIC CATEGORY"}
+_LEGAL_FORM_NAME = re.compile(r"(?:\b[A-ZÄÖÜ][\w&.+-]*\s+){1,4}(?:GmbH|AG|KG|OHG|UG|GbR|SE|eG|e\.K\.|KGaA|mbH)\b")
+_NYM_SECRETS = {"API_KEY", "PASSWORD", "PIN", "CVV"}
 _DE_WORDS = {"der", "die", "das", "und", "ist", "nicht", "mit", "ein", "eine", "von", "zu", "den", "im", "für",
              "auf", "sich", "wurde", "hat"}
 
@@ -102,9 +132,9 @@ def _held_out(key: str) -> bool:
     return int(hashlib.sha1(key.encode()).hexdigest(), 16) % 5 == 0
 
 
-def _span(text: str, start: int, end: int, label: str) -> dict | None:
+def _span(text: str, start: int, end: int, label: str, source: str = "") -> dict | None:
     """Our label for a source span; person spans without salutation and title."""
-    ours = LABELS.get(label.lower())
+    ours = SOURCE_LABELS.get(source, {}).get(label.lower()) or LABELS.get(label.lower())
     if not ours:
         return None
     if ours == "person" and (m := _TITLE.match(text[start:end])) and start + m.end() < end:
@@ -144,7 +174,8 @@ def detokenize(tokens: list[str]) -> str:
     return text
 
 
-def from_token_spans(tokens: list[str], ents: list, text: str | None = None) -> tuple[str, list[dict]] | None:
+def from_token_spans(tokens: list[str], ents: list, text: str | None = None,
+                     source: str = "") -> tuple[str, list[dict]] | None:
     """GLiNER style [first_token, last_token, label] -> spans. Tokens are located in ``text`` when given."""
     if text is None:
         text = detokenize(tokens)
@@ -155,7 +186,7 @@ def from_token_spans(tokens: list[str], ents: list, text: str | None = None) -> 
             return None
         offsets.append((i, i + len(tok)))
         pos = i + len(tok)
-    spans = [s for a, b, lab in ents if (s := _span(text, offsets[a][0], offsets[b][1], lab))]
+    spans = [s for a, b, lab in ents if (s := _span(text, offsets[a][0], offsets[b][1], lab, source))]
     return text, spans
 
 
@@ -200,8 +231,51 @@ def convert(source: str) -> dict[str, list[dict]]:
                 continue
             text, spans = from_token_spans(toks, r["ner"])
             out["test" if _held_out(text) else "train"].append({"id": f"urchade:{i}", "text": text, "entities": spans})
+    elif source == "nobody":
+        for split in ("train", "validation", "test"):
+            for i, r in enumerate(_parquet(f"{HF}/naeyn/nobody-pii-synth-de/resolve/main/data/{split}.parquet")):
+                if r["lang"] != "de":
+                    continue
+                ents = [(n["start"], n["end"], n["label"]) for n in r["ner"]]
+                if conv := from_token_spans(list(r["tokenized_text"]), ents, r["text"], source):
+                    out["test" if split == "test" else "train"].append(
+                        {"id": f"nobody:{split}:{i}", "text": conv[0], "entities": conv[1]})
+    elif source == "nym":
+        for split, name in (("train", "train"), ("train", "validation"), ("test", "test")):
+            req = urllib.request.Request(f"{HF}/Wismut/nym-pii-multilingual-data/resolve/main/{name}.jsonl")
+            with urllib.request.urlopen(req) as resp:  # noqa: S310 - fixed Hugging Face URL, 420 MB: stream
+                for i, line in enumerate(io.TextIOWrapper(resp, encoding="utf-8")):
+                    r = json.loads(line)
+                    text = r["text"]
+                    if sum(w.lower() in _DE_WORDS for w in re.findall(r"\w+", text)) < 2:
+                        continue
+                    # Synthetic keys and passwords trip GitHub push protection (as Gretel's did): not kept.
+                    if any(e["label"] in _NYM_SECRETS for e in r["entities"]):
+                        continue
+                    spans = _join_names(text, [s for e in r["entities"]
+                                               if (s := _span(text, e["start"], e["end"], e["label"], source))])
+                    out[split].append({"id": f"nym:{name}:{i}", "text": text, "entities": spans})
+    elif source == "medical":
+        url = f"{HF}/masterofaudio2077/medical-pii-multilingual/resolve/main/data/de.jsonl"
+        for line in _fetch(url).decode("utf-8").splitlines():
+            r = json.loads(line)
+            ents = json.loads(r["entities"]) if isinstance(r["entities"], str) else r["entities"]
+            spans = [s for e in ents if (s := _span(r["text"], e["start"], e["end"], e["label"], source))]
+            out["test" if _held_out(r["text"]) else "train"].append({"id": r["id"], "text": r["text"], "entities": spans})
     else:
         raise ValueError(source)
+    return out
+
+
+def _join_names(text: str, spans: list[dict]) -> list[dict]:
+    """Given name and surname as separate person spans ("Birthe" "Schmiedt") -> one person span."""
+    out: list[dict] = []
+    for s in sorted(spans, key=lambda s: s["start"]):
+        if (out and s["label"] == "person" == out[-1]["label"]
+                and text[out[-1]["end"]:s["start"]].strip() == "" and s["start"] - out[-1]["end"] <= 2):
+            out[-1] = {**out[-1], "end": s["end"]}
+        else:
+            out.append(s)
     return out
 
 
@@ -238,6 +312,9 @@ def ner_spans(data: Path, sources: list[str]) -> list[tuple[str, list[tuple[int,
                     spans.append((s, e, NER_LABELS[lab]))
             missing = [(s, e) for s, e, lab in gold if lab in NER_LABELS and NER_LABELS[lab] is None
                        and not any(s < e2 and s2 < e for s2, e2, _ in spans)]
+            if source == "nym":  # companies are labelled only sometimes: unlabelled legal-form names are not O
+                missing += [m.span() for m in _LEGAL_FORM_NAME.finditer(text)
+                            if not any(m.start() < e2 and s2 < m.end() for s2, e2, _ in spans)]
             out.append((text, spans, missing))
     return out
 
