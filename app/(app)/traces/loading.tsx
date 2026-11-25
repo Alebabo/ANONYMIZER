@@ -1,4 +1,6 @@
-// Shown instantly on navigation while the server renders the next page, so tab switches never feel frozen.
+// Shown instantly on navigation while the server renders the trace pages.
+// Only here, not in (app)/: there it wrapped pages with forms, and in production builds every server action
+// that revalidated such a page stayed pending forever (API key never shown, revoke/upload hanging).
 export default function WorkspaceLoading() {
   return (
     <div aria-busy="true" aria-label="Loading" className="animate-pulse">
