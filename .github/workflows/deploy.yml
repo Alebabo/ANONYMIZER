@@ -144,6 +144,8 @@ jobs:
           cd "$DEST"
           export COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.prod.yml
           docker compose up -d --build --remove-orphans
+          # Geänderte Caddyfile übernehmen (Container wird bei reinen Dateiänderungen nicht neu erstellt)
+          docker compose exec -T caddy caddy reload --config /etc/caddy-conf/Caddyfile --adapter caddyfile || docker compose restart caddy
           docker image prune -f >/dev/null
           ok=""
           for i in $(seq 1 40); do

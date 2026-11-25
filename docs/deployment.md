@@ -116,6 +116,8 @@ docker compose restart api              # Neustart
 free -h                                 # Speicher (1 GB RAM + Swap)
 ```
 
+Caddy liest `deploy/Caddyfile` über ein Verzeichnis-Mount und wird bei jedem Deploy per `caddy reload` neu geladen.
+
 **Rollback**: den fehlerhaften Commit auf `main` per `git revert` zurücknehmen und pushen; der Deploy rollt den
 vorherigen Stand aus. Alternativ in Actions einen älteren erfolgreichen Deploy-Lauf über "Re-run" erneut starten
 (nutzt den Commit dieses Laufs).

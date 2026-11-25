@@ -26,6 +26,7 @@ services:
   caddy:
     image: caddy:2.8-alpine
     depends_on: [api, dashboard]
+    command: ["caddy", "run", "--config", "/etc/caddy-conf/Caddyfile", "--adapter", "caddyfile"]
     environment:
       ANONYMIZER_DOMAIN: openanonymizer.tma-it-solution.de
     ports:
@@ -33,7 +34,9 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro  # Pfade relativ zum Projektverzeichnis (Repo-Root)
+      # Verzeichnis statt Einzeldatei: rsync ersetzt Dateien, ein Einzeldatei-Mount sähe die alte Version.
+      # Pfade relativ zum Projektverzeichnis (Repo-Root).
+      - ./deploy:/etc/caddy-conf:ro
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
