@@ -1,0 +1,73 @@
+name: Admin-Passwort setzen
+
+# Manuell: setzt das Passwort des Dashboard-Nutzers ADMIN_EMAIL auf ADMIN_PASSWORD
+# (GitHub-Secrets) und gleicht die Bootstrap-Zeilen in der Server-.env an.
+# Legt den Nutzer als Admin an, falls er nicht existiert. Gibt keine Geheimnisse aus.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.DEPLOY_HOST || '178.105.31.110' }}
+      USER: ${{ vars.DEPLOY_USER || 'root' }}
+      DEST: ${{ vars.DEPLOY_PATH || '/opt/anonymizer' }}
+    steps:
+      - name: SSH einrichten
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          python3 - > ~/.ssh/id_ed25519 <<'PY'
+          import os, re, textwrap
+          k = os.environ["KEY"]
+          m = re.search(r"BEGIN\s*OPENSSH\s*PRIVATE\s*KEY(.*?)END\s*OPENSSH\s*PRIVATE\s*KEY", k, re.S)
+          body = re.sub(r"[^A-Za-z0-9+/=]", "", m.group(1) if m else k)
+          print("-----BEGIN OPENSSH PRIVATE KEY-----")
+          print("\n".join(textwrap.wrap(body, 70)))
+          print("-----END OPENSSH PRIVATE KEY-----")
+          PY
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -T 15 -t ed25519 "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Passwort setzen
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          test -n "$ADMIN_EMAIL" && test -n "$ADMIN_PASSWORD" || { echo "Secrets ADMIN_EMAIL/ADMIN_PASSWORD fehlen"; exit 1; }
+          python3 -c 'import json,os;print(json.dumps({"email":os.environ["ADMIN_EMAIL"].strip(),"password":os.environ["ADMIN_PASSWORD"]}))' > creds.json
+          # 1. .env angleichen (Werte kommen per stdin, nicht über die Kommandozeile)
+          ssh "$USER@$HOST" "cd '$DEST' && python3 -c '
+          import json, sys
+          c = json.load(sys.stdin)
+          lines = [l for l in open(\".env\").read().splitlines() if not l.startswith(\"ANONYMIZER_BOOTSTRAP_ADMIN_\")]
+          old = {l.split(\"=\",1)[0]: l.split(\"=\",1)[1] for l in open(\".env\").read().splitlines() if l.startswith(\"ANONYMIZER_BOOTSTRAP_ADMIN_\")}
+          print(\".env: Passwort war\", \"gleich\" if old.get(\"ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD\") == c[\"password\"] else \"ANDERS\",
+                \"| E-Mail war\", \"gleich\" if old.get(\"ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL\", \"\").strip().lower() == c[\"email\"].lower() else \"ANDERS\")
+          lines += [\"ANONYMIZER_BOOTSTRAP_ADMIN_EMAIL=\" + c[\"email\"], \"ANONYMIZER_BOOTSTRAP_ADMIN_PASSWORD=\" + c[\"password\"]]
+          open(\".env\", \"w\").write(\"\n\".join(lines) + \"\n\")
+          '" < creds.json
+          # 2. Passwort-Hash in der Datenbank setzen (bzw. Admin anlegen)
+          ssh "$USER@$HOST" "cd '$DEST' && COMPOSE_FILE=docker-compose.yml:deploy/docker-compose.prod.yml docker compose exec -T api python -c '
+          import json, os, sys
+          from anonymizer.accounts import AccountStore, hash_password
+          c = json.load(sys.stdin)
+          email = c[\"email\"].strip().lower()
+          store = AccountStore(os.environ.get(\"ANONYMIZER_ACCOUNTS_DB\", \"/data/accounts.db\"))
+          row = store._db.execute(\"SELECT id FROM users WHERE email = ?\", (email,)).fetchone()
+          if row:
+              store._db.execute(\"UPDATE users SET password_hash = ?, disabled = 0 WHERE id = ?\", (hash_password(c[\"password\"]), row[0]))
+              store._db.commit()
+              print(\"Passwort für bestehenden Nutzer gesetzt\")
+          else:
+              store.create_user(\"default\", email, email.split(\"@\")[0], c[\"password\"], \"admin\")
+              print(\"Admin neu angelegt\")
+          '" < creds.json
+          # 3. Login prüfen
+          ssh "$USER@$HOST" "curl -s -o /dev/null -w 'API-Login: HTTP %{http_code}\n' -H 'Content-Type: application/json' --data @- http://127.0.0.1:8080/v1/auth/login" < creds.json
+          rm -f creds.json
