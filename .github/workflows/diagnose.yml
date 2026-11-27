@@ -51,6 +51,10 @@ jobs:
           " </dev/null || true
           echo "== API-Log (bootstrap/login/error)"; docker compose logs api 2>&1 | grep -iE 'bootstrap|login|error|Traceback' | tail -20
           echo "== Dashboard-Log"; docker compose logs --tail 30 dashboard 2>&1
+          # Arca: Zugriffslog (Pfade, Statuscodes) und Fehler. Inhalte (Fragen, Mandatsdaten) loggt Arca nicht.
+          echo "== Arca-Log"; docker compose logs --tail 80 arca 2>&1 | grep -vE 'GET /status' | tail -60
+          echo "== Arca: Claude-Version und Login-Verzeichnisse (Anzahl)"
+          docker compose exec -T arca sh -c 'claude --version; ls /data/claude 2>/dev/null | wc -l' </dev/null || true
           EOF
 
       - name: Login mit den Secrets testen
