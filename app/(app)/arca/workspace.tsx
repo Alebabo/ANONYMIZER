@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { FileUp, Lock, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { TableScroll } from "@/components/app-shell";
 import { Widget, stamp } from "@/components/widgets";
@@ -69,7 +69,9 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const [options, setOptions] = useState<ArcaOptions>({ dates: "month", money: "range" });
   const [confirmed, setConfirmed] = useState(false);
   const [prompt, setPrompt] = useState("");
+  // Live-Vorschau der Frage: so, wie der Terminal-Server sie pseudonymisiert an claude gibt.
   const [checked, setChecked] = useState<{ source: string; text: string; spans: ArcaSpan[]; hints: string[] } | null>(null);
+  const promptBox = useRef<HTMLTextAreaElement | null>(null);
   const [mode, setMode] = useState<"protected" | "direct">("protected");
   const [termNote, setTermNote] = useState<string | null>(null);
   const [sent, setSent] = useState<string[]>([]);
@@ -80,7 +82,7 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
     if ("mode" in e) setMode(e.mode);
     else if ("blocked" in e) setTermNote(e.login
       ? "Login-Code bitte oben im Feld \"Claude-Anmeldung\" einfügen."
-      : "Direkteingabe gesperrt: Frage unten eingeben, sie wird vor dem Senden pseudonymisiert.");
+      : "Text geht über das Eingabefeld unter dem Terminal (wird pseudonymisiert).");
     else if ("login" in e) {
       setLogin(e.login ? { url: e.url ?? null } : null);
       setTermNote(e.login ? null : "Login-Code gesendet.");
@@ -90,12 +92,40 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
       setTermNote(e.hints.length ? `Gesendet. Prüfhinweise: ${e.hints.join(", ")}` : "Gesendet (pseudonymisiert).");
     } else if ("error" in e) setTermNote(e.error);
   };
-  const checkPrompt = () => run(() => arcaPseudonymize(prompt), r => setChecked({ source: prompt, ...r }));
+  useEffect(() => {
+    const text = prompt;
+    if (!text.trim()) { setChecked(null); return; }
+    const timer = setTimeout(async () => {
+      const r = await arcaPseudonymize(text);
+      if (r.ok) setChecked({ source: text, ...r.data });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [prompt]);
+  // Pseudonymisiert wird im Terminal-Server (verbindlich); die Vorschau zeigt nur, was ankommt.
   const sendPrompt = () => {
-    if (!checked || checked.source !== prompt) return;
+    if (!prompt.trim()) return;
     terminal.current?.sendPrompt(prompt);
     setPrompt("");
     setChecked(null);
+  };
+  /** Tippen ins Terminal (geschützter Modus): Text landet im Eingabefeld statt ungefiltert bei claude. */
+  const onTerminalText = (data: string) => {
+    if (login || mode === "direct") return false;
+    if (data === "\r") {
+      if (prompt.trim()) { sendPrompt(); return true; }
+      return false;
+    }
+    // Steuertasten und Terminal-Antworten (Maus, Fokus, Geräteabfrage) gehen ans Terminal; eingefügter Text nicht.
+    if (data.startsWith("\x1b") && !data.startsWith("\x1b[200~")) return false;
+    // eslint-disable-next-line no-control-regex
+    if (/^[\t\x7f\x03\x04\x08]$/.test(data)) return false;
+    if (/^[0-9]$/.test(data) && !prompt) return false;  // Menüauswahl in claude
+    // eslint-disable-next-line no-control-regex
+    const text = data.replace(/\x1b\[20[01]~/g, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+    if (!text) return true;
+    setPrompt(p => p + text);
+    promptBox.current?.focus();
+    return true;
   };
   const toggleDirect = () => {
     if (mode === "direct") terminal.current?.lock();
@@ -322,21 +352,24 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
                 </p>
               </div>
             )}
-            <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} />
+            <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} onText={onTerminalText} />
             <div className="space-y-2">
-              <textarea value={prompt} onChange={e => { setPrompt(e.target.value); }} rows={3}
-                        placeholder="Frage an Claude, gern mit Klarnamen: wird vor dem Senden mit denselben Tokens wie in A pseudonymisiert"
+              <textarea ref={promptBox} value={prompt} onChange={e => { setPrompt(e.target.value); }} rows={3}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendPrompt(); }
+                        }}
+                        placeholder="Frage an Claude (auch einfach ins Terminal tippen). Enter sendet, Umschalt+Enter neue Zeile. Klarnamen werden vor dem Senden durch die Tokens aus A ersetzt."
                         className="border-input bg-background w-full rounded-md border p-2 text-sm" />
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="outline" onClick={checkPrompt} disabled={pending || !prompt.trim()}>Prüfen</Button>
-                <Button size="sm" onClick={sendPrompt} disabled={!checked || checked.source !== prompt}>
+                <Button size="sm" onClick={sendPrompt} disabled={!prompt.trim()}>
                   <Send className="mr-1 h-3.5 w-3.5" aria-hidden />An Claude senden
                 </Button>
-                {checked && checked.source !== prompt && <span className="text-muted-foreground text-xs">Text geändert: erneut prüfen</span>}
+                <span className="text-muted-foreground text-xs">Enter sendet</span>
               </div>
               {checked && checked.source === prompt && (
                 <p className="bg-muted rounded-md p-2 text-xs whitespace-pre-wrap">
                   <span className="text-muted-foreground">Claude bekommt: </span><Highlighted value={checked.text} spans={checked.spans} />
+                  {checked.hints.length > 0 && <span className="text-dark-yellow"> · Prüfhinweis: {checked.hints.join(", ")}</span>}
                 </p>
               )}
               {sent.length > 0 && (

@@ -44,7 +44,8 @@ test("kein API-Key, eigenes Abo per /login möglich", () => {
 
 test("geschützte Eingabe: nur Steuertasten", () => {
   for (const k of ["\r", "\x1b", "\x1b[A", "\x1b[B", "\x1b[3~", "\t", "\x7f", "\x03", "1", "2"]) assert.ok(isControlKey(k), JSON.stringify(k));
-  for (const k of ["a", "M", "Max Mustermann", "\x1b[200~Keller\x1b[201~", "12", " ", "/login"]) assert.ok(!isControlKey(k), JSON.stringify(k));
+  for (const k of ["\x1b[?1;2c", "\x1b[<35;76;15M", "\x1b[<0;76;15m", "\x1b[I", "\x1b[O"]) assert.ok(isControlKey(k), JSON.stringify(k));
+  for (const k of ["a", "M", "Max Mustermann", "\x1b[200~Keller\x1b[201~", "\x1b[200~", "12", " ", "/login", "\x1b[Ax"]) assert.ok(!isControlKey(k), JSON.stringify(k));
 });
 
 test("Fragen werden über den Service pseudonymisiert", async () => {

@@ -80,9 +80,11 @@ export function sessionToken(cookieHeader = "") {
   return null;
 }
 
-// Einzelne Tastendrücke, die keinen Text transportieren.
-const CONTROL_KEY = /^(?:\x1b(?:\[[0-9;]*[A-Za-z~]|O[A-Z])?|[\r\t\x7f\x03\x04\x08]|[0-9])$/;
-export const isControlKey = data => CONTROL_KEY.test(data);
+// Einzelne Tastendrücke und Terminal-Antworten (Maus, Fokus, Geräteabfrage), die keinen Text transportieren.
+// Eingefügter Text (Bracketed Paste ESC[200~...ESC[201~) passt nicht, weil die ganze Nachricht passen muss.
+const CONTROL_KEY = /^(?:\x1b(?:\[[0-9;?<>=]*[ -/]*[@-~]|O[A-Z]|\][^\x07\x1b]*(?:\x07|\x1b\\))?|[\r\t\x7f\x03\x04\x08]|[0-9])$/;
+const PASTE_START = "\x1b[200~";
+export const isControlKey = data => !data.startsWith(PASTE_START) && CONTROL_KEY.test(data);
 
 // Claude-Anmeldung: der OAuth-Code ist ein Token ohne Leerzeichen. Nur so etwas darf im Login-Schritt ohne
 // Pseudonymisierung durch (keine Sätze, keine Namen).

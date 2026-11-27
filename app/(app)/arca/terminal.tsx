@@ -33,14 +33,18 @@ function resolve(url: string): string {
 }
 
 /** xterm.js an den Arca-Terminal-Server. Der Server startet claude erst nach Freigabe. */
-export function Terminal({ ref, url, onEvent }: {
+export function Terminal({ ref, url, onEvent, onText }: {
   ref?: Ref<TerminalHandle>; url: string; onEvent?: (e: TerminalEvent) => void;
+  /** Getippter/eingefügter Text; true = von der Seite übernommen (geht nicht ans Terminal). */
+  onText?: (data: string) => boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<XTerm | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const events = useRef(onEvent);
   events.current = onEvent;
+  const texts = useRef(onText);
+  texts.current = onText;
 
   const send = (msg: object) => {
     const ws = socket.current;
@@ -83,7 +87,7 @@ export function Terminal({ ref, url, onEvent }: {
       if (e.code === 4001) t.write("\r\n\x1b[33mErst freigeben.\x1b[0m\r\n");
       if (e.code === 4003) t.write("\r\n\x1b[31mNicht angemeldet. Seite neu laden und einloggen.\x1b[0m\r\n");
     };
-    const input = t.onData(data => send({ type: "input", data }));
+    const input = t.onData(data => { if (!texts.current?.(data)) send({ type: "input", data }); });
     const onResize = () => { fit.fit(); send({ type: "resize", cols: t.cols, rows: t.rows }); };
     window.addEventListener("resize", onResize);
     return () => {
