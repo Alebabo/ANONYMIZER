@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  Activity, ChevronRight, Info, LogOut, Menu, MessageSquare, PanelLeft, Settings, Table2, X,
+  Activity, Archive, ChevronRight, Info, LogOut, Menu, MessageSquare, PanelLeft, Settings, Table2, X,
 } from "lucide-react";
 import { logout } from "@/app/actions";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ const main: NavItem[] = [
   { href: "/", label: "Chat", icon: MessageSquare },
   { href: "/traces", label: "Traces", icon: Activity },
   { href: "/playground", label: "CSV", icon: Table2 },
+  { href: "/arca", label: "Arca", icon: Archive },
 ];
 const bottom: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings, section: "settings" },
