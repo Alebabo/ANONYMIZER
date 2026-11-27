@@ -10,6 +10,12 @@
 // ARCA_CLAUDE_HOME bekommt jede angemeldete Dashboard-Person ein eigenes CLAUDE_CONFIG_DIR, Anmeldungen
 // werden also nicht geteilt. Kein API-Key auf dem Server.
 //
+// Geschützte Eingabe: freies Tippen ist gesperrt, nur Steuertasten (Pfeile, Enter, Esc, Tab, Backspace,
+// Ctrl-C, Ziffern für Menüs) gehen durch. Fragen kommen als {type:"prompt"} und werden HIER über den
+// Arca-Service pseudonymisiert (/pseudonymize), bevor sie claude erreichen; der Browser kann das nicht
+// umgehen. Direkteingabe (z. B. für /login) lässt sich freischalten und wieder sperren; beides steht mit der
+// Person im Audit-Log von vault.db.
+//
 // Login (Server): mit ARCA_AUTH_API_URL muss der WebSocket-Request das Dashboard-Session-Cookie tragen;
 // es wird bei der OpenAnonymizer-API geprüft (GET /v1/auth/me). Ohne gültige Sitzung: Code 4003.
 // Die Umgebung von claude enthält keine ARCA_*/ANONYMIZER_*/ANTHROPIC_*-Variablen. mcp.json enthält nur den Pfad zu
@@ -73,16 +79,46 @@ export function sessionToken(cookieHeader = "") {
   return null;
 }
 
-/** Dashboard-Person zur Sitzung, oder null. Ohne ARCA_AUTH_API_URL (lokal): "local". */
+// Einzelne Tastendrücke, die keinen Text transportieren.
+const CONTROL_KEY = /^(?:\x1b(?:\[[0-9;]*[A-Za-z~]|O[A-Z])?|[\r\t\x7f\x03\x04\x08]|[0-9])$/;
+export const isControlKey = data => CONTROL_KEY.test(data);
+
+/** Steuernachricht an den Browser (nicht für das Terminal): Präfix \u0000arca: + JSON. */
+export const CONTROL_PREFIX = "\u0000arca:";
+const control = obj => CONTROL_PREFIX + JSON.stringify(obj);
+
+/** Frage für claude: eine Zeile, pseudonymisiert durch den Arca-Service. */
+export async function protectPrompt(text, service = SERVICE) {
+  const res = await fetch(`${service}/pseudonymize`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error(`pseudonymize ${res.status}`);
+  const out = await res.json();
+  return { text: out.text.replace(/\s*\n\s*/g, " ").trim(), hints: out.hints ?? [] };
+}
+
+/** Ereignis ins Audit-Log; false, wenn es nicht geschrieben werden konnte. */
+async function auditEvent(action, actor) {
+  try {
+    const res = await fetch(`${SERVICE}/audit`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, actor }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Dashboard-Person zur Sitzung ({id, email}) oder null. Ohne ARCA_AUTH_API_URL (lokal): "local". */
 async function user(req) {
-  if (!AUTH_API) return "local";
+  if (!AUTH_API) return { id: "local", email: "lokal" };
   const token = sessionToken(req.headers.cookie);
   if (!token) return null;
   try {
     const res = await fetch(`${AUTH_API}/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const me = await res.json();
-    return me?.user?.id ?? null;
+    return me?.user?.id ? { id: me.user.id, email: me.user.email ?? me.user.id } : null;
   } catch {
     return null;
   }
@@ -123,8 +159,8 @@ function start() {
 
   wss.on("connection", async (ws, req) => {
     const say = text => ws.send(`\r\n\x1b[33m${text}\x1b[0m\r\n`);
-    const userId = await user(req);
-    if (!userId) {
+    const who = await user(req);
+    if (!who) {
       say("Nicht angemeldet.");
       ws.close(4003, "login required");
       return;
@@ -136,7 +172,7 @@ function start() {
     }
     const config = prepareWorkspace();
     const term = pty.spawn(CLAUDE, claudeArgs(config), {
-      name: "xterm-256color", cols: 100, rows: 28, cwd: WORKSPACE, env: claudeEnv(userId),
+      name: "xterm-256color", cols: 100, rows: 28, cwd: WORKSPACE, env: claudeEnv(who.id),
     });
     term.onData(d => ws.readyState === ws.OPEN && ws.send(d));
     term.onExit(({ exitCode }) => {
@@ -149,10 +185,44 @@ function start() {
         term.kill();
       }
     }, 3000);
-    ws.on("message", raw => {
+    let direct = false;
+    let lastHint = 0;
+    ws.send(control({ mode: "protected" }));
+    ws.on("message", async raw => {
       let msg;
       try { msg = JSON.parse(String(raw)); } catch { return; }
-      if (msg.type === "input" && typeof msg.data === "string") term.write(msg.data);
+      if (msg.type === "input" && typeof msg.data === "string") {
+        if (direct || isControlKey(msg.data)) term.write(msg.data);
+        else if (Date.now() - lastHint > 4000) {
+          lastHint = Date.now();
+          ws.send(control({ blocked: true }));
+        }
+      }
+      if (msg.type === "prompt" && typeof msg.text === "string" && msg.text.trim() && msg.text.length <= 20000) {
+        try {
+          const safe = await protectPrompt(msg.text);
+          term.write(safe.text);
+          setTimeout(() => term.write("\r"), 50);
+          ws.send(control({ sent: safe.text, hints: safe.hints }));
+        } catch {
+          ws.send(control({ error: "Frage konnte nicht pseudonymisiert werden und wurde nicht gesendet." }));
+        }
+      }
+      if (msg.type === "unlock" && !direct) {
+        // Nur freischalten, wenn das Freischalten protokolliert ist.
+        if (!(await auditEvent("terminal_unlock", who.email))) {
+          ws.send(control({ error: "Direkteingabe nicht freigeschaltet: Audit-Log nicht erreichbar." }));
+          return;
+        }
+        direct = true;
+        say("Direkteingabe freigeschaltet: Getipptes geht UNGEFILTERT an Claude. Nur für /login u. ä.");
+        ws.send(control({ mode: "direct" }));
+      }
+      if (msg.type === "lock" && direct) {
+        direct = false;
+        await auditEvent("terminal_lock", who.email);
+        ws.send(control({ mode: "protected" }));
+      }
       if (msg.type === "resize" && msg.cols > 0 && msg.rows > 0) term.resize(Math.min(msg.cols, 400), Math.min(msg.rows, 200));
     });
     ws.on("close", () => {

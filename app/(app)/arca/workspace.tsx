@@ -2,15 +2,15 @@
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
-import { FileUp, Lock } from "lucide-react";
+import { FileUp, Lock, Send, ShieldAlert, ShieldCheck } from "lucide-react";
 import { TableScroll } from "@/components/app-shell";
 import { Widget, stamp } from "@/components/widgets";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ArcaCell, ArcaPreview, ArcaSpan, ArcaTables } from "@/lib/arca-api";
+import type { ArcaCell, ArcaOptions, ArcaPreview, ArcaSpan, ArcaTables } from "@/lib/arca-api";
 import { cn } from "@/lib/utils";
-import { arcaPreview, arcaRelease, arcaRetranslate, arcaRevoke, arcaUpload } from "./actions";
-import type { TerminalHandle } from "./terminal";
+import { arcaPreview, arcaPseudonymize, arcaRelease, arcaRetranslate, arcaRevoke, arcaUpload } from "./actions";
+import type { TerminalEvent, TerminalHandle } from "./terminal";
 
 const Terminal = dynamic(() => import("./terminal").then(m => m.Terminal), { ssr: false });
 
@@ -21,6 +21,19 @@ const typeStyle: Record<string, string> = {
   address: "bg-light-teal text-dark-teal",
   case_number: "bg-light-yellow text-dark-yellow",
   withheld: "bg-light-red text-dark-red",
+  date: "bg-muted text-foreground-secondary",
+  money: "bg-muted text-foreground-secondary",
+  // Prüfhinweis: nicht ersetzt, bitte ansehen
+  check: "bg-light-yellow text-dark-yellow underline decoration-dotted underline-offset-2",
+};
+const typeTitle: Record<string, string> = {
+  date: "Datum vergröbert", money: "Betrag als Spanne", check: "Prüfhinweis: Eigenname nicht ersetzt",
+};
+
+const ACTIONS: Record<string, [string, string]> = {
+  release: ["Freigabe", "text-dark-green"], revoke: ["Widerruf", "text-dark-red"],
+  document: ["Dokument (nur vault.db)", "text-dark-blue"],
+  terminal_unlock: ["Direkteingabe freigeschaltet", "text-dark-red"], terminal_lock: ["Direkteingabe gesperrt", "text-dark-green"],
 };
 const mark = (type: string) => cn("rounded-sm px-0.5", typeStyle[type] ?? "bg-light-green text-dark-green");
 
@@ -31,7 +44,7 @@ function Highlighted({ value, spans }: { value: string; spans: ArcaSpan[] }) {
   [...spans].sort((a, b) => a.start - b.start).forEach((s, i) => {
     if (s.start < cursor) return;
     parts.push(value.slice(cursor, s.start));
-    parts.push(<mark key={i} title={s.type} className={mark(s.type)}>{value.slice(s.start, s.end)}</mark>);
+    parts.push(<mark key={i} title={typeTitle[s.type] ?? s.type} className={mark(s.type)}>{value.slice(s.start, s.end)}</mark>);
     cursor = s.end;
   });
   parts.push(value.slice(cursor));
@@ -53,6 +66,36 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const terminal = useRef<TerminalHandle | null>(null);
   const [answer, setAnswer] = useState("");
   const [translated, setTranslated] = useState<ArcaCell | null>(null);
+  const [options, setOptions] = useState<ArcaOptions>({ dates: "month", money: "range" });
+  const [confirmed, setConfirmed] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [checked, setChecked] = useState<{ source: string; text: string; spans: ArcaSpan[]; hints: string[] } | null>(null);
+  const [mode, setMode] = useState<"protected" | "direct">("protected");
+  const [termNote, setTermNote] = useState<string | null>(null);
+  const [sent, setSent] = useState<string[]>([]);
+
+  const onTerminal = (e: TerminalEvent) => {
+    if ("mode" in e) setMode(e.mode);
+    else if ("blocked" in e) setTermNote("Direkteingabe gesperrt: Frage unten eingeben, sie wird vor dem Senden pseudonymisiert.");
+    else if ("sent" in e) {
+      setSent(s => [e.sent, ...s].slice(0, 5));
+      setTermNote(e.hints.length ? `Gesendet. Prüfhinweise: ${e.hints.join(", ")}` : "Gesendet (pseudonymisiert).");
+    } else if ("error" in e) setTermNote(e.error);
+  };
+  const checkPrompt = () => run(() => arcaPseudonymize(prompt), r => setChecked({ source: prompt, ...r }));
+  const sendPrompt = () => {
+    if (!checked || checked.source !== prompt) return;
+    terminal.current?.sendPrompt(prompt);
+    setPrompt("");
+    setChecked(null);
+  };
+  const toggleDirect = () => {
+    if (mode === "direct") terminal.current?.lock();
+    else if (window.confirm("Direkteingabe freischalten? Alles, was du tippst oder einfügst, geht dann UNGEFILTERT an Claude. "
+      + "Nur für /login und Bedienung, nie für Mandatsinhalte. Das Freischalten wird mit deinem Namen protokolliert.")) {
+      terminal.current?.unlock();
+    }
+  };
 
   const label = (key: string) => tables.columns.find(c => c.key === key)?.label ?? key;
   const toggle = (key: string) =>
@@ -67,8 +110,8 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
       else setError(r.error);
     });
 
-  const anonymize = () => run(() => arcaPreview(selected), p => setPreview(p));
-  const release = () => preview && run(() => arcaRelease(preview.id), a => {
+  const anonymize = () => run(() => arcaPreview(selected, options), p => { setPreview(p); setConfirmed(false); });
+  const release = () => preview && run(() => arcaRelease(preview.id, confirmed), a => {
     setPreview(null);
     setMessage(`Freigegeben: ${a.columns.map(label).join(", ")} · ${a.row_count} Zeilen`);
     router.refresh();
@@ -185,18 +228,93 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
         </form>
       </Widget>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <label className="inline-flex items-center gap-1">Daten
+          <select value={options.dates} onChange={e => setOptions(o => ({ ...o, dates: e.target.value as ArcaOptions["dates"] }))}
+                  className="border-input bg-background h-8 rounded-md border px-2">
+            <option value="month">Monat/Jahr</option><option value="year">nur Jahr</option><option value="keep">genau (riskant)</option>
+          </select>
+        </label>
+        <label className="inline-flex items-center gap-1">Beträge
+          <select value={options.money} onChange={e => setOptions(o => ({ ...o, money: e.target.value as ArcaOptions["money"] }))}
+                  className="border-input bg-background h-8 rounded-md border px-2">
+            <option value="range">als Spanne</option><option value="keep">genau (riskant)</option>
+          </select>
+        </label>
         <Button onClick={anonymize} disabled={pending || !selected.length}>Anonymisieren</Button>
-        <Button variant="outline-success" onClick={release} disabled={pending || !preview}>Freigeben</Button>
         <Button variant="destructive-secondary" onClick={revoke} disabled={pending || !tables.released}>Freigabe widerrufen</Button>
-        {pending && <span className="text-muted-foreground text-xs">Läuft …</span>}
-        {error && <span role="alert" className="bg-light-red text-dark-red rounded-md px-2 py-0.5 text-xs">{error}</span>}
-        {message && <span className="bg-light-green text-dark-green rounded-md px-2 py-0.5 text-xs">{message}</span>}
+        {pending && <span className="text-muted-foreground">Läuft …</span>}
+        {error && <span role="alert" className="bg-light-red text-dark-red rounded-md px-2 py-0.5">{error}</span>}
+        {message && <span className="bg-light-green text-dark-green rounded-md px-2 py-0.5">{message}</span>}
       </div>
+
+      {preview && (
+        <Widget title="Prüfung vor der Freigabe"
+                description="Pflicht: Vorschau in A vollständig lesen. Gelb unterstrichen = Eigenname, der nicht ersetzt wurde.">
+          {preview.hints > 0 ? (
+            <p className="bg-light-yellow text-dark-yellow mb-2 rounded-md px-2 py-1 text-xs">
+              {preview.hints} Prüfhinweis(e): {[...new Set(preview.rows.flatMap(r => Object.values(r.cells).flatMap(c =>
+                c.spans.filter(sp => sp.type === "check").map(sp => c.value.slice(sp.start, sp.end)))))].join(", ")}.
+              Ist darunter ein Name oder Ort, der auf die Mandantschaft schließen lässt: nicht freigeben, Spalte abwählen
+              oder Text in B anpassen.
+            </p>
+          ) : (
+            <p className="text-muted-foreground mb-2 text-xs">Keine Prüfhinweise. Lies trotzdem: Ortsteile und Umschreibungen erkennt Arca nicht sicher.</p>
+          )}
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <label className="inline-flex cursor-pointer items-center gap-1.5">
+              <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+              Ich habe die Vorschau vollständig geprüft; sie lässt keinen Rückschluss auf Mandanten oder Beteiligte zu.
+            </label>
+            <Button variant="outline-success" onClick={release} disabled={pending || !confirmed}>Freigeben</Button>
+            <span className="text-muted-foreground">Wird mit deinem Namen im Audit-Log protokolliert.</span>
+          </div>
+        </Widget>
+      )}
 
       <Widget title="Claude" description="claude-CLI mit deinem eigenen Claude-Abo (beim ersten Start anmelden) · einziger Datenzugang: Arca-MCP (nur visible.db, nur SELECT), keine Built-in-Tools">
         {tables.released ? (
-          <Terminal ref={terminal} url={terminalUrl} />
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {mode === "protected" ? (
+                <span className="bg-light-green text-dark-green inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden />Geschützt: Fragen nur über das Feld unten (pseudonymisiert)
+                </span>
+              ) : (
+                <span className="bg-light-red text-dark-red inline-flex items-center gap-1 rounded-md px-2 py-0.5">
+                  <ShieldAlert className="h-3.5 w-3.5" aria-hidden />Direkteingabe offen: Getipptes geht ungefiltert an Claude
+                </span>
+              )}
+              <Button size="sm" variant={mode === "direct" ? "outline-success" : "destructive-secondary"} onClick={toggleDirect}>
+                {mode === "direct" ? "Direkteingabe sperren" : "Direkteingabe freischalten (für /login)"}
+              </Button>
+              {termNote && <span className="text-muted-foreground">{termNote}</span>}
+            </div>
+            <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} />
+            <div className="space-y-2">
+              <textarea value={prompt} onChange={e => { setPrompt(e.target.value); }} rows={3}
+                        placeholder="Frage an Claude, gern mit Klarnamen: wird vor dem Senden mit denselben Tokens wie in A pseudonymisiert"
+                        className="border-input bg-background w-full rounded-md border p-2 text-sm" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="outline" onClick={checkPrompt} disabled={pending || !prompt.trim()}>Prüfen</Button>
+                <Button size="sm" onClick={sendPrompt} disabled={!checked || checked.source !== prompt}>
+                  <Send className="mr-1 h-3.5 w-3.5" aria-hidden />An Claude senden
+                </Button>
+                {checked && checked.source !== prompt && <span className="text-muted-foreground text-xs">Text geändert: erneut prüfen</span>}
+              </div>
+              {checked && checked.source === prompt && (
+                <p className="bg-muted rounded-md p-2 text-xs whitespace-pre-wrap">
+                  <span className="text-muted-foreground">Claude bekommt: </span><Highlighted value={checked.text} spans={checked.spans} />
+                </p>
+              )}
+              {sent.length > 0 && (
+                <details className="text-xs">
+                  <summary className="text-muted-foreground cursor-pointer">Zuletzt gesendet ({sent.length})</summary>
+                  <ul className="mt-1 space-y-1 font-mono">{sent.map((t, i) => <li key={i}>{t}</li>)}</ul>
+                </details>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
             <Lock className="h-5 w-5" aria-hidden />
@@ -220,15 +338,20 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
           )}
         </Widget>
 
-        <Widget title="Audit-Log" description="vault.db · jede Freigabe und jeder Widerruf">
+        <Widget title="Audit-Log" description="vault.db · Freigaben, Widerrufe, Uploads und Direkteingabe, mit Person">
           <ul className="space-y-1 text-xs">
             {tables.audit.map(e => (
-              <li key={e.id} className="flex gap-2">
+              <li key={e.id} className="flex flex-wrap gap-x-2">
                 <span className="text-muted-foreground tabular-nums">{stamp(e.created_at)}</span>
-                <span className={e.action === "release" ? "text-dark-green" : e.action === "revoke" ? "text-dark-red" : "text-dark-blue"}>
-                  {e.action === "release" ? "Freigabe" : e.action === "revoke" ? "Widerruf" : "Dokument (nur vault.db)"}
-                </span>
-                {e.action === "release" && <span>{e.columns.map(label).join(", ")} · {e.row_count} Zeilen</span>}
+                <span className={ACTIONS[e.action]?.[1] ?? "text-foreground"}>{ACTIONS[e.action]?.[0] ?? e.action}</span>
+                {e.action === "release" && (
+                  <span>
+                    {e.columns.map(label).join(", ")} · {e.row_count} Zeilen
+                    {e.details?.options && ` · Daten ${e.details.options.dates === "keep" ? "genau" : e.details.options.dates === "year" ? "Jahr" : "Monat"}, Beträge ${e.details.options.money === "keep" ? "genau" : "Spanne"}`}
+                    {typeof e.details?.hints === "number" && ` · ${e.details.hints} Prüfhinweis(e)`}
+                  </span>
+                )}
+                {e.actor && <span className="text-muted-foreground">· {e.actor}</span>}
               </li>
             ))}
             {!tables.audit.length && <li className="text-muted-foreground">Noch keine Freigabe</li>}

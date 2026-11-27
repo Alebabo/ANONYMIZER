@@ -11,8 +11,17 @@ export const ARCA_API_URL = process.env.ARCA_API_URL || "http://127.0.0.1:8100";
 export type ArcaColumn = { key: string; label: string; kind: string };
 export type ArcaSpan = { start: number; end: number; type: string };
 export type ArcaCell = { value: string; spans: ArcaSpan[] };
-export type ArcaPreview = { id: string; created_at: number; columns: string[]; rows: { zeile: number; cells: Record<string, ArcaCell> }[] };
-export type ArcaAudit = { id: number; created_at: number; action: string; columns: string[]; row_count: number; preview_id: string | null };
+export type ArcaOptions = { dates: "month" | "year" | "keep"; money: "range" | "keep" };
+export type ArcaPreview = {
+  id: string; created_at: number; columns: string[]; rows: { zeile: number; cells: Record<string, ArcaCell> }[];
+  options: ArcaOptions;
+  /** Eigennamen, die nach der Anonymisierung stehen geblieben sind (Pflichtprüfung). */
+  hints: number;
+};
+export type ArcaAudit = {
+  id: number; created_at: number; action: string; columns: string[]; row_count: number; preview_id: string | null;
+  actor: string | null; details: { options?: ArcaOptions; hints?: number; ocr?: boolean } | null;
+};
 export type ArcaTables = {
   columns: ArcaColumn[];
   vault: Record<string, string | number>[];
@@ -31,9 +40,10 @@ export class ArcaError extends Error {}
  * token is validated by the API (GET /v1/auth/me); a missing or expired session redirects to /login. The
  * middleware alone only checks that a cookie exists. Demo mode (local development) has no login.
  */
-export async function requireArcaUser(): Promise<void> {
-  if (isDemo()) return;
-  await api<unknown>("/v1/auth/me");
+export async function requireArcaUser(): Promise<string> {
+  if (isDemo()) return "lokal";
+  const me = await api<{ user: { email: string } | null }>("/v1/auth/me");
+  return me.user?.email ?? "unbekannt";
 }
 
 /** WebSocket URL of the terminal. Relative (e.g. "/arca/terminal") = same host as the dashboard, via Caddy. */
