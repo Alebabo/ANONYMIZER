@@ -316,7 +316,10 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
                   <Button size="sm" disabled={authCode.trim().length < 20 || /\s/.test(authCode.trim())}
                           onClick={() => { terminal.current?.sendAuthCode(authCode); setAuthCode(""); }}>Code senden</Button>
                 </div>
-                <p className="text-muted-foreground">Nur der Code geht ans Terminal; Freitext bleibt gesperrt. Die Anmeldung bleibt für dich gespeichert.</p>
+                <p className="text-muted-foreground">
+                  Du kannst den Code auch direkt ins Terminal einfügen (Strg+V). Durch geht nur ein Code ohne Leerzeichen;
+                  Freitext bleibt gesperrt. Die Anmeldung bleibt für dich gespeichert.
+                </p>
               </div>
             )}
             <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} />

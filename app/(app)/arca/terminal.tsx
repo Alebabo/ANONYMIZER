@@ -3,6 +3,7 @@ import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { ClipboardAddon } from "@xterm/addon-clipboard";
 import "@xterm/xterm/css/xterm.css";
 
 export type TerminalHandle = {
@@ -60,6 +61,8 @@ export function Terminal({ ref, url, onEvent }: {
     t.loadAddon(fit);
     // Links (z. B. die Claude-Login-URL) anklickbar, öffnen in neuem Tab ohne Zugriff auf diese Seite.
     t.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, "_blank", "noopener,noreferrer")));
+    // OSC 52: "c to copy" in claude legt die Login-URL in die Zwischenablage des Browsers.
+    t.loadAddon(new ClipboardAddon());
     t.open(box.current);
     fit.fit();
     term.current = t;

@@ -94,6 +94,20 @@ const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@
 // eslint-disable-next-line no-control-regex
 const OSC8 = /\x1b\]8;[^;]*;(https:\/\/claude\.ai\/oauth\/authorize\?[^\x07\x1b]+)(?:\x07|\x1b\\)/;
 const LOGIN_URL = /https:\/\/claude\.ai\/oauth\/authorize\?\S+/;
+// claude setzt Wörter per Cursorposition (ESC[12G) statt mit Leerzeichen: als Leerzeichen lesen.
+// eslint-disable-next-line no-control-regex
+const CURSOR_MOVE = /\x1b\[\d*[GC]/g;
+// eslint-disable-next-line no-control-regex
+const PASTE_MARKS = /\x1b\[20[01]~/g;
+
+/** Terminal-Output als lesbaren Text (für die Erkennung, nicht für die Anzeige). */
+export const screenText = raw => raw.replace(CURSOR_MOVE, " ").replace(ANSI, "");
+
+/** Eingabe im Login-Schritt: eingefügter (auch Bracketed Paste) Code oder null. */
+export const pastedCode = data => {
+  const text = String(data).replace(PASTE_MARKS, "").trim();
+  return isAuthCode(text) ? text : null;
+};
 
 /** Erkennt im Terminal-Output, dass claude auf den Login-Code wartet, und die Login-URL. */
 export class LoginWatch {
@@ -102,8 +116,8 @@ export class LoginWatch {
   /** Neuen Output einlesen; liefert {login, url} bei Zustandswechsel, sonst null. */
   feed(chunk) {
     this.raw = (this.raw + chunk).slice(-16000);
-    const text = this.raw.replace(ANSI, "");
-    if (!this.active && /paste code here/i.test(text)) {
+    const text = screenText(this.raw);
+    if (!this.active && /paste\s+code\s+here/i.test(text)) {
       this.active = true;
       const url = this.raw.match(OSC8)?.[1] ?? text.match(LOGIN_URL)?.[0] ?? null;
       return { login: true, url };
@@ -241,12 +255,29 @@ function start() {
     }, 3000);
     let direct = false;
     let lastHint = 0;
+    // Nur im Login-Schritt, nur Code-förmig, protokolliert (ohne den Code).
+    const sendAuthCode = async text => {
+      if (!loginWatch.active || !isAuthCode(text)) {
+        ws.send(control({ error: "Kein gültiger Login-Code (oder claude wartet gerade nicht auf einen)." }));
+        return;
+      }
+      if (!(await auditEvent("terminal_login_code", who.email))) {
+        ws.send(control({ error: "Login-Code nicht gesendet: Audit-Log nicht erreichbar." }));
+        return;
+      }
+      term.write(String(text).trim());
+      setTimeout(() => term.write("\r"), 50);
+      ws.send(control(loginWatch.reset()));
+    };
     ws.send(control({ mode: "protected" }));
     ws.on("message", async raw => {
       let msg;
       try { msg = JSON.parse(String(raw)); } catch { return; }
       if (msg.type === "input" && typeof msg.data === "string") {
-        if (direct || isControlKey(msg.data)) term.write(msg.data);
+        // Login-Schritt: Code darf direkt ins Terminal eingefügt werden; "c" kopiert die Login-URL (claude).
+        const code = loginWatch.active && !direct ? pastedCode(msg.data) : null;
+        if (code) await sendAuthCode(code);
+        else if (direct || isControlKey(msg.data) || (loginWatch.active && msg.data === "c")) term.write(msg.data);
         else if (Date.now() - lastHint > 4000) {
           lastHint = Date.now();
           ws.send(control({ blocked: true, login: loginWatch.active }));
@@ -262,20 +293,7 @@ function start() {
           ws.send(control({ error: "Frage konnte nicht pseudonymisiert werden und wurde nicht gesendet." }));
         }
       }
-      if (msg.type === "auth_code") {
-        // Nur im Login-Schritt, nur Code-förmig, protokolliert (ohne den Code).
-        if (!loginWatch.active || !isAuthCode(msg.text)) {
-          ws.send(control({ error: "Kein gültiger Login-Code (oder claude wartet gerade nicht auf einen)." }));
-          return;
-        }
-        if (!(await auditEvent("terminal_login_code", who.email))) {
-          ws.send(control({ error: "Login-Code nicht gesendet: Audit-Log nicht erreichbar." }));
-          return;
-        }
-        term.write(msg.text.trim());
-        setTimeout(() => term.write("\r"), 50);
-        ws.send(control(loginWatch.reset()));
-      }
+      if (msg.type === "auth_code") await sendAuthCode(msg.text);
       if (msg.type === "unlock" && !direct) {
         // Nur freischalten, wenn das Freischalten protokolliert ist.
         if (!(await auditEvent("terminal_unlock", who.email))) {

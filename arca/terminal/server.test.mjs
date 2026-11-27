@@ -3,8 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import {
-  LoginWatch, claudeArgs, claudeEnv, cleanEnv, isAuthCode, isControlKey, mcpConfig, protectPrompt, sessionToken,
-  trustWorkspace,
+  LoginWatch, claudeArgs, claudeEnv, cleanEnv, isAuthCode, isControlKey, mcpConfig, pastedCode, protectPrompt,
+  screenText, sessionToken, trustWorkspace,
 } from "./server.mjs";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -108,4 +108,21 @@ test("eigenes Konfigurationsverzeichnis je Person", () => {
   assert.notEqual(a.CLAUDE_CONFIG_DIR, b.CLAUDE_CONFIG_DIR);
   assert.ok(a.CLAUDE_CONFIG_DIR.startsWith(home) && a.HOME === a.CLAUDE_CONFIG_DIR);
   assert.equal(a.ANTHROPIC_API_KEY, undefined);
+});
+
+test("echte claude-Ausgabe: Wörter per Cursorposition getrennt", () => {
+  // so rendert claude 2.1.x (gekürzt aus einer echten Aufnahme)
+  const raw = "\x1b[2G\x1b[1mBrowser\x1b[10Gdidn't\x1b[17Gopen?\x1b[23GUse\x1b[27Gthe\x1b[31GURL\r\r\n"
+    + "\x1b[2Ghttps://claude.ai/oauth/authorize?z-u4pslfxd9zRW5Y-wmg-xXQOehIZaIJKB5eLPzM4zhQE\r\r\n\r\r\n"
+    + "\x1b[2GPaste\x1b[8Gcode\x1b[13Ghere\x1b[18Gif\x1b[21Gprompted\r\r\n";
+  assert.match(screenText(raw), /Paste code here if prompted/);
+  const change = new LoginWatch().feed(raw);
+  assert.deepEqual(change, { login: true, url: "https://claude.ai/oauth/authorize?z-u4pslfxd9zRW5Y-wmg-xXQOehIZaIJKB5eLPzM4zhQE" });
+});
+
+test("Einfügen ins Terminal im Login-Schritt: nur Code", () => {
+  assert.equal(pastedCode("\x1b[200~aBcD1234efGH5678ijKL9012#st\x1b[201~"), "aBcD1234efGH5678ijKL9012#st");
+  assert.equal(pastedCode("aBcD1234efGH5678ijKL9012#st"), "aBcD1234efGH5678ijKL9012#st");
+  assert.equal(pastedCode("\x1b[200~Frau Keller klagt gegen Nordbau\x1b[201~"), null);
+  assert.equal(pastedCode("c"), null);
 });
