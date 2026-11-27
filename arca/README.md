@@ -25,7 +25,20 @@ Die Anonymisierung nutzt die vorhandene Erkennung (Cato 1.1, Regeln) und die Eng
                                                          --strict-mcp-config ──────┘
 ```
 
-B → Cato → Vorschau → **Freigabe** → A → MCP → Claude. Zurückübersetzen (Token → Klarname) läuft nur im
+B → Cato → Vorschau → **Freigabe** → A → MCP → Claude. Claude hat vollen Lesezugriff auf A (alle freigegebenen
+Tabellen und Spalten, beliebige SELECT-Abfragen, Blättern mit LIMIT/OFFSET) und keinen Zugang zu B.
+
+## Dokumente und OCR
+
+"Dokument hinzufügen" nimmt PDF, Scans, Bilder (PNG/JPEG/TIFF), DOCX und Text pro Mandat an. Scans liest
+Tesseract (Deutsch) lokal über `anonymizer.ocr` aus packages/core:
+
+- strikt offline: Eingabe nur per stdin, keine temporären Dateien, minimale Umgebung, Tesseract läuft in einem
+  Netzwerk-Namespace ohne Netz (`unshare --net`). Arca verlangt diese Isolation; ohne sie wird kein Scan gelesen.
+- gespeichert wird nur der Text (plus Dateiname, Format, SHA-256) in vault.db, nicht die Datei.
+- der Text erscheint in Spalte "Dokumente" und geht wie jeder Freitext erst über Vorschau und Freigabe nach A.
+
+Installation: `apt-get install tesseract-ocr tesseract-ocr-deu` und `pip install -e "packages/core[ocr]"`. Zurückübersetzen (Token → Klarname) läuft nur im
 Service und wird nur in der UI angezeigt.
 
 ## Start
@@ -99,6 +112,10 @@ keine Firma, kein Aktenzeichen und kein Ort aus dem Seed in visible.db; gleiche 
   Verfahren reicht das zur Re-Identifizierung. Daten und Beträge werden bewusst nicht vergröbert.
 - **Erkennungslücken**: Freitext ist nur so gut wie Cato (Firmen-Recall auf LER ca. 0,54). Namen, die in keiner
   strukturierten Spalte stehen und die Cato übersieht, gehen durch. Die Leak-Prüfung findet nur bekannte Werte.
+- **OCR**: Erkennungsfehler ("Mustermarm") können Namen an Cato vorbeischleusen; Handschrift und schlechte
+  Scans werden schlecht gelesen. Die Vorschau vor der Freigabe ist deshalb Pflicht, nicht Formsache.
+  Bekanntes Beispiel (Test `test_known_gap_location_in_scan`): "Zeuge ... aus Lüneburg" lässt den Ort stehen;
+  das ist eine Lücke von Cato, nicht vom OCR.
 - **Deterministische Tokens**: wer ARCA_SECRET hat, kann zu einem geratenen Namen das Token berechnen.
   Der Schlüssel gehört nicht neben die Daten (Produktiv: KMS/HSM). 8 Hex-Zeichen sind für einen Prototyp
   genug; Kollisionen werden erkannt und abgelehnt, nicht aufgelöst.
