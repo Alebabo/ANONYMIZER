@@ -1,27 +1,31 @@
 {
   "syntriq": {
     "docs": 687,
-    "seconds": 27.8,
-    "masked_recall": 0.976,
+    "seconds": 26.9,
+    "masked_recall": 0.984,
+    "sensitive_recall": 0.984,
+    "sensitive_found": 7862,
+    "sensitive_total": 7991,
+    "skipped_docs": 1,
     "masked_precision_lower_bound": 0.539,
     "labels": {
       "PERSON": {
-        "total": 2957,
-        "masked": 0.952,
-        "typed": 0.947
+        "total": 2955,
+        "masked": 0.973,
+        "typed": 0.968
       },
       "ADDRESS": {
-        "total": 1063,
+        "total": 1062,
         "masked": 0.999,
-        "typed": 0.98
+        "typed": 0.981
       },
       "EMAIL_ADDRESS": {
-        "total": 961,
+        "total": 960,
         "masked": 0.999,
         "typed": 0.999
       },
       "PHONE_NUMBER": {
-        "total": 837,
+        "total": 836,
         "masked": 1.0,
         "typed": 0.969
       },
@@ -51,8 +55,8 @@
         "typed": 1.0
       },
       "DE_ID_CARD": {
-        "total": 110,
-        "masked": 0.9,
+        "total": 109,
+        "masked": 0.908,
         "typed": null
       },
       "CREDIT_CARD": {
@@ -106,6 +110,10 @@
     "docs": 176,
     "seconds": 0.8,
     "masked_recall": 0.98,
+    "sensitive_recall": 0.978,
+    "sensitive_found": 219,
+    "sensitive_total": 224,
+    "skipped_docs": 0,
     "masked_precision_lower_bound": 0.796,
     "labels": {
       "PERSON": {

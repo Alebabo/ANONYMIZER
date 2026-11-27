@@ -253,14 +253,9 @@ def main() -> None:
     if a.cmd == "download":
         cmd_download(a.data, sources)
         return
-    from finance_data import cmd_eval  # noqa: PLC0415 - same scripts folder
+    from finance_data import cmd_eval, print_report  # noqa: PLC0415 - same scripts folder
 
-    report = cmd_eval(a.data, sources, a.limit, load_fn=load, type_map=TYPE_MAP, title="public")
-    for src, r in report.items():
-        print(f"{src}: {r['docs']} docs, masked recall {r['masked_recall']}, precision >= {r['masked_precision_lower_bound']}")
-        for k, v in r["labels"].items():
-            print(f"   {k:28} n={v['total']:5}  masked {v['masked']}  typed {v['typed']}")
-
+    print_report(cmd_eval(a.data, sources, a.limit, load_fn=load, type_map=TYPE_MAP, title="public"))
 
 if __name__ == "__main__":
     sys.exit(main())

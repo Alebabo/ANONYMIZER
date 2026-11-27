@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -45,6 +46,58 @@ TYPE_MAP: dict[str, set[str]] = {
     **dict.fromkeys(["ssn", "DE_SOCIAL_SECURITY"], {"social_security_number"}),
     **dict.fromkeys(["customer_id", "CUSTOMER_ID"], {"customer_number"}),
 }
+
+
+# Labels that are not sensitive on their own (project owner, 27.11.2026): companies, public bodies, places, dates and
+# times, amounts, bank and practice identifiers. Every other label (persons, private addresses, identifiers, account,
+# card and contact data, date of birth, credentials) counts for the "sensitive recall", the >99 % target.
+NOT_SENSITIVE = {"organization", "company", "public_body", "location", "date", "date_time", "time", "money", "bic",
+                 "swift_bic_code", "bank_routing_number", "local_latlng", "de_bsnr"}
+
+
+# smartdata and MobIE are news and traffic reports: their "addresses" are streets and roads, not where someone lives.
+NOT_SENSITIVE_BY_SOURCE = {"smartdata": {"address"}, "mobie": {"address"}}
+
+
+def is_sensitive(label: str, source: str = "") -> bool:
+    return label.lower() not in NOT_SENSITIVE and label.lower() not in NOT_SENSITIVE_BY_SOURCE.get(source, ())
+
+
+# Gold spans without personal data: placeholders of already anonymised texts ("X.________", "[Arbeitgebername]").
+_PLACEHOLDER = re.compile(r"_{3,}|^\W*\[[^\]]*\]\W*$")
+# Documents in another language or script (gheim has French, Thai, Arabic and Russian chunks marked de_ch, nym has
+# Danish and Swedish texts) are not what a German anonymizer is measured on. Only clear cases are dropped: mostly
+# non-Latin letters, or several foreign function words and fewer German ones; tables and short replies stay.
+_DE_WORDS = {"der", "die", "das", "und", "ist", "nicht", "mit", "ein", "eine", "von", "zu", "den", "im", "für", "auf",
+             "sich", "wurde", "hat", "dem", "des", "bei", "sie", "wir", "ich", "sind", "wird", "ihre", "ihr", "auch"}
+_FOREIGN_WORDS = {"le", "la", "les", "du", "et", "est", "une", "pour", "dans", "que", "qui", "aux", "sur", "par", "avec",
+                  "il", "di", "che", "per", "con", "della", "sono", "och", "att", "det", "ett", "som", "är", "og", "er",
+                  "til", "jeg", "af", "het", "een", "ik", "niet", "zijn", "the", "and", "of", "to", "is", "for", "that",
+                  "with", "are", "el", "los", "las", "por", "una", "não", "você"}
+
+
+def is_german(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+    if letters and sum(not ("a" <= c.lower() <= "z" or c in "äöüßÄÖÜàâçéèêëîïôûùüÿñæøåóíúšžčćđłńśźż") for c in letters) > len(letters) * 0.3:
+        return False
+    words = re.findall(r"[^\W\d_]+", text.lower())
+    de, foreign = sum(w in _DE_WORDS for w in words), sum(w in _FOREIGN_WORDS for w in words)
+    return not (foreign >= 3 and foreign > 2 * de)
+
+
+def print_report(report: dict) -> None:
+    """Per source: masked recall, sensitive recall and precision bound, then the labels; at the end the sensitive
+    recall over all sources together."""
+    found = total = 0
+    for src, r in report.items():
+        print(f"{src}: {r['docs'] - r.get('skipped_docs', 0)} docs, masked recall {r['masked_recall']}, sensitive recall {r['sensitive_recall']}, "
+              f"precision >= {r['masked_precision_lower_bound']}")
+        for k, v in r["labels"].items():
+            print(f"   {k:28} n={v['total']:5}  masked {v['masked']}  typed {v['typed']}")
+        found += r["sensitive_found"]
+        total += r["sensitive_total"]
+    if total:
+        print(f"all: sensitive recall {round(found / total, 4)} ({found}/{total}, missed {total - found})")
 
 
 GRETEL = "https://huggingface.co/datasets/gretelai/synthetic_pii_finance_multilingual/resolve/main/data"
@@ -100,8 +153,13 @@ def cmd_eval(data: Path, sources: list[str], limit: int | None, load_fn=None, ty
         docs = load_fn(data, source)[:limit] if limit else load_fn(data, source)
         total, masked, typed = Counter(), Counter(), Counter()
         n_pred = n_pred_hit = 0
+        skipped_docs = 0
         t0 = time.perf_counter()
         for key, text, gold in docs:
+            if not is_german(text):
+                skipped_docs += 1
+                continue
+            gold = [g for g in gold if not _PLACEHOLDER.search(text[g[0]:g[1]])]
             dets = det.scan(text, "de").detections
             n_pred += len(dets)
             n_pred_hit += sum(any(d.start < e and s < d.end for s, e, _ in gold) for d in dets)
@@ -114,9 +172,12 @@ def cmd_eval(data: Path, sources: list[str], limit: int | None, load_fn=None, ty
                 if not over and len(misses) < 400:
                     misses.append(f"- {source} {label} `{text[s:e]}` in …{text[max(0, s - 60):e + 30]}…".replace("\n", " "))
         r = lambda a, b: round(a / b, 3) if b else None  # noqa: E731
+        s_found = sum(v for k, v in masked.items() if is_sensitive(k, source))
+        s_total = sum(v for k, v in total.items() if is_sensitive(k, source))
         report[source] = {
             "docs": len(docs), "seconds": round(time.perf_counter() - t0, 1),
             "masked_recall": r(sum(masked.values()), sum(total.values())),
+            "sensitive_recall": r(s_found, s_total), "sensitive_found": s_found, "sensitive_total": s_total, "skipped_docs": skipped_docs,
             "masked_precision_lower_bound": r(n_pred_hit, n_pred),
             "labels": {k: {"total": total[k], "masked": r(masked[k], total[k]),
                            "typed": r(typed[k], total[k]) if k in type_map else None}
@@ -141,11 +202,7 @@ def main() -> None:
     if "gretel" in sources and not (a.data / "raw" / "gretel" / "German_test.parquet").exists():
         print("gretel: not downloaded, skipped (run: finance_data.py download)")
         sources = [s for s in sources if s != "gretel"] or sys.exit(0)
-    report = cmd_eval(a.data, sources, a.limit)
-    for src, r in report.items():
-        print(f"{src}: {r['docs']} docs, masked recall {r['masked_recall']}, precision >= {r['masked_precision_lower_bound']}")
-        for k, v in r["labels"].items():
-            print(f"   {k:28} n={v['total']:5}  masked {v['masked']}  typed {v['typed']}")
+    print_report(cmd_eval(a.data, sources, a.limit))
 
 
 if __name__ == "__main__":

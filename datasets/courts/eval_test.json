@@ -1,7 +1,7 @@
 {
   "split": "test",
   "docs": 56,
-  "seconds": 20.4,
+  "seconds": 20.8,
   "recall": {
     "ADDR": {
       "found": 3,

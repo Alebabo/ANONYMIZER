@@ -2,24 +2,24 @@
   "split": "test",
   "docs": 1113,
   "ner": true,
-  "seconds": 21.1,
+  "seconds": 19.0,
   "entities_partial": {
     "micro": {
       "tp": 629,
-      "fp": 57,
+      "fp": 58,
       "fn": 183,
-      "precision": 0.917,
+      "precision": 0.916,
       "recall": 0.775,
-      "f1": 0.84
+      "f1": 0.839
     },
     "labels": {
       "PER": {
         "tp": 293,
-        "fp": 31,
+        "fp": 32,
         "fn": 31,
-        "precision": 0.904,
+        "precision": 0.902,
         "recall": 0.904,
-        "f1": 0.904
+        "f1": 0.903
       },
       "ORG": {
         "tp": 132,
@@ -41,31 +41,31 @@
     "sources": {
       "ler": {
         "tp": 629,
-        "fp": 57,
+        "fp": 58,
         "fn": 183,
-        "precision": 0.917,
+        "precision": 0.916,
         "recall": 0.775,
-        "f1": 0.84
+        "f1": 0.839
       }
     }
   },
   "entities_strict": {
     "micro": {
       "tp": 584,
-      "fp": 102,
+      "fp": 103,
       "fn": 228,
-      "precision": 0.851,
+      "precision": 0.85,
       "recall": 0.719,
-      "f1": 0.78
+      "f1": 0.779
     },
     "labels": {
       "PER": {
         "tp": 265,
-        "fp": 59,
+        "fp": 60,
         "fn": 59,
-        "precision": 0.818,
+        "precision": 0.815,
         "recall": 0.818,
-        "f1": 0.818
+        "f1": 0.817
       },
       "ORG": {
         "tp": 118,
@@ -87,11 +87,11 @@
     "sources": {
       "ler": {
         "tp": 584,
-        "fp": 102,
+        "fp": 103,
         "fn": 228,
-        "precision": 0.851,
+        "precision": 0.85,
         "recall": 0.719,
-        "f1": 0.78
+        "f1": 0.779
       }
     }
   },

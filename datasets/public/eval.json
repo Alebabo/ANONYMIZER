@@ -1,9 +1,13 @@
 {
   "smartdata": {
     "docs": 230,
-    "seconds": 3.7,
+    "seconds": 3.3,
     "masked_recall": 0.529,
-    "masked_precision_lower_bound": 0.812,
+    "sensitive_recall": 0.9,
+    "sensitive_found": 90,
+    "sensitive_total": 100,
+    "skipped_docs": 0,
+    "masked_precision_lower_bound": 0.806,
     "labels": {
       "location": {
         "total": 458,
@@ -39,13 +43,17 @@
   },
   "mapa": {
     "docs": 558,
-    "seconds": 2.7,
-    "masked_recall": 0.484,
-    "masked_precision_lower_bound": 0.431,
+    "seconds": 2.3,
+    "masked_recall": 0.485,
+    "sensitive_recall": 0.557,
+    "sensitive_found": 44,
+    "sensitive_total": 79,
+    "skipped_docs": 2,
+    "masked_precision_lower_bound": 0.433,
     "labels": {
       "public_body": {
-        "total": 136,
-        "masked": 0.176,
+        "total": 135,
+        "masked": 0.178,
         "typed": null
       },
       "date": {
@@ -72,8 +80,12 @@
   },
   "e3jsi": {
     "docs": 99,
-    "seconds": 1.0,
+    "seconds": 0.9,
     "masked_recall": 0.884,
+    "sensitive_recall": 0.975,
+    "sensitive_found": 198,
+    "sensitive_total": 203,
+    "skipped_docs": 0,
     "masked_precision_lower_bound": 0.706,
     "labels": {
       "person": {
@@ -155,34 +167,38 @@
   },
   "urchade": {
     "docs": 671,
-    "seconds": 10.3,
-    "masked_recall": 0.881,
-    "masked_precision_lower_bound": 0.687,
+    "seconds": 8.7,
+    "masked_recall": 0.885,
+    "sensitive_recall": 0.963,
+    "sensitive_found": 3671,
+    "sensitive_total": 3811,
+    "skipped_docs": 3,
+    "masked_precision_lower_bound": 0.688,
     "labels": {
       "person": {
-        "total": 1221,
-        "masked": 0.943,
-        "typed": 0.935
+        "total": 1214,
+        "masked": 0.951,
+        "typed": 0.943
       },
       "date_of_birth": {
-        "total": 498,
-        "masked": 0.976,
-        "typed": 0.976
+        "total": 496,
+        "masked": 0.978,
+        "typed": 0.978
       },
       "phone": {
-        "total": 428,
+        "total": 427,
         "masked": 0.995,
         "typed": 0.925
       },
       "id_number": {
-        "total": 411,
+        "total": 410,
         "masked": 0.993,
         "typed": null
       },
       "address": {
-        "total": 396,
-        "masked": 0.851,
-        "typed": 0.801
+        "total": 395,
+        "masked": 0.866,
+        "typed": 0.82
       },
       "public_body": {
         "total": 354,
@@ -195,9 +211,9 @@
         "typed": 0.977
       },
       "location": {
-        "total": 335,
-        "masked": 0.337,
-        "typed": 0.319
+        "total": 332,
+        "masked": 0.34,
+        "typed": 0.322
       },
       "date": {
         "total": 212,
@@ -205,14 +221,14 @@
         "typed": 1.0
       },
       "insurance_number": {
-        "total": 180,
+        "total": 179,
         "masked": 1.0,
         "typed": null
       },
       "credit_card": {
-        "total": 140,
+        "total": 138,
         "masked": 0.993,
-        "typed": 0.886
+        "typed": 0.891
       },
       "account_number": {
         "total": 82,
@@ -220,9 +236,9 @@
         "typed": null
       },
       "tax_id": {
-        "total": 53,
+        "total": 52,
         "masked": 1.0,
-        "typed": 0.377
+        "typed": 0.385
       },
       "iban": {
         "total": 44,
@@ -230,8 +246,8 @@
         "typed": 0.636
       },
       "social_security_number": {
-        "total": 29,
-        "masked": 0.966,
+        "total": 27,
+        "masked": 0.963,
         "typed": 0.0
       },
       "organization": {

@@ -565,6 +565,10 @@ ROLE_TERMS: dict[str, str] = {
     r"Arbeitgeber(?:in)?": "employer",
     r"(?:Rechtsanw(?:alt|ältin)|RAin|RA|Verteidiger(?:in)?|Prozessbevollmächtigte[rn]?)": "counsel",
     r"(?:Richter(?:in(?:nen)?)?|Vorsitzende[rn]?|V?Rin?(?:BGH|BAG|BFH|BSG|BVerwG|BVerfG|OLG|LG|AG|LAG|LSG|FG|VG|OVG))": "judge",
+    # Swiss rubrum: "Bundesrichter Chaix", "Sozialversicherungsrichterin Daubenmeyer", "Gerichtsschreiber Schetty"
+    r"(?:Bundes|Ober|Ersatz|Kantons|Bezirks|Amts|Verwaltungs|Sozialversicherungs|Versicherungs|Straf|Zivil|Jugend|"
+    r"Handels|Laien|Einzel|Fach)richter(?:in)?|Gerichts(?:schreiber|sekretär)(?:in)?|Gerichtspräsident(?:in)?": "judge",
+    r"Fürsprecher(?:in)?|Advokat(?:in)?|lic\. iur\.": "counsel",
     r"[Cc]lient": "client",
     r"[Pp]laintiff": "plaintiff",
     r"[Cc]laimant": "plaintiff",
@@ -587,6 +591,7 @@ NAME_STOPWORDS = {
     "Mandant", "Mandantin", "Beklagte", "Kläger", "Zeuge", "Staatsanwaltschaft", "Unternehmen", "Bank", "Kollege",
     "Kollegin", "Richter", "Richterin", "Vorsitzende", "Verteidiger", "Polizei", "Antrag", "Schreiben", "Seite",
     "Mutter", "Vater", "Ehefrau", "Ehemann", "Sohn", "Tochter", "Erben", "Erbin", "Herr", "Frau", "Herrn",
+    "Urteil", "Beschluss", "Entscheid", "Verfügung", "Verfahrensbeteiligte", "Gerichtsschreiber", "Gerichtsschreiberin",
     "Ihnen", "Sie", "Ihr", "Ihre", "Wir", "Uns", "Es", "Er", "Sein", "Seine", "Am", "Im", "In", "Zu", "Bei", "Nach",
     "Vom", "Laut", "Gemäß", "Wegen", "Und", "Oder", "Aber", "Hat", "Ist", "War", "Wird", "Wurde", "Habe", "Haben",
     "Company", "Court", "The", "This", "That", "Client", "Party", "Counsel", "Defendant", "Plaintiff", "Witness",
@@ -820,16 +825,81 @@ LICENSE_PLATE = RegexRecognizer(
 _PERSON_FIELD = (r"(?:Vor-?name|Nach-?name|Familienname|Geburtsname|Rufname|Vor- und Nachname|Name des (?:Kunden|"
                  r"Patienten|Versicherten|Antragstellers|Empfängers)|Patient(?:in)?|Versicherte[rn]?|Kontoinhaber(?:in)?|"
                  r"Ansprechpartner(?:in)?|Sachbearbeiter(?:in)?|Freigabe|Dokumentiert durch|Bearbeiter(?:in)?|Von|An|"
-                 r"Absender(?:in)?|Empfänger(?:in)?|NAME|bearbeiter|vorname|nachname)")
+                 r"Absender(?:in)?|Empfänger(?:in)?|NAME|bearbeiter|vorname|nachname|PATIENT(?:_NAME)?|Mitarbeit(?:er(?:in)?|"
+                 r"ende[r]?)|Kunde|Kundin|Kunden-?name|Inhaber(?:in)?|Antragsteller(?:in)?|Unterzeichner(?:in)?|"
+                 r"Verfasser(?:in)?|Verantwortlich(?:e[r]?)?|Arzt|Ärztin|Name|Navn|von|an|name|kunde|patient|verantwortlich)")
 _FIELD_WORDS = {"Vorname", "Nachname", "Name", "Familienname", "Mit", "Bitte", "Hallo", "Sehr", "Liebe", "Lieber",
                 "Datum", "Betreff", "Telefon", "Adresse", "Anschrift", "Geburtsdatum", "Kundennummer", "Herr", "Frau"}
 PERSON_FIELD = RegexRecognizer(
     "person_field", E.PERSON,
     [Pattern(rf"(?<![\w-])(?:{_PERSON_FIELD})\s?[:=]\s?(?P<v>{_FULL_NAME})(?![\w-])", 0.75, group="v"),
-     Pattern(rf"(?<![\w-])(?:Vorname|Nachname|Familienname)\s(?P<v>{_NAME})(?![\w-])", 0.75, group="v")],
+     Pattern(rf"(?<![\w-])(?:Vorname|Nachname|Familienname)\s(?P<v>{_NAME})(?![\w-])", 0.75, group="v"),
+     # lower case or foreign letters after the colon ("von: senna-myrthe amalrada-dekker", "Navn: Христо Живков")
+     Pattern(r"(?<![\w-])(?:von|an|Von|An|Name|Navn|name|Vorname|Nachname|Patient(?:in)?|Kunde|Kundin)\s?:\s?"
+             r"(?P<v>[^\W\d_][^\W\d_'’-]*(?:[-'’][^\W\d_]+)*(?:\s[^\W\d_][^\W\d_'’-]*(?:[-'’][^\W\d_]+)*){1,2})(?=\s*(?:<|\n|$|,))",
+             0.7, group="v")],
     validator=lambda x: x.split()[0] not in NAME_STOPWORDS and x.split()[0] not in _FIELD_WORDS,
     checksum=False,
 )
+
+# Signatures: the line after a closing formula, or after "gez." ("Viele Grüße\nAndiç Şener", "beste grüße\ndagmara
+# buś-łepek", "gez. Anđa Tomičić"). Any letters and any case, two to four words, the line ends after the name or a comma.
+_CLOSING = (r"(?i:mit freundlichen grüßen|mit freundlichen grüssen|freundliche grüße|freundliche grüsse|viele grüße|"
+            r"viele grüsse|beste grüße|beste grüsse|liebe grüße|liebe grüsse|herzliche grüße|herzliche grüsse|"
+            r"schöne grüße|schöne grüsse|lg|vg|mfg|grüße|grüsse|gruß|gruss|best regards|kind regards|regards)")
+_SIG_WORD = r"[^\W\d_][^\W\d_'’.-]*(?:[-'’][^\W\d_]+)*\.?"
+SIGNATURE = RegexRecognizer(
+    "signature", E.PERSON,
+    [Pattern(rf"(?m)^[ \t]*{_CLOSING}[,!.]?[ \t]*\n(?:[ \t]*\n)?[ \t]*(?:(?:{_ROLE_ALT}|{_HONORIFICS}|i\.\s?[AV]\.)\s)*"
+             rf"(?P<v>{_SIG_WORD}(?:[ \t]{_SIG_WORD}){{1,3}})[ \t]*(?=,|\n|$)", 0.7, group="v"),
+     Pattern(rf"(?<![\w-])gez\.\s(?:(?:Dr\.|Prof\.)\s)?(?P<v>{_SIG_WORD}(?:\s{_SIG_WORD}){{1,3}})(?=\s*(?:,|\n|$))", 0.7,
+             group="v")],
+    validator=lambda x: x.split()[0].rstrip(".").capitalize() not in NAME_STOPWORDS and not any(
+        w.lower() in {"team", "ihr", "ihre", "ihr team", "kundenservice", "support", "abteilung", "der", "die", "das", "und"}
+        for w in x.split()),
+    checksum=False,
+)
+
+# Tables and CSV exports: a header with a name column ("Name;E-Mail;...", "| Kunde | IBAN |"); every value in that
+# column of the following rows is a person.
+class TableNameRecognizer:
+    name = "table_name_column"
+    languages: frozenset[str] = frozenset()
+    _header_word = re.compile(r"^(?:(?:vor|nach|familien|kunden|full|first|last|user|display|contact|kontakt)[ _-]?)?"
+                              r"(?:name|vorname|nachname)$|^(?:kunde|kundin|verantwortlich|bearbeiter(?:in)?|mitarbeiter(?:in)?|"
+                              r"inhaber(?:in)?|ansprechpartner(?:in)?|patient(?:in)?|firstname|lastname|fullname|"
+                              r"teilnehmer(?:in)?|empfänger(?:in)?|absender(?:in)?)$", I)
+
+    def analyze(self, text: str, language: str) -> Iterable[Detection]:
+        lines = text.split("\n")
+        pos, starts = 0, []
+        for line in lines:
+            starts.append(pos)
+            pos += len(line) + 1
+        for i, line in enumerate(lines):
+            delim = next((d for d in (";", "|", "\t", ",") if line.count(d) >= 2), None)
+            if delim is None:
+                continue
+            cells = [c.strip().strip('"').strip() for c in line.split(delim)]
+            cols = [j for j, c in enumerate(cells) if self._header_word.match(c)]
+            if not cols:
+                continue
+            for k in range(i + 1, min(len(lines), i + 500)):
+                row = lines[k]
+                if row.count(delim) < line.count(delim) - 1 or not row.strip():
+                    break
+                parts, off = row.split(delim), 0
+                for j, cell in enumerate(parts):
+                    value = cell.strip().strip('"').strip()
+                    if j in cols and value and re.fullmatch(r"[^\W\d_][^\W\d_ .,'’-]*(?:[ .,'’-]+[^\W\d_][^\W\d_'’-]*){0,3}\.?",
+                                                             value) and len(value) <= 60:
+                        start = starts[k] + off + cell.index(value)
+                        yield make_detection(E.PERSON, Category.PERSONAL_DATA, start, start + len(value), value, 0.7,
+                                             self.name)
+                    off += len(cell) + len(delim)
+
+
+TABLE_NAMES = TableNameRecognizer()
 
 # Chat transcripts: "[15:48] sylvie: das sepa-mandat ...". The speaker is a name, often lowercase.
 CHAT_SPEAKER = RegexRecognizer(
@@ -847,6 +917,21 @@ ADDRESS_FIELD = RegexRecognizer(
              r"(?P<v>(?=[A-ZÄÖÜ0-9])[^\n:;]{3,60}?\d{1,5}[a-z]?(?:[,\s]+(?:Apt\.|Hausnummer|Nummer|Piano|Etage|Stock)\s?\d{1,4})?"
              r"(?:,\s\d{4,5}\s[A-ZÄÖÜ][\w-]+(?:\s[A-ZÄÖÜ][\w-]+)?|,\s[A-ZÄÖÜ][\w-]+(?:\s[A-ZÄÖÜ][\w-]+)?)?)"
              r"(?=[\s,.;)\]\"]|$)", 0.7, group="v")],
+    checksum=False,
+)
+
+_FOREIGN_STREET = (r"(?:straat|laan|singel|gracht|plein|kade|baan|dreef|gatan|vägen|stigen|torget|gränd|backen|gade|vej|"
+                   r"allé|alle|vei|veien|gata|katu|ulica|utca|weg|straße|strasse|gasse|platz|allee|ring)")
+_ROMANCE_STREET = (r"(?:Calle|Via|Viale|Vicolo|Piazza|Corso|Strada|Rue|Avenue|Boulevard|Chemin|Paseo|Pasaje|Avenida|"
+                   r"Carrer|Plaza|Rua|Travessa|Largo|Borgo|Contrada|Incrocio|Rotonda|Ronda|Camino)")
+# Word parts never contain the separator, so long hyphen chains stay linear (test_scan_scales_linearly).
+_STREET_NAME = rf"(?:{_ROMANCE_STREET}\s(?:(?:de|del|de la|di|della|du|des|da|do|dos|das|d')\s?)?[{_UPPER}][\w'’]+(?:\s[{_UPPER}][\w'’]+){{0,2}}"
+_STREET_NAME += rf"|[{_UPPER}][\w'’]*(?:[ -][{_UPPER}][\w'’]*){{0,2}}{_FOREIGN_STREET}|[{_UPPER}][\w'’]+\s(?:Allé|Alle|Park|Square))"
+FOREIGN_ADDRESS = RegexRecognizer(
+    "address_foreign", E.ADDRESS,
+    [Pattern(rf"(?<![\w-])(?:{_STREET_NAME})(?:\s\d{{1,4}}|,\s\d{{1,3}})[a-zA-Z]?(?:,?\s(?:Apt\.?|Piano|Etage|Stock)\s?\d{{1,4}})?(?![\w])", 0.7),
+     Pattern(rf"(?<![\w.,/-])\d{{1,4}}[a-zA-Z]?,?\s(?:{_STREET_NAME})(?:,?\s(?:Apt\.?|Piano|Etage)\s?\d{{1,4}})?(?![\w])", 0.7),
+     Pattern(r"(?<![\w-])(?i:apt|apartment|wohnung)\.?\s\d{1,4}(?![\w])", 0.65)],
     checksum=False,
 )
 
@@ -898,7 +983,8 @@ def builtin_recognizers() -> list:
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
         PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, ORGANIZATION_HYPHEN, FIRM_CUE, PERSON, SELF_INTRO, *LABELLED_IDS,
-        LICENSE_PLATE, PERSON_FIELD, CHAT_SPEAKER, ADDRESS_FIELD, IP_ADDRESS, NUMBER,
+        LICENSE_PLATE, PERSON_FIELD, SIGNATURE, TABLE_NAMES, CHAT_SPEAKER, ADDRESS_FIELD, FOREIGN_ADDRESS, IP_ADDRESS,
+        NUMBER,
     ]
 
 
