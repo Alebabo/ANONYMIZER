@@ -1,55 +1,23 @@
 "use client";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { FileUp, Lock, Send, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useState, useTransition } from "react";
+import { FileUp, Lock } from "lucide-react";
 import { TableScroll } from "@/components/app-shell";
 import { Widget, stamp } from "@/components/widgets";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { ArcaCell, ArcaOptions, ArcaPreview, ArcaSpan, ArcaTables } from "@/lib/arca-api";
+import type { ArcaOptions, ArcaPreview, ArcaTables } from "@/lib/arca-api";
 import { cn } from "@/lib/utils";
-import { arcaPreview, arcaPseudonymize, arcaRelease, arcaRetranslate, arcaRevoke, arcaUpload } from "./actions";
-import type { TerminalEvent, TerminalHandle } from "./terminal";
-
-const Terminal = dynamic(() => import("./terminal").then(m => m.Terminal), { ssr: false });
-
-const typeStyle: Record<string, string> = {
-  person: "bg-light-blue text-dark-blue",
-  organization: "bg-light-violet text-dark-violet",
-  location: "bg-light-teal text-dark-teal",
-  address: "bg-light-teal text-dark-teal",
-  case_number: "bg-light-yellow text-dark-yellow",
-  withheld: "bg-light-red text-dark-red",
-  date: "bg-muted text-foreground-secondary",
-  money: "bg-muted text-foreground-secondary",
-  // Prüfhinweis: nicht ersetzt, bitte ansehen
-  check: "bg-light-yellow text-dark-yellow underline decoration-dotted underline-offset-2",
-};
-const typeTitle: Record<string, string> = {
-  date: "Datum vergröbert", money: "Betrag als Spanne", check: "Prüfhinweis: Eigenname nicht ersetzt",
-};
+import { arcaPreview, arcaRelease, arcaRevoke, arcaUpload } from "./actions";
+import { Chat } from "./chat";
+import { Highlighted } from "./highlighted";
 
 const ACTIONS: Record<string, [string, string]> = {
   release: ["Freigabe", "text-dark-green"], revoke: ["Widerruf", "text-dark-red"],
   document: ["Dokument (nur vault.db)", "text-dark-blue"],
+  chat_message: ["Frage an Claude", "text-dark-violet"], terminal_login_code: ["Claude-Anmeldung", "text-dark-blue"],
   terminal_unlock: ["Direkteingabe freigeschaltet", "text-dark-red"], terminal_lock: ["Direkteingabe gesperrt", "text-dark-green"],
 };
-const mark = (type: string) => cn("rounded-sm px-0.5", typeStyle[type] ?? "bg-light-green text-dark-green");
-
-/** Wert mit farbig hervorgehobenen Ersetzungen. */
-function Highlighted({ value, spans }: { value: string; spans: ArcaSpan[] }) {
-  const parts: React.ReactNode[] = [];
-  let cursor = 0;
-  [...spans].sort((a, b) => a.start - b.start).forEach((s, i) => {
-    if (s.start < cursor) return;
-    parts.push(value.slice(cursor, s.start));
-    parts.push(<mark key={i} title={typeTitle[s.type] ?? s.type} className={mark(s.type)}>{value.slice(s.start, s.end)}</mark>);
-    cursor = s.end;
-  });
-  parts.push(value.slice(cursor));
-  return <>{parts}</>;
-}
 
 /** Freitext breit und umbrechend, kurze Werte in einer Zeile; die Tabelle scrollt seitlich. */
 const cellClass = (key: string) => key === "sachverhalt" || key === "dokumente"
@@ -63,77 +31,8 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const terminal = useRef<TerminalHandle | null>(null);
-  const [answer, setAnswer] = useState("");
-  const [translated, setTranslated] = useState<ArcaCell | null>(null);
   const [options, setOptions] = useState<ArcaOptions>({ dates: "month", money: "range" });
   const [confirmed, setConfirmed] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  // Live-Vorschau der Frage: so, wie der Terminal-Server sie pseudonymisiert an claude gibt.
-  const [checked, setChecked] = useState<{ source: string; text: string; spans: ArcaSpan[]; hints: string[] } | null>(null);
-  const promptBox = useRef<HTMLTextAreaElement | null>(null);
-  const [mode, setMode] = useState<"protected" | "direct">("protected");
-  const [termNote, setTermNote] = useState<string | null>(null);
-  const [sent, setSent] = useState<string[]>([]);
-  const [login, setLogin] = useState<{ url: string | null } | null>(null);
-  const [authCode, setAuthCode] = useState("");
-
-  const onTerminal = (e: TerminalEvent) => {
-    if ("mode" in e) setMode(e.mode);
-    else if ("blocked" in e) setTermNote(e.login
-      ? "Login-Code bitte oben im Feld \"Claude-Anmeldung\" einfügen."
-      : "Text geht über das Eingabefeld unter dem Terminal (wird pseudonymisiert).");
-    else if ("login" in e) {
-      setLogin(e.login ? { url: e.url ?? null } : null);
-      setTermNote(e.login ? null : "Login-Code gesendet.");
-    }
-    else if ("sent" in e) {
-      setSent(s => [e.sent, ...s].slice(0, 5));
-      setTermNote(e.hints.length ? `Gesendet. Prüfhinweise: ${e.hints.join(", ")}` : "Gesendet (pseudonymisiert).");
-    } else if ("error" in e) setTermNote(e.error);
-  };
-  useEffect(() => {
-    const text = prompt;
-    if (!text.trim()) { setChecked(null); return; }
-    const timer = setTimeout(async () => {
-      const r = await arcaPseudonymize(text);
-      if (r.ok) setChecked({ source: text, ...r.data });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [prompt]);
-  // Pseudonymisiert wird im Terminal-Server (verbindlich); die Vorschau zeigt nur, was ankommt.
-  const sendPrompt = () => {
-    if (!prompt.trim()) return;
-    terminal.current?.sendPrompt(prompt);
-    setPrompt("");
-    setChecked(null);
-  };
-  /** Tippen ins Terminal (geschützter Modus): Text landet im Eingabefeld statt ungefiltert bei claude. */
-  const onTerminalText = (data: string) => {
-    if (login || mode === "direct") return false;
-    if (data === "\r") {
-      if (prompt.trim()) { sendPrompt(); return true; }
-      return false;
-    }
-    // Steuertasten und Terminal-Antworten (Maus, Fokus, Geräteabfrage) gehen ans Terminal; eingefügter Text nicht.
-    if (data.startsWith("\x1b") && !data.startsWith("\x1b[200~")) return false;
-    // eslint-disable-next-line no-control-regex
-    if (/^[\t\x7f\x03\x04\x08]$/.test(data)) return false;
-    if (/^[0-9]$/.test(data) && !prompt) return false;  // Menüauswahl in claude
-    // eslint-disable-next-line no-control-regex
-    const text = data.replace(/\x1b\[20[01]~/g, "").replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-    if (!text) return true;
-    setPrompt(p => p + text);
-    promptBox.current?.focus();
-    return true;
-  };
-  const toggleDirect = () => {
-    if (mode === "direct") terminal.current?.lock();
-    else if (window.confirm("Direkteingabe freischalten? Alles, was du tippst oder einfügst, geht dann UNGEFILTERT an Claude. "
-      + "Nur für Ausnahmen (die Anmeldung geht über das Anmeldefeld), nie für Mandatsinhalte. Das Freischalten wird mit deinem Namen protokolliert.")) {
-      terminal.current?.unlock();
-    }
-  };
 
   const label = (key: string) => tables.columns.find(c => c.key === key)?.label ?? key;
   const toggle = (key: string) =>
@@ -164,9 +63,6 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   });
   const short = (key: string, v: string) =>
     key === "dokumente" && v.length > 280 ? `${v.slice(0, 280)} …` : v;
-  const retranslate = () => run(() => arcaRetranslate(answer), r =>
-    setTranslated({ value: r.text, spans: r.spans.map(s => ({ start: s.start, end: s.end, type: "person" })) }));
-
   const visible = tables.visible;
   return (
     <>
@@ -310,77 +206,8 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
         </Widget>
       )}
 
-      <Widget title="Claude" description="claude-CLI mit deinem eigenen Claude-Abo (beim ersten Start anmelden) · einziger Datenzugang: Arca-MCP (nur visible.db, nur SELECT), keine Built-in-Tools">
-        {tables.released ? (
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {mode === "protected" ? (
-                <span className="bg-light-green text-dark-green inline-flex items-center gap-1 rounded-md px-2 py-0.5">
-                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden />Geschützt: Fragen nur über das Feld unten (pseudonymisiert)
-                </span>
-              ) : (
-                <span className="bg-light-red text-dark-red inline-flex items-center gap-1 rounded-md px-2 py-0.5">
-                  <ShieldAlert className="h-3.5 w-3.5" aria-hidden />Direkteingabe offen: Getipptes geht ungefiltert an Claude
-                </span>
-              )}
-              <Button size="sm" variant={mode === "direct" ? "outline-success" : "destructive-secondary"} onClick={toggleDirect}>
-                {mode === "direct" ? "Direkteingabe sperren" : "Direkteingabe freischalten (Ausnahme)"}
-              </Button>
-              {termNote && <span className="text-muted-foreground">{termNote}</span>}
-            </div>
-            {login && (
-              <div className="border-dark-blue bg-light-blue/40 space-y-2 rounded-md border p-3 text-xs">
-                <p className="font-medium">Claude-Anmeldung (einmalig, mit deinem eigenen Claude-Konto)</p>
-                <p>
-                  1.{" "}
-                  {login.url
-                    ? <a href={login.url} target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover underline">Anmeldeseite öffnen</a>
-                    : "Den Link im Terminal anklicken"}
-                  , anmelden und den angezeigten Code kopieren.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span>2.</span>
-                  <input value={authCode} onChange={e => setAuthCode(e.target.value)} placeholder="Code hier einfügen"
-                         autoComplete="off" spellCheck={false}
-                         className="border-input bg-background h-8 min-w-[18rem] flex-1 rounded-md border px-2 font-mono" />
-                  <Button size="sm" disabled={authCode.trim().length < 20 || /\s/.test(authCode.trim())}
-                          onClick={() => { terminal.current?.sendAuthCode(authCode); setAuthCode(""); }}>Code senden</Button>
-                </div>
-                <p className="text-muted-foreground">
-                  Du kannst den Code auch direkt ins Terminal einfügen (Strg+V). Durch geht nur ein Code ohne Leerzeichen;
-                  Freitext bleibt gesperrt. Die Anmeldung bleibt für dich gespeichert.
-                </p>
-              </div>
-            )}
-            <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} onText={onTerminalText} />
-            <div className="space-y-2">
-              <textarea ref={promptBox} value={prompt} onChange={e => { setPrompt(e.target.value); }} rows={3}
-                        onKeyDown={e => {
-                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); sendPrompt(); }
-                        }}
-                        placeholder="Frage an Claude (auch einfach ins Terminal tippen). Enter sendet, Umschalt+Enter neue Zeile. Klarnamen werden vor dem Senden durch die Tokens aus A ersetzt."
-                        className="border-input bg-background w-full rounded-md border p-2 text-sm" />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" onClick={sendPrompt} disabled={!prompt.trim()}>
-                  <Send className="mr-1 h-3.5 w-3.5" aria-hidden />An Claude senden
-                </Button>
-                <span className="text-muted-foreground text-xs">Enter sendet</span>
-              </div>
-              {checked && checked.source === prompt && (
-                <p className="bg-muted rounded-md p-2 text-xs whitespace-pre-wrap">
-                  <span className="text-muted-foreground">Claude bekommt: </span><Highlighted value={checked.text} spans={checked.spans} />
-                  {checked.hints.length > 0 && <span className="text-dark-yellow"> · Prüfhinweis: {checked.hints.join(", ")}</span>}
-                </p>
-              )}
-              {sent.length > 0 && (
-                <details className="text-xs">
-                  <summary className="text-muted-foreground cursor-pointer">Zuletzt gesendet ({sent.length})</summary>
-                  <ul className="mt-1 space-y-1 font-mono">{sent.map((t, i) => <li key={i}>{t}</li>)}</ul>
-                </details>
-              )}
-            </div>
-          </div>
-        ) : (
+      <Widget title="Claude" description="Chat mit deinem eigenen Claude-Abo. Fragen werden vor dem Senden pseudonymisiert; du siehst, was an Claude geht und welche Abfragen Claude auf visible.db macht.">
+        {tables.released ? <Chat url={terminalUrl} /> : (
           <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
             <Lock className="h-5 w-5" aria-hidden />
             Erst freigeben
@@ -388,27 +215,15 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
         )}
       </Widget>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Widget title="Zurückübersetzen" description="Claude-Antwort lokal mit Klarnamen anzeigen. Nur hier in der UI, nie zurück an Claude.">
-          <textarea value={answer} onChange={e => setAnswer(e.target.value)} rows={4}
-                    placeholder="Antwort von Claude einfügen oder im Terminal markieren"
-                    className="border-input bg-background w-full rounded-md border p-2 font-mono text-xs" />
-          <div className="mt-2 flex gap-2">
-            <Button size="sm" variant="outline" disabled={!tables.released}
-                    onClick={() => setAnswer(terminal.current?.selection() ?? "")}>Terminal-Auswahl übernehmen</Button>
-            <Button size="sm" onClick={retranslate} disabled={pending || !answer.trim()}>Zurückübersetzen</Button>
-          </div>
-          {translated && (
-            <p className="bg-muted mt-3 rounded-md p-2 text-xs whitespace-pre-wrap"><Highlighted {...translated} /></p>
-          )}
-        </Widget>
-
-        <Widget title="Audit-Log" description="vault.db · Freigaben, Widerrufe, Uploads und Direkteingabe, mit Person">
+      <Widget title="Audit-Log" description="vault.db · Freigaben, Widerrufe, Uploads und jede Frage an Claude (pseudonymisiert), mit Person">
           <ul className="space-y-1 text-xs">
             {tables.audit.map(e => (
               <li key={e.id} className="flex flex-wrap gap-x-2">
                 <span className="text-muted-foreground tabular-nums">{stamp(e.created_at)}</span>
                 <span className={ACTIONS[e.action]?.[1] ?? "text-foreground"}>{ACTIONS[e.action]?.[0] ?? e.action}</span>
+                {e.action === "chat_message" && typeof e.details?.text === "string" && (
+                  <span className="font-mono">{e.details.text.length > 140 ? `${e.details.text.slice(0, 140)} …` : e.details.text}</span>
+                )}
                 {e.action === "release" && (
                   <span>
                     {e.columns.map(label).join(", ")} · {e.row_count} Zeilen
@@ -421,8 +236,7 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
             ))}
             {!tables.audit.length && <li className="text-muted-foreground">Noch keine Freigabe</li>}
           </ul>
-        </Widget>
-      </div>
+      </Widget>
     </>
   );
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import {
-  LoginWatch, claudeArgs, claudeEnv, cleanEnv, isAuthCode, isControlKey, mcpConfig, pastedCode, protectPrompt,
+  LoginWatch, chatArgs, claudeArgs, claudeEnv, cleanEnv, isAuthCode, mapEvent, mcpConfig, protectPrompt,
   screenText, sessionToken, trustWorkspace,
 } from "./server.mjs";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -36,16 +36,8 @@ test("Session-Cookie wird gelesen", () => {
   assert.equal(sessionToken(undefined), null);
 });
 
-test("kein API-Key, eigenes Abo per /login möglich", () => {
-  const args = claudeArgs("/tmp/mcp.json").join(" ");
-  assert.ok(!args.includes("--disable-slash-commands"));  // /login muss gehen
+test("kein API-Key, eigenes Abo", () => {
   assert.deepEqual(cleanEnv({ ANTHROPIC_API_KEY: "x", ANTHROPIC_AUTH_TOKEN: "y", PATH: "/bin" }), { PATH: "/bin" });
-});
-
-test("geschützte Eingabe: nur Steuertasten", () => {
-  for (const k of ["\r", "\x1b", "\x1b[A", "\x1b[B", "\x1b[3~", "\t", "\x7f", "\x03", "1", "2"]) assert.ok(isControlKey(k), JSON.stringify(k));
-  for (const k of ["\x1b[?1;2c", "\x1b[<35;76;15M", "\x1b[<0;76;15m", "\x1b[I", "\x1b[O"]) assert.ok(isControlKey(k), JSON.stringify(k));
-  for (const k of ["a", "M", "Max Mustermann", "\x1b[200~Keller\x1b[201~", "\x1b[200~", "12", " ", "/login", "\x1b[Ax"]) assert.ok(!isControlKey(k), JSON.stringify(k));
 });
 
 test("Fragen werden über den Service pseudonymisiert", async () => {
@@ -56,14 +48,14 @@ test("Fragen werden über den Service pseudonymisiert", async () => {
     req.on("end", () => {
       body = JSON.parse(raw);
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ text: "Was ist mit\nPERSON_1a2b3c4d?", hints: ["Lüneburg"] }));
+      res.end(JSON.stringify({ text: "Was ist mit\nPERSON_1a2b3c4d? ", hints: ["Lüneburg"] }));
     });
   });
   await new Promise(r => srv.listen(0, "127.0.0.1", r));
   const out = await protectPrompt("Was ist mit Max Mustermann?", `http://127.0.0.1:${srv.address().port}`);
   srv.close();
   assert.equal(body.text, "Was ist mit Max Mustermann?");
-  assert.deepEqual(out, { text: "Was ist mit PERSON_1a2b3c4d?", hints: ["Lüneburg"] });
+  assert.deepEqual(out, { text: "Was ist mit\nPERSON_1a2b3c4d?", hints: ["Lüneburg"] });  // Zeilen bleiben
 });
 
 test("Login-Code: nur Token-förmig", () => {
@@ -121,9 +113,36 @@ test("echte claude-Ausgabe: Wörter per Cursorposition getrennt", () => {
   assert.deepEqual(change, { login: true, url: "https://claude.ai/oauth/authorize?z-u4pslfxd9zRW5Y-wmg-xXQOehIZaIJKB5eLPzM4zhQE" });
 });
 
-test("Einfügen ins Terminal im Login-Schritt: nur Code", () => {
-  assert.equal(pastedCode("\x1b[200~aBcD1234efGH5678ijKL9012#st\x1b[201~"), "aBcD1234efGH5678ijKL9012#st");
-  assert.equal(pastedCode("aBcD1234efGH5678ijKL9012#st"), "aBcD1234efGH5678ijKL9012#st");
-  assert.equal(pastedCode("\x1b[200~Frau Keller klagt gegen Nordbau\x1b[201~"), null);
-  assert.equal(pastedCode("c"), null);
+
+test("Chat-Prozess: Stream-Modus mit denselben Einschränkungen", () => {
+  const args = chatArgs("/tmp/mcp.json");
+  assert.deepEqual(args.slice(0, 6), ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"]);
+  assert.equal(args[args.indexOf("--tools") + 1], "");
+  assert.ok(args.includes("--strict-mcp-config"));
+});
+
+test("Stream-Ereignisse werden zu Chat-Ereignissen", () => {
+  assert.deepEqual(mapEvent({ type: "system", subtype: "init", mcp_servers: [{ name: "arca", status: "connected" }] }),
+    [{ type: "ready", mcp: "connected" }]);
+  assert.deepEqual(mapEvent({ type: "assistant", message: { content: [
+    { type: "text", text: "Ich schaue nach." },
+    { type: "tool_use", id: "toolu_1", name: "mcp__arca__query", input: { sql: "SELECT COUNT(*) FROM mandate" } },
+  ] } }), [
+    { type: "assistant", text: "Ich schaue nach." },
+    { type: "tool_use", id: "toolu_1", name: "query", input: { sql: "SELECT COUNT(*) FROM mandate" } },
+  ]);
+  assert.deepEqual(mapEvent({ type: "user", message: { content: [
+    { type: "tool_result", tool_use_id: "toolu_1", content: [{ type: "text", text: "{\"rows\": [[5]]}" }] },
+  ] } }), [{ type: "tool_result", id: "toolu_1", content: "{\"rows\": [[5]]}", isError: false }]);
+  assert.deepEqual(mapEvent({ type: "result", subtype: "success", is_error: false, duration_ms: 1200, num_turns: 2 }),
+    [{ type: "done", ok: true, durationMs: 1200, turns: 2, error: null }]);
+  assert.equal(mapEvent({ type: "result", subtype: "error_during_execution", is_error: true, result: "Not logged in" })[0].error,
+    "Not logged in");
+  assert.deepEqual(mapEvent({ type: "stream_event" }), []);
+  assert.deepEqual(mapEvent({ type: "assistant", message: { content: [{ type: "text", text: "  " }] } }), []);
+});
+
+test("lange Tool-Ergebnisse werden gekürzt", () => {
+  const [ev] = mapEvent({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t", content: "x".repeat(30000) }] } });
+  assert.ok(ev.content.length < 21000 && ev.content.includes("gekürzt"));
 });

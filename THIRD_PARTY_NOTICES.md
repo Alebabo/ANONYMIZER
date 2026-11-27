@@ -133,4 +133,4 @@ licence text: https://github.com/explosion/spacy-models/blob/master/LICENSE.
   https://github.com/tesseract-ocr/tesseract. Installed as a system package, not redistributed in this repository.
 - pypdfium2 (Apache-2.0 / BSD-3-Clause) with PDFium (BSD-3-Clause/Apache-2.0), used to render scanned PDF pages.
 - Pillow (MIT-CMU / HPND), image conversion for OCR.
-- Arca prototype: xterm.js (`@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-web-links`, `@xterm/addon-clipboard`, MIT; js-base64, BSD-3-Clause), node-pty (MIT), ws (MIT).
+- Arca prototype: node-pty (MIT, only for the Claude sign-in), ws (MIT).

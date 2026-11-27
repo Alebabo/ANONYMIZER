@@ -18,7 +18,7 @@ Die Anonymisierung nutzt die vorhandene Erkennung (Cato 1.1, Regeln) und die Eng
                         Dashboard-Tab "Arca" (Next.js)                                 ▼
                         ┌──────────────────────────────┐              ┌──────────────────────────┐
                         │ B | A, Anonymisieren,        │  WebSocket   │ arca/mcp/server.py       │
-                        │ Freigeben, Terminal (xterm)  │ ───────────▶ │ list_tables, describe_   │
+                        │ Freigeben, Chat              │ ───────────▶ │ list_tables, describe_   │
                         └──────────────────────────────┘  :8101       │ table, query (SELECT)    │
                                                          node-pty     └────────────┬─────────────┘
                                                          claude --tools ""         │ MCP (stdio)
@@ -34,12 +34,13 @@ Ziel: Was Claude sieht, ist anonym, nicht nur namensfrei. Dann wird kein Geheimn
 keinen Vertrag nach § 43e BRAO. Das hängt an vier Stellen, die Arca technisch absichert, aber nicht garantieren
 kann:
 
-1. **Fragen an Claude:** freies Tippen im Terminal ist gesperrt. Fragen gehen über das Eingabefeld, werden im
-   Terminal-Server mit denselben Tokens wie in A pseudonymisiert und erst dann an claude geschrieben.
-   Claude-Anmeldung: erkennt der Terminal-Server den Login-Schritt, erscheint ein Anmeldefeld; nur ein Code ohne
-   Leerzeichen (OAuth-Code) geht durch, protokolliert ohne Inhalt. Das Arbeitsverzeichnis ist vorab als vertraut
-   markiert (eigene Konfiguration je Person). Direkteingabe nur als Ausnahme nach Rückfrage; Freischalten und
-   Sperren stehen mit Person im Audit-Log, ohne Audit-Eintrag kein Freischalten.
+1. **Fragen an Claude:** eigener Chat statt Terminal. Der Chat-Server (`terminal/server.mjs`) pseudonymisiert jede
+   Frage mit denselben Tokens wie in A, bevor sie an `claude -p --input-format/--output-format stream-json` geht;
+   die Frage (pseudonymisiert, wie gesendet) steht mit Person im Audit-Log. Im Chat sichtbar: Original (nur lokal),
+   "An Claude gesendet", jeder Tool-Aufruf mit Eingabe (SQL) und Ergebnis, Claudes Antwort mit Tokens und auf
+   Wunsch lokal mit Klarnamen. Freitext an claude vorbei gibt es nicht mehr.
+   Claude-Anmeldung: `claude auth login` im Hintergrund; Link und Code-Feld im Chat, nur ein Code ohne Leerzeichen
+   geht durch, protokolliert ohne Inhalt.
 2. **Vergröberung:** Daten standardmäßig nur Monat/Jahr, Beträge als Spannen (z. B. "1–5 Mio. €"); genaue Werte
    nur bewusst und im Audit-Log sichtbar.
 3. **Pflichtprüfung:** Freigabe nur mit Bestätigung und der angemeldeten Person; Eigennamen, die stehen
@@ -81,7 +82,7 @@ cp arca/.env.example arca/.env && python -c "import secrets; print('ARCA_SECRET=
 npm ci && npm --prefix arca/terminal ci
 ```
 
-Drei Prozesse (je ein Terminal):
+Drei Prozesse (je eine Shell):
 
 ```bash
 arca-service
@@ -109,11 +110,11 @@ Tesseract, Cato, claude-CLI) wird in GitHub Actions gebaut und geladen, Containe
 (cato.tma-it-solution.de/arca leitet dorthin weiter, siehe Repo tma-it-solutions, `vercel.json`).
 
 - **Login:** Seite und alle Aktionen prüfen die Dashboard-Sitzung bei der API (`/v1/auth/me`), der
-  Terminal-WebSocket (`/arca/terminal`, über Caddy) ebenso, plus Origin-Prüfung.
+  Chat-WebSocket (`/arca/terminal`, über Caddy) ebenso, plus Origin-Prüfung.
 - **Eigenes Claude-Abo:** kein API-Key auf dem Server; `ANTHROPIC_*` wird aus Claudes Umgebung entfernt. Jede
-  Person meldet sich im Terminal einmal mit ihrem Claude-Konto an; die Anmeldung liegt in einem eigenen
+  Person meldet sich im Chat einmal mit ihrem Claude-Konto an; die Anmeldung liegt in einem eigenen
   Verzeichnis pro Dashboard-Nutzer (Volume `arca-claude`).
-- **Vereinfachte Abschottung (bewusst gewählt):** Service, Terminal und Claude laufen in einem Container mit
+- **Vereinfachte Abschottung (bewusst gewählt):** Service, Chat-Server und Claude laufen in einem Container mit
   gemeinsamem Datenverzeichnis; die Trennung B/A hängt am Code (keine Built-in-Tools, MCP nur auf visible.db),
   nicht an Volumes. OCR läuft lokal im Container, aber ohne eigene Netztrennung (Docker erlaubt kein unshare).
 - `ARCA_SECRET` legt der Deploy einmalig in der Server-`.env` an. Sichern: ohne ihn ändern sich alle Tokens.
@@ -127,9 +128,9 @@ Tesseract, Cato, claude-CLI) wird in GitHub Actions gebaut und geladen, Containe
 | `src/arca/tokens.py` | `ArcaVault`: Vault-Protocol der Engine, Token = `TYP_` + 8 Hex aus HMAC-SHA256(ARCA_SECRET, Wert) |
 | `src/arca/anonymize.py` | Spaltenweise Vorschau: strukturierte Spalten fail closed als ganzer Wert, Freitext mit Cato plus bekannten Werten aller Zeilen |
 | `src/arca/release.py` | Freigabe (visible.db atomar neu aufbauen), unabhängige Leak-Prüfung, Widerruf, Audit-Log |
-| `src/arca/service.py` | lokale HTTP-API für Dashboard und Terminal |
+| `src/arca/service.py` | lokale HTTP-API für Dashboard und Chat-Server |
 | `mcp/server.py` | eigenständiger MCP-Server: nur `sqlite3` + `mcp`, nur `visible.db`, `mode=ro`, SQLite-Authorizer (kein ATTACH/PRAGMA/Schreiben) |
-| `terminal/server.mjs` | WebSocket + node-pty, startet `claude` nur nach Freigabe, beendet die Sitzung bei Widerruf |
+| `terminal/server.mjs` | Chat-Server: WebSocket, `claude` im Stream-Modus nur nach Freigabe, Pseudonymisierung jeder Frage, Anmeldung über node-pty, Sitzungsende bei Widerruf |
 | `app/(app)/arca/` | Dashboard-Tab |
 
 ## Tests
@@ -164,9 +165,7 @@ keine Firma, kein Aktenzeichen und kein Ort aus dem Seed in visible.db; gleiche 
 - **Gleiche Werte über Spalten**: Tokens hängen nur vom Wert ab, so lassen sich Mandate über A verknüpfen
   (gewollt für Auswertungen, aber ein Pseudonym, kein anonymes Datum im Sinne der DSGVO).
 - **Claude-CLI**: Schutz beruht auf `--tools ""`, `--strict-mcp-config` und `--setting-sources project`.
-  Eine Person am Terminal kann mit `!befehl` selbst Shell-Befehle ausführen, deren Ausgabe in den Kontext
-  geht. Das ist eine Bedienerhandlung, keine Claude-Fähigkeit; für den Produktivbetrieb Claude in einem
-  Container/Benutzer ohne Leserechte auf vault.db starten.
+  Für den Produktivbetrieb Claude zusätzlich in einem Container/Benutzer ohne Leserechte auf vault.db starten.
 - **Dateirechte**: der MCP-Server prüft nur den Dateinamen `visible.db`. Eine als visible.db umbenannte
   Kopie von vault.db würde er lesen. Die echte Grenze sind getrennte Verzeichnisse und Betriebssystemrechte.
 - **Kein Login/keine Mandantentrennung** im Arca-Service; er lauscht nur auf 127.0.0.1. Im Live-Modus schützt

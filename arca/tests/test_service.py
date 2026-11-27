@@ -63,6 +63,11 @@ def test_review_prompt_and_audit_endpoints(tmp_path, detector, monkeypatch):
     assert c.post("/audit", json={"action": "terminal_unlock", "actor": "a@example.org"}).status_code == 200
     assert c.post("/audit", json={"action": "terminal_login_code", "actor": "a@example.org"}).status_code == 200
     assert c.post("/audit", json={"action": "release", "actor": "a@example.org"}).status_code == 400
+    assert c.post("/audit", json={"action": "terminal_unlock", "actor": "a", "details": {"x": 1}}).status_code == 400
+    r = c.post("/audit", json={"action": "chat_message", "actor": "a@example.org",
+                               "details": {"text": "Was ist mit PERSON_1a2b3c4d?", "hints": []}})
+    assert r.status_code == 200
     log = c.get("/tables").json()["audit"]
-    assert [e["action"] for e in log[:2]] == ["terminal_login_code", "terminal_unlock"]
-    assert log[0]["actor"] == "a@example.org" and log[0]["details"] is None  # kein Code im Log
+    assert [e["action"] for e in log[:3]] == ["chat_message", "terminal_login_code", "terminal_unlock"]
+    assert log[0]["details"]["text"] == "Was ist mit PERSON_1a2b3c4d?"
+    assert log[1]["actor"] == "a@example.org" and log[1]["details"] is None  # kein Code im Log

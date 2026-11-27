@@ -20,7 +20,8 @@ export type ArcaPreview = {
 };
 export type ArcaAudit = {
   id: number; created_at: number; action: string; columns: string[]; row_count: number; preview_id: string | null;
-  actor: string | null; details: { options?: ArcaOptions; hints?: number; ocr?: boolean } | null;
+  actor: string | null;
+  details: { options?: ArcaOptions; hints?: number | string[]; ocr?: boolean; text?: string } | null;
 };
 export type ArcaTables = {
   columns: ArcaColumn[];
@@ -47,6 +48,7 @@ export async function requireArcaUser(): Promise<string> {
 }
 
 /** WebSocket URL of the terminal. Relative (e.g. "/arca/terminal") = same host as the dashboard, via Caddy. */
+/** WebSocket des Arca-Chat-Servers (Pfad historisch /arca/terminal). */
 export const ARCA_TERMINAL_URL = process.env.ARCA_TERMINAL_URL || "ws://127.0.0.1:8101";
 
 export async function arca<T>(path: string, body?: unknown): Promise<T> {

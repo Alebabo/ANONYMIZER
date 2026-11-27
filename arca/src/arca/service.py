@@ -11,7 +11,7 @@ Lauscht nur auf 127.0.0.1. Er ist die einzige Komponente, die vault.db öffnet; 
     POST /retranslate  {"text": "..."} -> Klarnamen, nur zur Anzeige in der UI
     POST /documents    multipart (mandat_id, file, actor): Text bzw. lokales OCR -> vault.db
     POST /pseudonymize {"text": "..."} -> Frage an Claude mit denselben Tokens wie in A (Terminal-Server)
-    POST /audit        {"action": "terminal_unlock" | "terminal_lock" | "terminal_login_code", "actor": "..."}
+    POST /audit        {"action": "chat_message" | "terminal_login_code" | ..., "actor": "...", "details": {...}}
 
 "actor" ist die angemeldete Person (E-Mail aus der Dashboard-Sitzung); Dashboard und Terminal-Server setzen ihn.
 """
@@ -30,7 +30,8 @@ from arca.config import Config
 from arca.documents import MAX_BYTES, UploadError, add_document, ocr_engine
 from arca.release import ReleaseError, audit, audit_log, init_visible, release, released, revoke
 
-TERMINAL_ACTIONS = {"terminal_unlock", "terminal_lock", "terminal_login_code"}
+# Vom Chat-Server gemeldete Ereignisse. chat_message trägt die Frage so, wie sie an Claude ging (pseudonymisiert).
+TERMINAL_ACTIONS = {"terminal_unlock", "terminal_lock", "terminal_login_code", "chat_message"}
 
 
 class PreviewRequest(BaseModel):
@@ -51,6 +52,7 @@ class ActorRequest(BaseModel):
 class AuditRequest(BaseModel):
     action: str
     actor: str
+    details: dict | None = None
 
 
 class RetranslateRequest(BaseModel):
@@ -152,8 +154,10 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
     def audit_event(req: AuditRequest) -> dict:
         if req.action not in TERMINAL_ACTIONS or not req.actor.strip():
             raise HTTPException(400, "Unbekannte Aktion")
+        if req.details is not None and (req.action != "chat_message" or len(str(req.details)) > 25_000):
+            raise HTTPException(400, "Details nur für chat_message und höchstens 25.000 Zeichen")
         with lock:
-            return audit(conn, req.action, [], 0, None, req.actor)
+            return audit(conn, req.action, [], 0, None, req.actor, req.details)
 
     return app
 
