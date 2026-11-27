@@ -1,0 +1,10 @@
+{
+  "name": "arca-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "WebSocket-Terminal für Arca: startet die claude-CLI nur mit dem Arca-MCP-Server und ohne Built-in-Tools.",
+  "scripts": { "start": "node server.mjs", "test": "node --test" },
+  "dependencies": { "node-pty": "1.0.0", "ws": "8.18.0" }
+}
