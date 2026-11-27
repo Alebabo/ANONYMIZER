@@ -58,7 +58,7 @@ def test_scan_to_vault_and_release(paths, vault, arca, offline):
     preview = arca.preview(["dokumente"])
     cell = preview["rows"][0]["cells"]["dokumente"]["value"]
     assert "PERSON_" in cell and "ORGANIZATION_" in cell
-    release(vault, paths[1], preview["id"])
+    release(vault, paths[1], preview["id"], "pruefer@example.org", True)
     conn = sqlite3.connect(paths[1])
     blob = "\n".join(str(v) for row in conn.execute("SELECT * FROM mandate") for v in row)
     conn.close()
@@ -104,7 +104,7 @@ def test_claude_reads_released_documents_via_mcp(paths, vault, arca, offline):
     from test_mcp import srv
 
     add_document(vault, 1, "brief.pdf", scanned_pdf())
-    release(vault, paths[1], arca.preview(["mandant", "dokumente"])["id"])
+    release(vault, paths[1], arca.preview(["mandant", "dokumente"])["id"], "pruefer@example.org", True)
     db = srv.VisibleDB(paths[1])
     assert db.list_tables() == ["mandate"]
     rows = db.query("SELECT zeile, mandant, dokumente FROM mandate WHERE dokumente != ''")["rows"]

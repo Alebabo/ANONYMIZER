@@ -51,19 +51,20 @@ def test_visible_empty_without_release(paths, arca):
 def test_no_original_names_after_release(paths, vault, arca):
     _, visible = paths
     preview = arca.preview(ALL)
-    release(vault, visible, preview["id"])
+    release(vault, visible, preview["id"], "pruefer@example.org", True)
     tables, cells = visible_dump(visible)
     assert tables == ["mandate"]
     blob = "\n".join(cells)
     leaked = [v for v in seed_secrets() if contains_word(blob, v)]
     assert leaked == []
-    # Streitwert bleibt lesbar, Klartext des Sachverhalts ist anonymisiert
-    assert "500.000 €" in cells
+    # Streitwert und Daten sind vergröbert (Standard), nicht mehr exakt
+    assert "500.000 € – 1 Mio. €" in cells and "500.000 €" not in cells
+    assert not any("12.03.2022" in c for c in cells) and any("03/2022" in c for c in cells)
 
 
 def test_only_selected_columns(paths, vault, arca):
     _, visible = paths
-    release(vault, visible, arca.preview(["streitwert", "sachverhalt"])["id"])
+    release(vault, visible, arca.preview(["streitwert", "sachverhalt"])["id"], "pruefer@example.org", True)
     conn = sqlite3.connect(visible)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(mandate)")]
     conn.close()
@@ -77,15 +78,16 @@ def test_release_blocks_on_leak(paths, vault, arca):
     preview = arca.preview(["sachverhalt"])
     payload = preview["rows"]
     payload[0]["cells"]["sachverhalt"]["value"] = "Max Mustermann klagt."
-    vault.execute("UPDATE preview SET payload = ? WHERE id = ?", (json.dumps(payload), preview["id"]))
+    vault.execute("UPDATE preview SET payload = ? WHERE id = ?",
+                  (json.dumps({"rows": payload, "options": preview["options"], "hints": 0}), preview["id"]))
     with pytest.raises(ReleaseError):
-        release(vault, visible, preview["id"])
+        release(vault, visible, preview["id"], "pruefer@example.org", True)
     assert visible_dump(visible) == ([], [])
 
 
 def test_audit_log(paths, vault, arca):
     _, visible = paths
-    release(vault, visible, arca.preview(["mandant", "streitwert"])["id"])
+    release(vault, visible, arca.preview(["mandant", "streitwert"])["id"], "pruefer@example.org", True)
     revoke(vault, visible)
     log = audit_log(vault)
     assert [e["action"] for e in log] == ["revoke", "release"]
@@ -96,4 +98,36 @@ def test_audit_log(paths, vault, arca):
 
 def test_unknown_preview(paths, vault):
     with pytest.raises(ReleaseError):
-        release(vault, paths[1], "nope")
+        release(vault, paths[1], "nope", "pruefer@example.org", True)
+
+
+def test_release_requires_confirmed_review(paths, vault, arca):
+    _, visible = paths
+    preview = arca.preview(["mandant"])
+    with pytest.raises(ReleaseError, match="Prüfung"):
+        release(vault, visible, preview["id"], "pruefer@example.org", False)
+    with pytest.raises(ReleaseError, match="Prüfung"):
+        release(vault, visible, preview["id"], "  ", True)
+    assert visible_dump(visible) == ([], [])
+
+
+def test_audit_records_reviewer_and_options(paths, vault, arca):
+    _, visible = paths
+    release(vault, visible, arca.preview(["sachverhalt"], {"dates": "year", "money": "keep"})["id"],
+            "pruefer@example.org", True)
+    entry = audit_log(vault)[0]
+    assert entry["actor"] == "pruefer@example.org"
+    assert entry["details"]["options"] == {"dates": "year", "money": "keep"}
+    assert isinstance(entry["details"]["hints"], int)
+
+
+def test_keep_options(paths, vault, arca):
+    cell = arca.preview(["streitwert", "sachverhalt"], {"dates": "keep", "money": "keep"})["rows"][0]["cells"]
+    assert cell["streitwert"]["value"] == "500.000 €"
+    assert "12.03.2022" in cell["sachverhalt"]["value"]
+
+
+def test_invalid_options(arca):
+    from arca.anonymize import PreviewError
+    with pytest.raises(PreviewError):
+        arca.preview(["mandant"], {"dates": "tag"})

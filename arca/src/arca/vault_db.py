@@ -107,6 +107,12 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    # Spätere Erweiterung des Audit-Logs: wer (actor) und Details (JSON, z. B. Vergröberung, Prüfhinweise).
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(audit_log)")}
+    for col in ("actor", "details"):
+        if col not in have:
+            conn.execute(f"ALTER TABLE audit_log ADD COLUMN {col} TEXT")
+    conn.commit()
     return conn
 
 

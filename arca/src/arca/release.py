@@ -4,7 +4,8 @@
   die Spalten und Werte der freigegebenen Vorschau, keine IDs aus vault.db, kein Mapping.
 * Vor dem Schreiben eine letzte, unabhängige Prüfung: kein Originalwert aus vault.db (Mandant, Firma, Gegner,
   Aktenzeichen, Ort, Nachnamen) darf in einer Zelle stehen. Sonst wird nichts geschrieben.
-* Jede Freigabe und jeder Widerruf landet im Audit-Log in vault.db.
+* Pflichtprüfung: ohne ausdrückliche Bestätigung und ohne Namen der prüfenden Person keine Freigabe.
+* Jede Freigabe und jeder Widerruf landet mit Person, Vergröberung und Zahl der Prüfhinweise im Audit-Log.
 """
 
 from __future__ import annotations
@@ -78,35 +79,43 @@ def _write_visible(path: Path, columns: list[str], rows: list[dict]) -> None:
     os.replace(tmp, path)
 
 
-def _audit(vault: sqlite3.Connection, action: str, columns: list[str], row_count: int, preview_id: str | None) -> dict:
+def audit(vault: sqlite3.Connection, action: str, columns: list[str], row_count: int, preview_id: str | None,
+          actor: str | None = None, details: dict | None = None) -> dict:
     entry = {"created_at": time.time(), "action": action, "columns": columns, "row_count": row_count,
-             "preview_id": preview_id}
-    vault.execute("INSERT INTO audit_log (created_at, action, columns, row_count, preview_id) VALUES (?, ?, ?, ?, ?)",
-                  (entry["created_at"], action, json.dumps(columns), row_count, preview_id))
+             "preview_id": preview_id, "actor": actor, "details": details}
+    vault.execute("INSERT INTO audit_log (created_at, action, columns, row_count, preview_id, actor, details) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  (entry["created_at"], action, json.dumps(columns), row_count, preview_id, actor,
+                   json.dumps(details) if details is not None else None))
     vault.commit()
     return entry
 
 
-def release(vault: sqlite3.Connection, visible_path: Path, preview_id: str) -> dict:
+def release(vault: sqlite3.Connection, visible_path: Path, preview_id: str, actor: str = "",
+            confirmed: bool = False) -> dict:
+    if not confirmed or not actor.strip():
+        raise ReleaseError("Freigabe nur nach bestätigter Prüfung der Vorschau durch eine angemeldete Person")
     row = vault.execute("SELECT columns, payload FROM preview WHERE id = ?", (preview_id,)).fetchone()
     if row is None:
         raise ReleaseError("Vorschau nicht gefunden. Erst anonymisieren.")
     columns: list[str] = json.loads(row["columns"])
-    rows: list[dict] = json.loads(row["payload"])
+    payload = json.loads(row["payload"])
+    rows: list[dict] = payload["rows"] if isinstance(payload, dict) else payload
+    details = {k: payload.get(k) for k in ("options", "hints")} if isinstance(payload, dict) else {}
     leaks = find_leaks([r["cells"][c]["value"] for r in rows for c in columns], originals(vault))
     if leaks:
         raise ReleaseError(f"Freigabe gestoppt: {len(leaks)} Originalwert(e) noch in der Vorschau")
     _write_visible(visible_path, columns, rows)
-    return _audit(vault, "release", columns, len(rows), preview_id)
+    return audit(vault, "release", columns, len(rows), preview_id, actor, details)
 
 
-def revoke(vault: sqlite3.Connection, visible_path: Path) -> dict:
+def revoke(vault: sqlite3.Connection, visible_path: Path, actor: str | None = None) -> dict:
     """Freigabe zurückziehen: visible.db wird wieder leer."""
     visible_path.unlink(missing_ok=True)
     init_visible(visible_path)
-    return _audit(vault, "revoke", [], 0, None)
+    return audit(vault, "revoke", [], 0, None, actor)
 
 
 def audit_log(vault: sqlite3.Connection, limit: int = 50) -> list[dict]:
-    return [{**dict(r), "columns": json.loads(r["columns"])}
+    return [{**dict(r), "columns": json.loads(r["columns"]), "details": json.loads(r["details"] or "null")}
             for r in vault.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))]

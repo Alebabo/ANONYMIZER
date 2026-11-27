@@ -24,7 +24,7 @@ spec.loader.exec_module(srv)
 
 @pytest.fixture()
 def released_db(paths, vault, arca):
-    release(vault, paths[1], arca.preview(list(vault_db.COLUMNS))["id"])
+    release(vault, paths[1], arca.preview(list(vault_db.COLUMNS))["id"], "pruefer@example.org", True)
     return srv.VisibleDB(paths[1])
 
 

@@ -9,15 +9,17 @@ Lauscht nur auf 127.0.0.1. Er ist die einzige Komponente, die vault.db öffnet; 
     POST /release      {"preview_id": "..."} -> schreibt visible.db
     POST /revoke       visible.db leeren
     POST /retranslate  {"text": "..."} -> Klarnamen, nur zur Anzeige in der UI
-    POST /documents    multipart (mandat_id, file): Text bzw. lokales OCR -> vault.db
+    POST /documents    multipart (mandat_id, file, actor): Text bzw. lokales OCR -> vault.db
+    POST /pseudonymize {"text": "..."} -> Frage an Claude mit denselben Tokens wie in A (Terminal-Server)
+    POST /audit        {"action": "terminal_unlock" | "terminal_lock", "actor": "..."}
+
+"actor" ist die angemeldete Person (E-Mail aus der Dashboard-Sitzung); Dashboard und Terminal-Server setzen ihn.
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
-import time
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -26,15 +28,29 @@ from arca import vault_db
 from arca.anonymize import ArcaAnonymizer, PreviewError
 from arca.config import Config
 from arca.documents import MAX_BYTES, UploadError, add_document, ocr_engine
-from arca.release import ReleaseError, audit_log, init_visible, release, released, revoke
+from arca.release import ReleaseError, audit, audit_log, init_visible, release, released, revoke
+
+TERMINAL_ACTIONS = {"terminal_unlock", "terminal_lock"}
 
 
 class PreviewRequest(BaseModel):
     columns: list[str]
+    options: dict | None = None
 
 
 class ReleaseRequest(BaseModel):
     preview_id: str
+    actor: str = ""
+    confirmed: bool = False
+
+
+class ActorRequest(BaseModel):
+    actor: str | None = None
+
+
+class AuditRequest(BaseModel):
+    action: str
+    actor: str
 
 
 class RetranslateRequest(BaseModel):
@@ -88,7 +104,7 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
     def preview(req: PreviewRequest) -> dict:
         with lock:
             try:
-                return arca.preview(req.columns)
+                return arca.preview(req.columns, req.options)
             except PreviewError as exc:
                 raise HTTPException(400, str(exc)) from exc
 
@@ -96,14 +112,14 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
     def release_(req: ReleaseRequest) -> dict:
         with lock:
             try:
-                return release(conn, cfg.visible_path, req.preview_id)
+                return release(conn, cfg.visible_path, req.preview_id, req.actor, req.confirmed)
             except ReleaseError as exc:
                 raise HTTPException(409, str(exc)) from exc
 
     @app.post("/revoke")
-    def revoke_() -> dict:
+    def revoke_(req: ActorRequest | None = None) -> dict:
         with lock:
-            return revoke(conn, cfg.visible_path)
+            return revoke(conn, cfg.visible_path, req.actor if req else None)
 
     @app.post("/retranslate")
     def retranslate(req: RetranslateRequest) -> dict:
@@ -112,17 +128,32 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
             return {"text": text, "spans": spans}
 
     @app.post("/documents")
-    def documents(mandat_id: int = Form(...), file: UploadFile = File(...)) -> dict:
+    def documents(mandat_id: int = Form(...), file: UploadFile = File(...), actor: str = Form("")) -> dict:
         data = file.file.read(MAX_BYTES + 1)  # synchron: OCR läuft im Threadpool, nicht in der Event-Loop
         with lock:
             try:
                 doc = add_document(conn, mandat_id, file.filename or "dokument", data)
             except UploadError as exc:
                 raise HTTPException(400, str(exc)) from exc
-            conn.execute("INSERT INTO audit_log (created_at, action, columns, row_count, preview_id) "
-                         "VALUES (?, 'document', ?, 1, NULL)", (time.time(), json.dumps(["dokumente"])))
-            conn.commit()
+            audit(conn, "document", ["dokumente"], 1, None, actor or None,
+                  {"mandat_id": mandat_id, "ocr": doc["ocr"], "chars": doc["chars"]})
             return doc
+
+    @app.post("/pseudonymize")
+    def pseudonymize(req: RetranslateRequest) -> dict:
+        if len(req.text) > 20_000:
+            raise HTTPException(400, "Text zu lang")
+        with lock:
+            cell = arca.pseudonymize(req.text)
+            return {"text": cell["value"], "spans": cell["spans"],
+                    "hints": [cell["value"][s["start"]:s["end"]] for s in cell["spans"] if s["type"] == "check"]}
+
+    @app.post("/audit")
+    def audit_event(req: AuditRequest) -> dict:
+        if req.action not in TERMINAL_ACTIONS or not req.actor.strip():
+            raise HTTPException(400, "Unbekannte Aktion")
+        with lock:
+            return audit(conn, req.action, [], 0, None, req.actor)
 
     return app
 
