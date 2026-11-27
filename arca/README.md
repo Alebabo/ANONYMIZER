@@ -28,6 +28,28 @@ Die Anonymisierung nutzt die vorhandene Erkennung (Cato 1.1, Regeln) und die Eng
 B → Cato → Vorschau → **Freigabe** → A → MCP → Claude. Claude hat vollen Lesezugriff auf A (alle freigegebenen
 Tabellen und Spalten, beliebige SELECT-Abfragen, Blättern mit LIMIT/OFFSET) und keinen Zugang zu B.
 
+## Schutz vor Offenbarung (§ 203 StGB)
+
+Ziel: Was Claude sieht, ist anonym, nicht nur namensfrei. Dann wird kein Geheimnis offenbart und es braucht
+keinen Vertrag nach § 43e BRAO. Das hängt an vier Stellen, die Arca technisch absichert, aber nicht garantieren
+kann:
+
+1. **Fragen an Claude:** freies Tippen im Terminal ist gesperrt. Fragen gehen über das Eingabefeld, werden im
+   Terminal-Server mit denselben Tokens wie in A pseudonymisiert und erst dann an claude geschrieben. Direkteingabe
+   (für `/login`) nur nach Rückfrage; Freischalten und Sperren stehen mit Person im Audit-Log, ohne Audit-Eintrag
+   kein Freischalten.
+2. **Vergröberung:** Daten standardmäßig nur Monat/Jahr, Beträge als Spannen (z. B. "1–5 Mio. €"); genaue Werte
+   nur bewusst und im Audit-Log sichtbar.
+3. **Pflichtprüfung:** Freigabe nur mit Bestätigung und der angemeldeten Person; Eigennamen, die stehen
+   bleiben, werden als Prüfhinweis markiert (Cato-Tagger).
+4. **Erkennung:** Straßen mit Präposition ("Am Wall 112, 28195 Bremen") erkennt Cato jetzt; Adressen, die einen
+   bekannten Ort enthalten, werden ganz ersetzt.
+
+Was bleibt: Ortsteile und Umschreibungen ("Lagerhalle in der Überseestadt") erkennt weder Cato noch der
+Prüfhinweis sicher. Die Prüfung vor der Freigabe ist der eigentliche Schutz. Ob das Ergebnis im Einzelfall
+anonym im Rechtssinn ist, ist eine Bewertung, die die Kanzlei trifft; vor dem ersten echten Mandat von
+Berufsrecht/Datenschutz bestätigen lassen. Antworten von Claude enthalten Tokens; Zurückübersetzen nur in der UI.
+
 ## Dokumente und OCR
 
 "Dokument hinzufügen" nimmt PDF, Scans, Bilder (PNG/JPEG/TIFF), DOCX und Text pro Mandat an. Scans liest

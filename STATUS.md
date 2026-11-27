@@ -36,6 +36,17 @@ Ein Modell, drei Wege, es zu nutzen, alle in den Traces protokolliert (Kanal `ap
 | `docs/research/` | Recherchen: `outcome-prediction.md`, `org-ner.md`, `org-ner-results.md`, `person-recall.md`, `gliner-results.md`, `newmean-pii.md`, `unified-ner-md.md` |
 | `datasets/outcome/` | Machbarkeitsexperiment Ausgangsvorhersage Kündigungsschutz (3.226 Urteile, ODbL), `outcome_experiment.py` |
 
+### Arca (Prototyp) und OCR (Stand 27.11.2026)
+
+- `arca/`: duale Datenbank. vault.db (Originale, Token-Mapping, Audit-Log) und visible.db (nur freigegebene,
+  anonymisierte und vergröberte Spalten). Claude (CLI im Dashboard-Tab Arca, eigenes Abo je Person) liest nur
+  visible.db über `arca/mcp/server.py`. Fragen an Claude werden im Terminal-Server pseudonymisiert, freies Tippen
+  ist gesperrt. Freigabe nur mit Pflichtprüfung. Details und Grenzen: [arca/README.md](arca/README.md).
+- Deploy: Container `arca` (`deploy/arca.Dockerfile`), https://openanonymizer.tma-it-solution.de/arca.
+- OCR: `anonymizer/ocr.py`, lokales Tesseract (deu), offline, Scans und Bilder in API, MCP, Playground, Arca.
+- Erkennung: Straßen mit Präposition und PLZ/Ort ("Am Wall 112, 28195 Bremen") als Adresse; LER und Gerichte
+  unverändert, syntriq Adressen typisiert 0,981 -> 0,990.
+
 ## 3. Aktuelle Qualität (Test-Splits, komplette Pipeline)
 
 Seit 25.11.2026 ist Cato 1.1 das deutsche Standardmodell. Werte gegen die früheren Spezialmodelle:

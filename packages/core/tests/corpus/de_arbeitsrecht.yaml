@@ -33,8 +33,8 @@ expected:
   - {type: legal_citation, text: § 168 SGB IX}
   - {type: court, text: Arbeitsgericht Köln}
   - {type: email, text: j.beispielmann@mail.example}
+  - {type: address, text: "Am Rosengarten 7a, 50667 Köln"}
 must_not_detect:
   - {type: person, text: Beklagten}
 known_false_negatives:
-  - {type: address, text: "Am Rosengarten 7a, 50667 Köln", note: "Streets without a street suffix (Am ..., An der ...) are not matched by the address pattern."}
   - {type: health_data, text: schwerbehindert, note: "Adjective form missing from the health lexicon."}
