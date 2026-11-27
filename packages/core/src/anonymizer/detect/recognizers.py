@@ -186,6 +186,15 @@ ADDRESS = RegexRecognizer(
             0.85,
         ),
         Pattern(
+            # Streets without a street word, named with a preposition ("Am Wall 112", "An der Alster 5",
+            # "Im Tal 3"). Only with postcode and city right after it, so "Im Jahr 2025" or "Am Ende 3
+            # Wochen" never match. Separators include OCR and letterhead forms ("Am Wall 112 · 28195 Bremen").
+            rf"(?<![\w-])(?:Am|An der|An den|Im|In der|In den|Auf der|Auf dem|Auf den|Zum|Zur|Hinter der|"
+            rf"Hinter dem|Unter den|Vor dem|Bei der|Beim)\s{_CAP}(?:[ -]{_CAP})?\s\d{{1,4}}\s?[a-z]?"
+            rf"(?:\s*[,·•|–-]\s*|\s+)\d{{5}}[ \t]+{_DE_CITY}(?!\w)",
+            0.8,
+        ),
+        Pattern(
             r"\b\d{1,5}\s(?:[A-Z][a-z]+\s){1,3}(?:Street|St\.|Avenue|Ave\.|Road|Rd\.|Lane|Ln\.|Boulevard|Blvd\.|Drive|Way|Place)"
             r"(?:,\s[A-Z][a-z]+(?:\s[A-Z][a-z]+)?(?:,\s[A-Z]{2}\s\d{5})?)?",
             0.8,
