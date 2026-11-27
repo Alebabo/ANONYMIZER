@@ -110,7 +110,8 @@ def build_server(db: VisibleDB):
     def describe_table(table: str) -> dict:
         return safe(db.describe_table, table)
 
-    @server.tool(description=f"Eine SELECT-Abfrage (SQLite) ausführen, höchstens {MAX_ROWS} Zeilen.", annotations=ro)
+    @server.tool(description=f"Eine SELECT-Abfrage (SQLite) auf allen freigegebenen Tabellen ausführen, höchstens "
+                             f"{MAX_ROWS} Zeilen pro Aufruf; für mehr mit LIMIT/OFFSET blättern.", annotations=ro)
     def query(sql: str) -> dict:
         return safe(db.query, sql)
 

@@ -23,7 +23,9 @@ COLUMNS: dict[str, tuple[str, str]] = {
     "ort": ("Ort", "location"),
     "streitwert": ("Streitwert", "money"),
     "sachverhalt": ("Sachverhalt", "text"),
+    "dokumente": ("Dokumente", "text"),   # OCR-/Dokumenttext aus Tabelle dokumente, je Mandat zusammengefasst
 }
+STORED = [c for c in COLUMNS if c != "dokumente"]
 
 SEED: list[dict[str, str]] = [
     {
@@ -65,7 +67,17 @@ SEED: list[dict[str, str]] = [
 SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS {TABLE} (
     id INTEGER PRIMARY KEY,
-    {", ".join(f"{c} TEXT NOT NULL" for c in COLUMNS)}
+    {", ".join(f"{c} TEXT NOT NULL" for c in STORED)}
+);
+CREATE TABLE IF NOT EXISTS dokumente (
+    id INTEGER PRIMARY KEY,
+    mandat_id INTEGER NOT NULL REFERENCES mandate(id),
+    dateiname TEXT NOT NULL,
+    sha256 TEXT NOT NULL,       -- Prüfsumme der Originaldatei; die Datei selbst wird nicht gespeichert
+    format TEXT NOT NULL,
+    ocr INTEGER NOT NULL,       -- 1 = Text stammt aus OCR
+    text TEXT NOT NULL,
+    created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS token_map (
     token TEXT PRIMARY KEY,
@@ -101,7 +113,7 @@ def connect(path: Path) -> sqlite3.Connection:
 def seed(conn: sqlite3.Connection) -> int:
     """Demo-Mandate einfügen, wenn die Tabelle leer ist. Gibt die Zeilenzahl zurück."""
     if conn.execute(f"SELECT COUNT(*) FROM {TABLE}").fetchone()[0] == 0:
-        cols = list(COLUMNS)
+        cols = STORED
         conn.executemany(
             f"INSERT INTO {TABLE} ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
             [tuple(row[c] for c in cols) for row in SEED],
@@ -111,4 +123,8 @@ def seed(conn: sqlite3.Connection) -> int:
 
 
 def rows(conn: sqlite3.Connection) -> list[dict]:
-    return [dict(r) for r in conn.execute(f"SELECT * FROM {TABLE} ORDER BY id")]
+    docs: dict[int, list[str]] = {}
+    for d in conn.execute("SELECT mandat_id, text FROM dokumente ORDER BY id"):
+        docs.setdefault(d["mandat_id"], []).append(d["text"])
+    return [{**dict(r), "dokumente": "\n\n".join(docs.get(r["id"], []))}
+            for r in conn.execute(f"SELECT * FROM {TABLE} ORDER BY id")]

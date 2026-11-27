@@ -32,4 +32,16 @@ export async function arcaRetranslate(text: string) {
   return call(() => arca<{ text: string; spans: { start: number; end: number; token: string }[] }>("/retranslate", { text }));
 }
 
+/** Dokument zu einem Mandat: Text bzw. lokales OCR (offline), landet nur in vault.db. */
+export async function arcaUpload(form: FormData) {
+  const file = form.get("file");
+  const mandat = String(form.get("mandat_id") ?? "");
+  if (!(file instanceof File) || !file.size) return { ok: false as const, error: "Keine Datei gewählt" };
+  if (!/^\d+$/.test(mandat)) return { ok: false as const, error: "Kein Mandat gewählt" };
+  const body = new FormData();
+  body.set("mandat_id", mandat);
+  body.set("file", file, file.name);
+  return call(() => arca<{ dateiname: string; ocr: boolean; chars: number }>("/documents", body), true);
+}
+
 export type { ArcaSpan };

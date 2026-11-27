@@ -9,19 +9,23 @@ Lauscht nur auf 127.0.0.1. Er ist die einzige Komponente, die vault.db öffnet; 
     POST /release      {"preview_id": "..."} -> schreibt visible.db
     POST /revoke       visible.db leeren
     POST /retranslate  {"text": "..."} -> Klarnamen, nur zur Anzeige in der UI
+    POST /documents    multipart (mandat_id, file): Text bzw. lokales OCR -> vault.db
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from arca import vault_db
 from arca.anonymize import ArcaAnonymizer, PreviewError
 from arca.config import Config
+from arca.documents import MAX_BYTES, UploadError, add_document, ocr_engine
 from arca.release import ReleaseError, audit_log, init_visible, release, released, revoke
 
 
@@ -74,6 +78,10 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
                 "visible": _visible(cfg.visible_path),
                 "released": released(cfg.visible_path),
                 "audit": audit_log(conn, 20),
+                "documents": [dict(r) for r in conn.execute(
+                    "SELECT id, mandat_id, dateiname, format, ocr, length(text) AS chars, created_at "
+                    "FROM dokumente ORDER BY id DESC")],
+                "ocr": ocr_engine() is not None,
             }
 
     @app.post("/preview")
@@ -102,6 +110,19 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
         with lock:
             text, spans = arca.vault.retranslate(req.text)
             return {"text": text, "spans": spans}
+
+    @app.post("/documents")
+    def documents(mandat_id: int = Form(...), file: UploadFile = File(...)) -> dict:
+        data = file.file.read(MAX_BYTES + 1)  # synchron: OCR läuft im Threadpool, nicht in der Event-Loop
+        with lock:
+            try:
+                doc = add_document(conn, mandat_id, file.filename or "dokument", data)
+            except UploadError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            conn.execute("INSERT INTO audit_log (created_at, action, columns, row_count, preview_id) "
+                         "VALUES (?, 'document', ?, 1, NULL)", (time.time(), json.dumps(["dokumente"])))
+            conn.commit()
+            return doc
 
     return app
 
