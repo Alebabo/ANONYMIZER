@@ -2,12 +2,15 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 
 export type TerminalHandle = {
   selection: () => string;
   /** Frage an Claude; der Terminal-Server pseudonymisiert sie, bevor claude sie bekommt. */
   sendPrompt: (text: string) => void;
+  /** OAuth-Code der Claude-Anmeldung; der Server nimmt nur Code-förmigen Text im Login-Schritt an. */
+  sendAuthCode: (code: string) => void;
   unlock: () => void;
   lock: () => void;
 };
@@ -15,7 +18,8 @@ export type TerminalHandle = {
 /** Steuernachrichten des Terminal-Servers (arca/terminal/server.mjs). */
 export type TerminalEvent =
   | { mode: "protected" | "direct" }
-  | { blocked: true }
+  | { blocked: true; login?: boolean }
+  | { login: boolean; url?: string | null }
   | { sent: string; hints: string[] }
   | { error: string };
 
@@ -44,6 +48,7 @@ export function Terminal({ ref, url, onEvent }: {
   useImperativeHandle(ref, () => ({
     selection: () => term.current?.getSelection() ?? "",
     sendPrompt: (text: string) => send({ type: "prompt", text }),
+    sendAuthCode: (code: string) => send({ type: "auth_code", text: code }),
     unlock: () => send({ type: "unlock" }),
     lock: () => send({ type: "lock" }),
   }), []);
@@ -53,6 +58,8 @@ export function Terminal({ ref, url, onEvent }: {
     const t = new XTerm({ fontSize: 13, cursorBlink: true, convertEol: false, theme: { background: "#111111" } });
     const fit = new FitAddon();
     t.loadAddon(fit);
+    // Links (z. B. die Claude-Login-URL) anklickbar, öffnen in neuem Tab ohne Zugriff auf diese Seite.
+    t.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, "_blank", "noopener,noreferrer")));
     t.open(box.current);
     fit.fit();
     term.current = t;

@@ -73,10 +73,18 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const [mode, setMode] = useState<"protected" | "direct">("protected");
   const [termNote, setTermNote] = useState<string | null>(null);
   const [sent, setSent] = useState<string[]>([]);
+  const [login, setLogin] = useState<{ url: string | null } | null>(null);
+  const [authCode, setAuthCode] = useState("");
 
   const onTerminal = (e: TerminalEvent) => {
     if ("mode" in e) setMode(e.mode);
-    else if ("blocked" in e) setTermNote("Direkteingabe gesperrt: Frage unten eingeben, sie wird vor dem Senden pseudonymisiert.");
+    else if ("blocked" in e) setTermNote(e.login
+      ? "Login-Code bitte oben im Feld \"Claude-Anmeldung\" einfügen."
+      : "Direkteingabe gesperrt: Frage unten eingeben, sie wird vor dem Senden pseudonymisiert.");
+    else if ("login" in e) {
+      setLogin(e.login ? { url: e.url ?? null } : null);
+      setTermNote(e.login ? null : "Login-Code gesendet.");
+    }
     else if ("sent" in e) {
       setSent(s => [e.sent, ...s].slice(0, 5));
       setTermNote(e.hints.length ? `Gesendet. Prüfhinweise: ${e.hints.join(", ")}` : "Gesendet (pseudonymisiert).");
@@ -92,7 +100,7 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const toggleDirect = () => {
     if (mode === "direct") terminal.current?.lock();
     else if (window.confirm("Direkteingabe freischalten? Alles, was du tippst oder einfügst, geht dann UNGEFILTERT an Claude. "
-      + "Nur für /login und Bedienung, nie für Mandatsinhalte. Das Freischalten wird mit deinem Namen protokolliert.")) {
+      + "Nur für Ausnahmen (die Anmeldung geht über das Anmeldefeld), nie für Mandatsinhalte. Das Freischalten wird mit deinem Namen protokolliert.")) {
       terminal.current?.unlock();
     }
   };
@@ -286,10 +294,31 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
                 </span>
               )}
               <Button size="sm" variant={mode === "direct" ? "outline-success" : "destructive-secondary"} onClick={toggleDirect}>
-                {mode === "direct" ? "Direkteingabe sperren" : "Direkteingabe freischalten (für /login)"}
+                {mode === "direct" ? "Direkteingabe sperren" : "Direkteingabe freischalten (Ausnahme)"}
               </Button>
               {termNote && <span className="text-muted-foreground">{termNote}</span>}
             </div>
+            {login && (
+              <div className="border-dark-blue bg-light-blue/40 space-y-2 rounded-md border p-3 text-xs">
+                <p className="font-medium">Claude-Anmeldung (einmalig, mit deinem eigenen Claude-Konto)</p>
+                <p>
+                  1.{" "}
+                  {login.url
+                    ? <a href={login.url} target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover underline">Anmeldeseite öffnen</a>
+                    : "Den Link im Terminal anklicken"}
+                  , anmelden und den angezeigten Code kopieren.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>2.</span>
+                  <input value={authCode} onChange={e => setAuthCode(e.target.value)} placeholder="Code hier einfügen"
+                         autoComplete="off" spellCheck={false}
+                         className="border-input bg-background h-8 min-w-[18rem] flex-1 rounded-md border px-2 font-mono" />
+                  <Button size="sm" disabled={authCode.trim().length < 20 || /\s/.test(authCode.trim())}
+                          onClick={() => { terminal.current?.sendAuthCode(authCode); setAuthCode(""); }}>Code senden</Button>
+                </div>
+                <p className="text-muted-foreground">Nur der Code geht ans Terminal; Freitext bleibt gesperrt. Die Anmeldung bleibt für dich gespeichert.</p>
+              </div>
+            )}
             <Terminal ref={terminal} url={terminalUrl} onEvent={onTerminal} />
             <div className="space-y-2">
               <textarea value={prompt} onChange={e => { setPrompt(e.target.value); }} rows={3}

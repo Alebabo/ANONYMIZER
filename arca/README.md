@@ -35,9 +35,11 @@ keinen Vertrag nach § 43e BRAO. Das hängt an vier Stellen, die Arca technisch 
 kann:
 
 1. **Fragen an Claude:** freies Tippen im Terminal ist gesperrt. Fragen gehen über das Eingabefeld, werden im
-   Terminal-Server mit denselben Tokens wie in A pseudonymisiert und erst dann an claude geschrieben. Direkteingabe
-   (für `/login`) nur nach Rückfrage; Freischalten und Sperren stehen mit Person im Audit-Log, ohne Audit-Eintrag
-   kein Freischalten.
+   Terminal-Server mit denselben Tokens wie in A pseudonymisiert und erst dann an claude geschrieben.
+   Claude-Anmeldung: erkennt der Terminal-Server den Login-Schritt, erscheint ein Anmeldefeld; nur ein Code ohne
+   Leerzeichen (OAuth-Code) geht durch, protokolliert ohne Inhalt. Das Arbeitsverzeichnis ist vorab als vertraut
+   markiert (eigene Konfiguration je Person). Direkteingabe nur als Ausnahme nach Rückfrage; Freischalten und
+   Sperren stehen mit Person im Audit-Log, ohne Audit-Eintrag kein Freischalten.
 2. **Vergröberung:** Daten standardmäßig nur Monat/Jahr, Beträge als Spannen (z. B. "1–5 Mio. €"); genaue Werte
    nur bewusst und im Audit-Log sichtbar.
 3. **Pflichtprüfung:** Freigabe nur mit Bestätigung und der angemeldeten Person; Eigennamen, die stehen

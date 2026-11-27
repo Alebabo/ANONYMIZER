@@ -11,7 +11,7 @@ Lauscht nur auf 127.0.0.1. Er ist die einzige Komponente, die vault.db öffnet; 
     POST /retranslate  {"text": "..."} -> Klarnamen, nur zur Anzeige in der UI
     POST /documents    multipart (mandat_id, file, actor): Text bzw. lokales OCR -> vault.db
     POST /pseudonymize {"text": "..."} -> Frage an Claude mit denselben Tokens wie in A (Terminal-Server)
-    POST /audit        {"action": "terminal_unlock" | "terminal_lock", "actor": "..."}
+    POST /audit        {"action": "terminal_unlock" | "terminal_lock" | "terminal_login_code", "actor": "..."}
 
 "actor" ist die angemeldete Person (E-Mail aus der Dashboard-Sitzung); Dashboard und Terminal-Server setzen ihn.
 """
@@ -30,7 +30,7 @@ from arca.config import Config
 from arca.documents import MAX_BYTES, UploadError, add_document, ocr_engine
 from arca.release import ReleaseError, audit, audit_log, init_visible, release, released, revoke
 
-TERMINAL_ACTIONS = {"terminal_unlock", "terminal_lock"}
+TERMINAL_ACTIONS = {"terminal_unlock", "terminal_lock", "terminal_login_code"}
 
 
 class PreviewRequest(BaseModel):

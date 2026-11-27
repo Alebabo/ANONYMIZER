@@ -61,6 +61,8 @@ def test_review_prompt_and_audit_endpoints(tmp_path, detector, monkeypatch):
     assert "Mustermann" not in r["text"] and r["text"].startswith("Was ist mit PERSON_")
 
     assert c.post("/audit", json={"action": "terminal_unlock", "actor": "a@example.org"}).status_code == 200
+    assert c.post("/audit", json={"action": "terminal_login_code", "actor": "a@example.org"}).status_code == 200
     assert c.post("/audit", json={"action": "release", "actor": "a@example.org"}).status_code == 400
     log = c.get("/tables").json()["audit"]
-    assert log[0]["action"] == "terminal_unlock" and log[0]["actor"] == "a@example.org"
+    assert [e["action"] for e in log[:2]] == ["terminal_login_code", "terminal_unlock"]
+    assert log[0]["actor"] == "a@example.org" and log[0]["details"] is None  # kein Code im Log

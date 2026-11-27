@@ -27,7 +27,7 @@
 // Nur lokale Verbindungen, Origin-Prüfung gegen Cross-Site-WebSocket-Hijacking.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
@@ -38,13 +38,14 @@ const ARCA = resolve(here, "..");
 const PORT = Number(process.env.ARCA_TERMINAL_PORT || 8101);
 const HOST = process.env.ARCA_TERMINAL_HOST || "127.0.0.1";
 const AUTH_API = process.env.ARCA_AUTH_API_URL || "";
-const CLAUDE_HOME = process.env.ARCA_CLAUDE_HOME || "";
 const SESSION_COOKIE = "anonymizer_session";
 const SERVICE = process.env.ARCA_SERVICE_URL || "http://127.0.0.1:8100";
 const ORIGINS = (process.env.ARCA_ALLOWED_ORIGINS || "http://localhost:3000,http://127.0.0.1:3000").split(",");
 const DATA_DIR = resolve(process.env.ARCA_DATA_DIR || join(ARCA, "data"));
 const VISIBLE = join(DATA_DIR, "visible.db");
 const WORKSPACE = join(ARCA, "workspace");
+// Eigenes Konfigurationsverzeichnis je Person; auch lokal nie die globale ~/.claude.json anfassen.
+const CLAUDE_HOME = process.env.ARCA_CLAUDE_HOME || join(DATA_DIR, "claude");
 const PYTHON = process.env.ARCA_PYTHON || "python3";
 const CLAUDE = process.env.ARCA_CLAUDE_BIN || "claude";
 const TOOLS = ["mcp__arca__list_tables", "mcp__arca__describe_table", "mcp__arca__query"];
@@ -82,6 +83,37 @@ export function sessionToken(cookieHeader = "") {
 // Einzelne Tastendrücke, die keinen Text transportieren.
 const CONTROL_KEY = /^(?:\x1b(?:\[[0-9;]*[A-Za-z~]|O[A-Z])?|[\r\t\x7f\x03\x04\x08]|[0-9])$/;
 export const isControlKey = data => CONTROL_KEY.test(data);
+
+// Claude-Anmeldung: der OAuth-Code ist ein Token ohne Leerzeichen. Nur so etwas darf im Login-Schritt ohne
+// Pseudonymisierung durch (keine Sätze, keine Namen).
+const AUTH_CODE = /^[A-Za-z0-9_\-#.~]{20,512}$/;
+export const isAuthCode = text => typeof text === "string" && AUTH_CODE.test(text.trim());
+
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-_]/g;
+// eslint-disable-next-line no-control-regex
+const OSC8 = /\x1b\]8;[^;]*;(https:\/\/claude\.ai\/oauth\/authorize\?[^\x07\x1b]+)(?:\x07|\x1b\\)/;
+const LOGIN_URL = /https:\/\/claude\.ai\/oauth\/authorize\?\S+/;
+
+/** Erkennt im Terminal-Output, dass claude auf den Login-Code wartet, und die Login-URL. */
+export class LoginWatch {
+  constructor() { this.raw = ""; this.active = false; }
+
+  /** Neuen Output einlesen; liefert {login, url} bei Zustandswechsel, sonst null. */
+  feed(chunk) {
+    this.raw = (this.raw + chunk).slice(-16000);
+    const text = this.raw.replace(ANSI, "");
+    if (!this.active && /paste code here/i.test(text)) {
+      this.active = true;
+      const url = this.raw.match(OSC8)?.[1] ?? text.match(LOGIN_URL)?.[0] ?? null;
+      return { login: true, url };
+    }
+    return null;
+  }
+
+  /** Nach dem Senden des Codes: zurücksetzen, damit ein erneutes "Paste code here" (falscher Code) erkannt wird. */
+  reset() { this.raw = ""; this.active = false; return { login: false }; }
+}
 
 /** Steuernachricht an den Browser (nicht für das Terminal): Präfix \u0000arca: + JSON. */
 export const CONTROL_PREFIX = "\u0000arca:";
@@ -124,14 +156,30 @@ async function user(req) {
   }
 }
 
-export function claudeEnv(userId, env = process.env) {
-  const out = cleanEnv(env);
-  if (CLAUDE_HOME) {
-    const dir = join(CLAUDE_HOME, createHash("sha256").update(String(userId)).digest("hex").slice(0, 24));
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    out.CLAUDE_CONFIG_DIR = dir;
-    out.HOME = dir;
+/**
+ * Das Arca-Arbeitsverzeichnis (leer bis auf mcp.json; claude hat keine Datei-Tools) als vertraut markieren.
+ * Sonst fragt claude bei jedem Start "Accessing workspace ... trust?" mit Vorauswahl "No, exit".
+ * Schreibt nur in die Arca-eigene Konfiguration der Person (CLAUDE_CONFIG_DIR/.claude.json).
+ */
+export function trustWorkspace(configDir, workspace = WORKSPACE) {
+  const file = join(configDir, ".claude.json");
+  let cfg = {};
+  if (existsSync(file)) {
+    try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch { return; }  // fremdes Format: nicht anfassen
   }
+  cfg.projects ??= {};
+  if (cfg.projects[workspace]?.hasTrustDialogAccepted) return;
+  cfg.projects[workspace] = { ...cfg.projects[workspace], hasTrustDialogAccepted: true };
+  writeFileSync(file, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+}
+
+export function claudeEnv(userId, env = process.env, home = CLAUDE_HOME) {
+  const out = cleanEnv(env);
+  const dir = join(home, createHash("sha256").update(String(userId)).digest("hex").slice(0, 24));
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  trustWorkspace(dir);
+  out.CLAUDE_CONFIG_DIR = dir;
+  out.HOME = dir;
   return out;
 }
 
@@ -174,7 +222,13 @@ function start() {
     const term = pty.spawn(CLAUDE, claudeArgs(config), {
       name: "xterm-256color", cols: 100, rows: 28, cwd: WORKSPACE, env: claudeEnv(who.id),
     });
-    term.onData(d => ws.readyState === ws.OPEN && ws.send(d));
+    const loginWatch = new LoginWatch();
+    term.onData(d => {
+      if (ws.readyState !== ws.OPEN) return;
+      ws.send(d);
+      const change = loginWatch.feed(d);
+      if (change) ws.send(control(change));
+    });
     term.onExit(({ exitCode }) => {
       say(`claude beendet (Code ${exitCode}).`);
       ws.close(1000);
@@ -195,7 +249,7 @@ function start() {
         if (direct || isControlKey(msg.data)) term.write(msg.data);
         else if (Date.now() - lastHint > 4000) {
           lastHint = Date.now();
-          ws.send(control({ blocked: true }));
+          ws.send(control({ blocked: true, login: loginWatch.active }));
         }
       }
       if (msg.type === "prompt" && typeof msg.text === "string" && msg.text.trim() && msg.text.length <= 20000) {
@@ -207,6 +261,20 @@ function start() {
         } catch {
           ws.send(control({ error: "Frage konnte nicht pseudonymisiert werden und wurde nicht gesendet." }));
         }
+      }
+      if (msg.type === "auth_code") {
+        // Nur im Login-Schritt, nur Code-förmig, protokolliert (ohne den Code).
+        if (!loginWatch.active || !isAuthCode(msg.text)) {
+          ws.send(control({ error: "Kein gültiger Login-Code (oder claude wartet gerade nicht auf einen)." }));
+          return;
+        }
+        if (!(await auditEvent("terminal_login_code", who.email))) {
+          ws.send(control({ error: "Login-Code nicht gesendet: Audit-Log nicht erreichbar." }));
+          return;
+        }
+        term.write(msg.text.trim());
+        setTimeout(() => term.write("\r"), 50);
+        ws.send(control(loginWatch.reset()));
       }
       if (msg.type === "unlock" && !direct) {
         // Nur freischalten, wenn das Freischalten protokolliert ist.
