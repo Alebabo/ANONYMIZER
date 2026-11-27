@@ -84,3 +84,9 @@ def us_ssn_is_plausible(value: str) -> bool:
 
 def contains_digit(value: str) -> bool:
     return any(ch.isdigit() for ch in value)
+
+
+def looks_like_handle(value: str) -> bool:
+    """A user name, not a word: digits, dots or underscores, or written in lower case ("danuta21", "t.berger22",
+    "htextor"). Capitalised words after "Benutzer" are mostly ordinary nouns ("Benutzer Konto")."""
+    return any(ch.isdigit() or ch in "._" for ch in value) or value.lstrip("@").islower()

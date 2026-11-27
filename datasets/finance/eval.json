@@ -1,172 +1,19 @@
 {
-  "gretel": {
-    "docs": 453,
-    "seconds": 9.7,
-    "masked_recall": 0.673,
-    "masked_precision_lower_bound": 0.379,
-    "labels": {
-      "name": {
-        "total": 530,
-        "masked": 0.774,
-        "typed": 0.747
-      },
-      "company": {
-        "total": 436,
-        "masked": 0.709,
-        "typed": 0.665
-      },
-      "street_address": {
-        "total": 282,
-        "masked": 0.635,
-        "typed": 0.489
-      },
-      "date": {
-        "total": 118,
-        "masked": 0.958,
-        "typed": 0.958
-      },
-      "phone_number": {
-        "total": 49,
-        "masked": 0.633,
-        "typed": 0.592
-      },
-      "time": {
-        "total": 36,
-        "masked": 0.0,
-        "typed": null
-      },
-      "email": {
-        "total": 33,
-        "masked": 0.939,
-        "typed": 0.909
-      },
-      "employee_id": {
-        "total": 24,
-        "masked": 0.0,
-        "typed": null
-      },
-      "customer_id": {
-        "total": 23,
-        "masked": 0.217,
-        "typed": 0.174
-      },
-      "swift_bic_code": {
-        "total": 22,
-        "masked": 0.273,
-        "typed": 0.273
-      },
-      "iban": {
-        "total": 19,
-        "masked": 0.895,
-        "typed": 0.842
-      },
-      "last_name": {
-        "total": 19,
-        "masked": 0.632,
-        "typed": 0.579
-      },
-      "bban": {
-        "total": 17,
-        "masked": 0.059,
-        "typed": null
-      },
-      "date_of_birth": {
-        "total": 17,
-        "masked": 0.941,
-        "typed": 0.941
-      },
-      "first_name": {
-        "total": 16,
-        "masked": 0.625,
-        "typed": 0.625
-      },
-      "bank_routing_number": {
-        "total": 15,
-        "masked": 0.067,
-        "typed": null
-      },
-      "passport_number": {
-        "total": 12,
-        "masked": 0.333,
-        "typed": null
-      },
-      "account_pin": {
-        "total": 9,
-        "masked": 0.111,
-        "typed": null
-      },
-      "driver_license_number": {
-        "total": 9,
-        "masked": 0.444,
-        "typed": null
-      },
-      "ssn": {
-        "total": 9,
-        "masked": 0.111,
-        "typed": 0.0
-      },
-      "ipv6": {
-        "total": 8,
-        "masked": 1.0,
-        "typed": null
-      },
-      "api_key": {
-        "total": 8,
-        "masked": 0.0,
-        "typed": null
-      },
-      "ipv4": {
-        "total": 7,
-        "masked": 1.0,
-        "typed": null
-      },
-      "user_name": {
-        "total": 6,
-        "masked": 0.167,
-        "typed": null
-      },
-      "password": {
-        "total": 5,
-        "masked": 0.0,
-        "typed": null
-      },
-      "credit_card_number": {
-        "total": 5,
-        "masked": 0.8,
-        "typed": 0.6
-      },
-      "local_latlng": {
-        "total": 5,
-        "masked": 0.0,
-        "typed": null
-      },
-      "credit_card_security_code": {
-        "total": 3,
-        "masked": 0.0,
-        "typed": null
-      },
-      "date_time": {
-        "total": 2,
-        "masked": 1.0,
-        "typed": 1.0
-      }
-    }
-  },
   "syntriq": {
     "docs": 687,
-    "seconds": 19.2,
-    "masked_recall": 0.905,
-    "masked_precision_lower_bound": 0.549,
+    "seconds": 27.8,
+    "masked_recall": 0.976,
+    "masked_precision_lower_bound": 0.539,
     "labels": {
       "PERSON": {
         "total": 2957,
-        "masked": 0.942,
-        "typed": 0.932
+        "masked": 0.952,
+        "typed": 0.947
       },
       "ADDRESS": {
         "total": 1063,
-        "masked": 0.956,
-        "typed": 0.94
+        "masked": 0.999,
+        "typed": 0.98
       },
       "EMAIL_ADDRESS": {
         "total": 961,
@@ -175,13 +22,13 @@
       },
       "PHONE_NUMBER": {
         "total": 837,
-        "masked": 0.989,
+        "masked": 1.0,
         "typed": 0.969
       },
       "CUSTOMER_ID": {
         "total": 469,
-        "masked": 0.382,
-        "typed": 0.345
+        "masked": 0.951,
+        "typed": 0.42
       },
       "DATE_OF_BIRTH": {
         "total": 448,
@@ -205,7 +52,7 @@
       },
       "DE_ID_CARD": {
         "total": 110,
-        "masked": 0.718,
+        "masked": 0.9,
         "typed": null
       },
       "CREDIT_CARD": {
@@ -215,32 +62,32 @@
       },
       "DE_KFZ": {
         "total": 97,
-        "masked": 0.526,
+        "masked": 0.897,
         "typed": null
       },
       "DE_HEALTH_INSURANCE": {
         "total": 80,
-        "masked": 0.713,
+        "masked": 1.0,
         "typed": null
       },
       "DE_TAX_NUMBER": {
         "total": 76,
-        "masked": 0.776,
+        "masked": 1.0,
         "typed": 0.658
       },
       "DE_FUEHRERSCHEIN": {
         "total": 66,
-        "masked": 0.591,
+        "masked": 1.0,
         "typed": null
       },
       "DE_PASSPORT": {
         "total": 61,
-        "masked": 0.754,
+        "masked": 0.934,
         "typed": null
       },
       "DE_LANR": {
         "total": 51,
-        "masked": 0.0,
+        "masked": 1.0,
         "typed": null
       },
       "DE_SOCIAL_SECURITY": {
@@ -250,35 +97,35 @@
       },
       "DE_BSNR": {
         "total": 38,
-        "masked": 0.0,
+        "masked": 1.0,
         "typed": null
       }
     }
   },
   "easyoctopus": {
     "docs": 176,
-    "seconds": 0.6,
-    "masked_recall": 0.586,
-    "masked_precision_lower_bound": 0.702,
+    "seconds": 0.8,
+    "masked_recall": 0.98,
+    "masked_precision_lower_bound": 0.796,
     "labels": {
       "PERSON": {
         "total": 32,
-        "masked": 0.594,
-        "typed": 0.594
+        "masked": 0.844,
+        "typed": 0.844
       },
       "ORDER_ID": {
         "total": 16,
-        "masked": 0.0,
+        "masked": 1.0,
         "typed": null
       },
       "ACCOUNT_ID": {
         "total": 16,
-        "masked": 0.0,
+        "masked": 1.0,
         "typed": null
       },
       "IBAN": {
         "total": 16,
-        "masked": 0.188,
+        "masked": 1.0,
         "typed": 0.0
       },
       "EMAIL": {
@@ -288,8 +135,8 @@
       },
       "ADDRESS": {
         "total": 16,
-        "masked": 0.812,
-        "typed": 0.562
+        "masked": 1.0,
+        "typed": 0.5
       },
       "PHONE": {
         "total": 16,
@@ -303,12 +150,12 @@
       },
       "CUSTOMER_ID": {
         "total": 16,
-        "masked": 0.5,
+        "masked": 1.0,
         "typed": 0.5
       },
       "INSURANCE_ID": {
         "total": 16,
-        "masked": 0.0,
+        "masked": 1.0,
         "typed": null
       },
       "DATE_OF_BIRTH": {
@@ -323,17 +170,17 @@
       },
       "TAX_ID": {
         "total": 16,
-        "masked": 0.5,
+        "masked": 1.0,
         "typed": 0.5
       },
       "PAYMENT_CARD": {
         "total": 16,
-        "masked": 0.688,
+        "masked": 1.0,
         "typed": 0.688
       },
       "BIC": {
         "total": 16,
-        "masked": 0.5,
+        "masked": 1.0,
         "typed": 0.5
       }
     }

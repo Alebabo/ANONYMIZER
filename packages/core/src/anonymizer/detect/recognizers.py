@@ -56,6 +56,7 @@ class IbanRecognizer:
     name = "iban"
     languages: frozenset[str] = frozenset()
     _candidate = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,32}")
+    _lower = re.compile(r"(?<![A-Za-z0-9])[a-z]{2}\d{2}(?:[ ]?[a-z0-9]){11,32}")
     _label = re.compile(r"iban|konto|account", I)
 
     def analyze(self, text: str, language: str) -> Iterable[Detection]:
@@ -76,6 +77,13 @@ class IbanRecognizer:
                 E.IBAN, Category.FINANCIAL_DATA, start, start + end, value,
                 0.99 if valid else 0.5, self.name, validated=valid,
             )
+        for m in self._lower.finditer(text):  # chats in lower case: only with a valid checksum
+            raw = m.group(0).upper()
+            length = v.IBAN_LENGTHS.get(raw[:2])
+            end = self._cut(raw, length) if length else None
+            if end is not None and v.iban_is_valid(raw[:end]):
+                yield make_detection(E.IBAN, Category.FINANCIAL_DATA, m.start(), m.start() + end, m.group(0)[:end],
+                                     0.95, self.name, validated=True)
 
     @staticmethod
     def _cut(raw: str, length: int) -> int | None:
@@ -171,7 +179,9 @@ ADDRESS = RegexRecognizer(
         Pattern(
             # Start only at a token start: with a plain \b every part of a long
             # hyphenated chain is a start and the scan becomes quadratic.
-            rf"(?<![\w-])(?:{_CAP}(?:-{_CAP})*{_STREET_SUFFIX}|{_CAP}(?:\s{_CAP})?\s{_STREET_WORD})"
+            # Streets named after people are hyphenated throughout ("Elzbieta-Rogge-Straße 329").
+            rf"(?<![\w-])(?:{_CAP}(?:-{_CAP})*{_STREET_SUFFIX}|{_CAP}(?:-{_CAP})+-{_STREET_WORD}"
+            rf"|{_CAP}(?:\s{_CAP})?\s{_STREET_WORD})"
             rf"\s\d{{1,4}}\s?[a-z]?(?:,?\s+\d{{5}}[ \t]+{_DE_CITY})?(?!\w)",
             0.85,
         ),
@@ -733,7 +743,9 @@ SELF_INTRO = SelfIntroductionRecognizer()
 _LABEL_SEP = (r"(?:\s(?:der|des|von|für|bei|unserer?|Ihrer?|meiner?|seiner?)\s[\wÄÖÜäöüß.-]{2,30})?"
               r"\s*(?:[:#]|Nr\.?|-Nr\.?)?\s*:?\s*")
 _ID_TOKEN = r"[A-Z0-9](?:[A-Z0-9/.\-]*[A-Z0-9])?"  # ends with a letter or digit, never with a full stop
-_ID_VALUE = rf"(?P<v>{_ID_TOKEN}(?:\s{_ID_TOKEN}){{0,3}})"
+# Further tokens only with a digit ("B2 213 546"), so a following capitalised field name ("KVNR=E550364058 ANSCHRIFT")
+# stays out.
+_ID_VALUE = rf"(?P<v>{_ID_TOKEN}(?:\s(?=[A-Z/.\-]*\d){_ID_TOKEN}){{0,3}})"
 
 
 def _labelled(name: str, entity_type: str, labels: str, value: str = _ID_VALUE, confidence: float = 0.85,
@@ -746,16 +758,47 @@ LABELLED_IDS = [
     _labelled("customer_number_label", "customer_number",
               r"\b(?:Kunden(?:nummer|-?Nr\.?|kennung|-?ID|konto)|Mitgliedsnummer|Mitglieds-Nr\.?|Personalnummer|"
               r"Versichertennummer|Vertragsnummer|Vertrags-Nr\.?|Policennummer|Kontonummer|Konto-Nr\.?|Mandatsreferenz|"
-              r"Customer (?:ID|No\.?|number)|Client (?:ID|number))"),
+              r"Customer (?:ID|No\.?|number)|Client (?:ID|number)|CUSTOMER_ID|kundennummer=)"),
+    # Patients and cases in medical and insurance records ("Fallnummer: P5345664", "Patientenkennung: MRN80839162").
+    _labelled("patient_number_label", "patient_number",
+              r"\b(?:Fall(?:nummer|-?Nr\.?|zahl)|FALLNUMMER=?|Patienten(?:akten)?(?:nummer|-?Nr\.?|kennung|-?ID|zeichen)|"
+              r"Patienten-?ID|PIZ|Vorgangsnummer|Aufnahmenummer|Medical record number|MEDICAL_RECORD_NUMBER|MRN)"),
+    _labelled("employee_number_label", "employee_number",
+              r"\b(?:Mitarbeiter(?:nummer|-?Nr\.?|-?ID|kennung)|Employee[- ]?(?:ID|No\.?|number)|Dienstausweis(?:e|nummer)?)"),
+    # Health and pension insurance numbers in any format once labelled ("Versicherungskennung G729557000",
+    # "Krankenkasse-Nummer 345.678.123-001").
+    _labelled("insurance_number_label", "insurance_number",
+              r"\b(?:Versicherungs(?:nummer|-?Nr\.?|kennung|schein(?:nummer)?)|Versicherten(?:kennung|-?ID)|KV-?Nr\.?|KVNR=?|"
+              r"(?:Kranken|Gesundheits|Renten)(?:versicherungs|versicherten|kassen?(?:versicherten)?)-?(?:nummer|Nr\.?)|"
+              r"Krankenkasse-Nummer|Insurance (?:ID|No\.?|number)|Polic(?:y|e) (?:No\.?|number))(?:\s(?:lautet|ist))?",
+              value=rf"(?![A-Z]\d{{9}}(?!\w)){_ID_VALUE}"),
     _labelled("id_document_label", "id_document",
-              r"\b(?:Personalausweis(?:nummer)?(?:\s(?:mit der|Nr\.))?(?:\sNummer)?|Ausweis(?:nummer)?|Reisepass(?:nummer)?|"
-              r"Pass(?:nummer|-Nr\.?)|Führerschein(?:nummer)?|Passport (?:No\.?|number)|ID card (?:No\.?|number))"),
+              r"\b(?:Personalausweis(?:es|nummer)?(?:\s(?:mit der|Nr\.))?(?:\sNummer)?|Ausweis(?:es|nummer|-?Nr\.?)?|"
+              r"Reisepass(?:es|nummer)?|Pass(?:nummer|-Nr\.?)|Passport(?:nummer)?|Führerschein(?:s|nummer)?|"
+              r"Fahrerlaubnis(?:nummer)?|ID-?Kartennummer|Passport (?:No\.?|number)|ID card (?:No\.?|number)|"
+              r"Driver.?s? licen[cs]e (?:No\.?|number))(?:\s(?:mit\s)?(?:der|die)\s(?:Nummer|ID))?(?:\s(?:lautet|ist|war))?"),
+    # Document numbers without a digit ("Personalausweis CFMXKJMTH"): nine or ten capitals right after the label.
+    _labelled("id_document_label", "id_document",
+              r"\b(?:Personalausweis(?:es|nummer|-Nr\.)?|Ausweis(?:nummer|nr\.|-Nr\.)?|Reisepass(?:es|nummer)?)"
+              r"(?:\s(?:mit\s)?der\sNummer)?(?:\s(?:lautet|ist))?",
+              value=r"(?P<v>[A-Z0-9]{9,10})", validator=None),
+    # User names after a label; chat users do not capitalise, so the value is any handle-like token.
+    RegexRecognizer("username_label", "username", [Pattern(
+        r"\b(?:Benutzer(?:name|kennung|konto)|Nutzername|Login(?:name)?|Username|brugernavn|user_name)(?![a-zäöüß])"
+        r"(?:\s(?:ist|lautet|für))?\s?[:=]?\s?[\"'„‚‘“]?"
+        r"(?!(?:für|von|mit|der|die|das|den|und|oder|ist|war|wird|wurde|lautet|bei|im|in|am|an|auf|zu|per|via|fehlgeschlagen)\b)"
+        r"(?P<v>(?=@?[a-z]|[\w@.\-]*[\d._])@?[A-Za-z][\w.\-]{2,39})(?![\w/-])",
+        0.85, group="v"), Pattern(
+        r"\b(?:Benutzer|Nutzers?|User)(?![a-zäöüß])\s?[:=]?\s?[\"'„‚‘“]?(?P<v>(?=[\w@.\-]*[\d._])@?[A-Za-z][\w.\-]{2,39})(?![\w/-])",
+        0.8, group="v")], validator=v.looks_like_handle, checksum=False),
     _labelled("health_insurance_label", "health_insurance_number",
-              r"\b(?:Krankenversichertennummer|Krankenversicherungsnummer|KVNR|Versicherten-?Nr\.?)",
+              r"\b(?:Krankenversichertennummer|Krankenversicherungsnummer|KVNR=?|Versicherten-?Nr\.?|Krankenversicherten-Nr\.?|"
+              r"Krankenkassenversichertennummer|KV-?Nr\.?|Versichertenkennung|Versicherungsnummer|Versicherungskennung)"
+              r"(?:\s(?:lautet|ist))?",
               value=r"(?P<v>[A-Z]\d{9})"),
     _labelled("license_plate_label", "license_plate",
               r"\b(?:(?:Fahrzeug|amtliche[sn]?\s)?[Kk]ennzeichen|Kfz-Kennzeichen|License plate)",
-              value=r"(?P<v>[A-ZÄÖÜ]{1,3}[-\s][A-Z]{1,2}\s?\d{1,4}[EH]?)"),
+              value=r"(?P<v>[A-ZÄÖÜ]{1,3}[-\s][A-Z]{1,2}[-\s]?\d{1,4}[EH]?)"),
     _labelled("tax_number_label", E.TAX_NUMBER, r"\b(?:Steuernummer|St\.-?Nr\.?|Steuer-Nr\.?)",
               value=r"(?P<v>\d{2,3}/\d{3}/\d{4,5}|\d{10,13})"),
     # A labelled IBAN with a failed checksum is kept by the IBAN recognizer itself (validated=False, so a policy
@@ -763,6 +806,49 @@ LABELLED_IDS = [
     _labelled("bic_label", E.BIC, r"\b(?:BIC|SWIFT(?:-Code)?|Bankcode)", value=r"(?P<v>[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)",
               confidence=0.75, validator=None),
 ]
+
+# German number plates written with two hyphens ("LWL-BF-478", "KG-E-748E"); without hyphens they are too close
+# to product codes.
+LICENSE_PLATE = RegexRecognizer(
+    "license_plate", "license_plate",
+    [Pattern(r"(?<![\w-])[A-ZÄÖÜ]{1,3}-[A-Z]{1,2}-\d{1,4}[EH]?(?![\w-])", 0.7)],
+    checksum=False,
+)
+
+# Form fields and record exports: "Vorname: Regina", "Nachname Trub", "Patientin: Tiina Ahonen", "nachname=Kummer",
+# "Von: Gebhard Wilms". The label says it is a name, so one capitalised word is enough.
+_PERSON_FIELD = (r"(?:Vor-?name|Nach-?name|Familienname|Geburtsname|Rufname|Vor- und Nachname|Name des (?:Kunden|"
+                 r"Patienten|Versicherten|Antragstellers|Empfängers)|Patient(?:in)?|Versicherte[rn]?|Kontoinhaber(?:in)?|"
+                 r"Ansprechpartner(?:in)?|Sachbearbeiter(?:in)?|Freigabe|Dokumentiert durch|Bearbeiter(?:in)?|Von|An|"
+                 r"Absender(?:in)?|Empfänger(?:in)?|NAME|bearbeiter|vorname|nachname)")
+_FIELD_WORDS = {"Vorname", "Nachname", "Name", "Familienname", "Mit", "Bitte", "Hallo", "Sehr", "Liebe", "Lieber",
+                "Datum", "Betreff", "Telefon", "Adresse", "Anschrift", "Geburtsdatum", "Kundennummer", "Herr", "Frau"}
+PERSON_FIELD = RegexRecognizer(
+    "person_field", E.PERSON,
+    [Pattern(rf"(?<![\w-])(?:{_PERSON_FIELD})\s?[:=]\s?(?P<v>{_FULL_NAME})(?![\w-])", 0.75, group="v"),
+     Pattern(rf"(?<![\w-])(?:Vorname|Nachname|Familienname)\s(?P<v>{_NAME})(?![\w-])", 0.75, group="v")],
+    validator=lambda x: x.split()[0] not in NAME_STOPWORDS and x.split()[0] not in _FIELD_WORDS,
+    checksum=False,
+)
+
+# Chat transcripts: "[15:48] sylvie: das sepa-mandat ...". The speaker is a name, often lowercase.
+CHAT_SPEAKER = RegexRecognizer(
+    "chat_speaker", E.PERSON,
+    [Pattern(r"(?m)\[\d{1,2}:\d{2}(?::\d{2})?\]\s?(?P<v>[A-Za-zÄÖÜäöüß][\w.\-]{1,30}(?:\s[A-Za-zÄÖÜäöüß][\w.\-]{1,30})?):",
+             0.75, group="v")],
+    checksum=False,
+)
+
+# An address announced by a label, also foreign ones ("Adresse: Rue du Midi 21, Brüssel", "Anschrift: Mainschleife 12").
+ADDRESS_FIELD = RegexRecognizer(
+    "address_field", E.ADDRESS,
+    [Pattern(r"(?<![\w-])(?:Anschrift|Adresse|Wohnanschrift|Wohnadresse|Rechnungsadresse|Lieferadresse|Postanschrift|"
+             r"Straße und Hausnummer|Straßenadresse|Address|Street Address|Wohnsitz)(?:\s(?:lautet|ist))?\s?:?\s"
+             r"(?P<v>(?=[A-ZÄÖÜ0-9])[^\n:;]{3,60}?\d{1,5}[a-z]?(?:[,\s]+(?:Apt\.|Hausnummer|Nummer|Piano|Etage|Stock)\s?\d{1,4})?"
+             r"(?:,\s\d{4,5}\s[A-ZÄÖÜ][\w-]+(?:\s[A-ZÄÖÜ][\w-]+)?|,\s[A-ZÄÖÜ][\w-]+(?:\s[A-ZÄÖÜ][\w-]+)?)?)"
+             r"(?=[\s,.;)\]\"]|$)", 0.7, group="v")],
+    checksum=False,
+)
 
 IP_ADDRESS = RegexRecognizer(
     "ip_address", "ip_address",
@@ -783,12 +869,25 @@ class NumberRecognizer:
     languages: frozenset[str] = frozenset()
     _candidate = re.compile(r"(?<![\w])\d{4,}(?![\w])")
     _year = re.compile(r"(?:19|20)\d{2}")
+    # Identifiers that mix letters and digits ("P5345664", "MRN80839162", "KD78576-JJ", "EMP468380"): at least four
+    # digits in one token. Letter-digit names such as "B217" or "MP3" have fewer digits.
+    _mixed = re.compile(r"(?<![\w/.-])(?=[\w/.-]*(?:[A-Za-z]\d|\d[A-Za-z]))(?=(?:[A-Za-z/.-]*\d){4})[A-Za-z0-9](?:[A-Za-z0-9/.\-]*[A-Za-z0-9])?(?![\w/-])")
+    # Digit groups ("123.456.789-10", "PN 77 807 9", "VN/665.287.16"): seven digits or more in groups of up to four.
+    _unit = re.compile(r"[\d.,-]+(?:mg|ml|µg|mcg|g|kg|sec|min|mm|cm|km|kb|mb|gb|kw|kwh|mah|ps|hz|ie|iu|ccm)", I)
+    _date = re.compile(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{2}-\d{2}")
+    _grouped = re.compile(r"(?<![\w.,/-])(?:[A-Z]{1,3}[ /])?\d{2,4}(?:[ ./-]\d{1,4}){2,5}(?![\w]|[.,]\d)")
 
     def analyze(self, text: str, language: str) -> Iterable[Detection]:
         for m in self._candidate.finditer(text):
             if self._year.fullmatch(m.group(0)):
                 continue
             yield make_detection("number", Category.PERSONAL_DATA, m.start(), m.end(), m.group(0), 0.6, self.name)
+        for m in self._mixed.finditer(text):
+            if not m.group(0).isdigit() and not self._unit.fullmatch(m.group(0)):
+                yield make_detection("number", Category.PERSONAL_DATA, m.start(), m.end(), m.group(0), 0.55, self.name)
+        for m in self._grouped.finditer(text):
+            if sum(c.isdigit() for c in m.group(0)) >= 7 and not self._date.fullmatch(m.group(0)):
+                yield make_detection("number", Category.PERSONAL_DATA, m.start(), m.end(), m.group(0), 0.5, self.name)
 
 
 NUMBER = NumberRecognizer()
@@ -799,7 +898,7 @@ def builtin_recognizers() -> list:
         EMAIL, PHONE, IBAN, BIC, CREDIT_CARD, MONEY, TAX_ID, TAX_NUMBER, VAT_ID, SOCIAL_SECURITY, US_SSN,
         ADDRESS, DATE, CASE_NUMBER, LEGAL_CITATION, COURT, HEALTH, BIOMETRIC, *SPECIAL, CRIMINAL_RECORD,
         PRIVILEGE, BUSINESS_SECRET, ORGANIZATION, ORGANIZATION_HYPHEN, FIRM_CUE, PERSON, SELF_INTRO, *LABELLED_IDS,
-        IP_ADDRESS, NUMBER,
+        LICENSE_PLATE, PERSON_FIELD, CHAT_SPEAKER, ADDRESS_FIELD, IP_ADDRESS, NUMBER,
     ]
 
 

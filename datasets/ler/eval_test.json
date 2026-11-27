@@ -2,96 +2,96 @@
   "split": "test",
   "docs": 1113,
   "ner": true,
-  "seconds": 22.8,
+  "seconds": 21.1,
   "entities_partial": {
     "micro": {
-      "tp": 536,
-      "fp": 556,
-      "fn": 276,
-      "precision": 0.491,
-      "recall": 0.66,
-      "f1": 0.563
+      "tp": 629,
+      "fp": 57,
+      "fn": 183,
+      "precision": 0.917,
+      "recall": 0.775,
+      "f1": 0.84
     },
     "labels": {
       "PER": {
-        "tp": 238,
-        "fp": 154,
-        "fn": 86,
-        "precision": 0.607,
-        "recall": 0.735,
-        "f1": 0.665
+        "tp": 293,
+        "fp": 31,
+        "fn": 31,
+        "precision": 0.904,
+        "recall": 0.904,
+        "f1": 0.904
       },
       "ORG": {
-        "tp": 101,
-        "fp": 212,
-        "fn": 152,
-        "precision": 0.323,
-        "recall": 0.399,
-        "f1": 0.357
+        "tp": 132,
+        "fp": 17,
+        "fn": 121,
+        "precision": 0.886,
+        "recall": 0.522,
+        "f1": 0.657
       },
       "LOC": {
-        "tp": 197,
-        "fp": 190,
-        "fn": 38,
-        "precision": 0.509,
-        "recall": 0.838,
-        "f1": 0.633
+        "tp": 204,
+        "fp": 9,
+        "fn": 31,
+        "precision": 0.958,
+        "recall": 0.868,
+        "f1": 0.911
       }
     },
     "sources": {
       "ler": {
-        "tp": 536,
-        "fp": 556,
-        "fn": 276,
-        "precision": 0.491,
-        "recall": 0.66,
-        "f1": 0.563
+        "tp": 629,
+        "fp": 57,
+        "fn": 183,
+        "precision": 0.917,
+        "recall": 0.775,
+        "f1": 0.84
       }
     }
   },
   "entities_strict": {
     "micro": {
-      "tp": 462,
-      "fp": 630,
-      "fn": 350,
-      "precision": 0.423,
-      "recall": 0.569,
-      "f1": 0.485
+      "tp": 584,
+      "fp": 102,
+      "fn": 228,
+      "precision": 0.851,
+      "recall": 0.719,
+      "f1": 0.78
     },
     "labels": {
       "PER": {
-        "tp": 201,
-        "fp": 191,
-        "fn": 123,
-        "precision": 0.513,
-        "recall": 0.62,
-        "f1": 0.561
+        "tp": 265,
+        "fp": 59,
+        "fn": 59,
+        "precision": 0.818,
+        "recall": 0.818,
+        "f1": 0.818
       },
       "ORG": {
-        "tp": 89,
-        "fp": 224,
-        "fn": 164,
-        "precision": 0.284,
-        "recall": 0.352,
-        "f1": 0.314
+        "tp": 118,
+        "fp": 31,
+        "fn": 135,
+        "precision": 0.792,
+        "recall": 0.466,
+        "f1": 0.587
       },
       "LOC": {
-        "tp": 172,
-        "fp": 215,
-        "fn": 63,
-        "precision": 0.444,
-        "recall": 0.732,
-        "f1": 0.553
+        "tp": 201,
+        "fp": 12,
+        "fn": 34,
+        "precision": 0.944,
+        "recall": 0.855,
+        "f1": 0.897
       }
     },
     "sources": {
       "ler": {
-        "tp": 462,
-        "fp": 630,
-        "fn": 350,
-        "precision": 0.423,
-        "recall": 0.569,
-        "f1": 0.485
+        "tp": 584,
+        "fp": 102,
+        "fn": 228,
+        "precision": 0.851,
+        "recall": 0.719,
+        "f1": 0.78
       }
     }
   },
@@ -118,27 +118,13 @@
     "rate": 0.999
   },
   "false_positives_on_public_references": {
-    "ORG on INN": 57,
-    "LOC on RS": 47,
-    "PER on LIT": 42,
-    "ORG on VT": 40,
-    "ORG on RS": 39,
-    "PER on RS": 29,
-    "LOC on LIT": 22,
-    "LOC on INN": 10,
-    "LOC on VT": 10,
-    "ORG on EUN": 8,
-    "ORG on LIT": 7,
-    "LOC on VS": 6,
-    "LOC on GRT": 6,
-    "ORG on GS": 6,
-    "LOC on GS": 3,
-    "ORG on VS": 3,
-    "ORG on VO": 3,
-    "PER on VO": 2,
-    "PER on GS": 2,
-    "LOC on EUN": 2,
-    "LOC on VO": 2,
-    "ORG on GRT": 1
+    "ORG on INN": 4,
+    "PER on RS": 4,
+    "LOC on VT": 3,
+    "ORG on VT": 3,
+    "ORG on RS": 3,
+    "LOC on INN": 2,
+    "LOC on LIT": 1,
+    "LOC on VS": 1
   }
 }
