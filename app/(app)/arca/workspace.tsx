@@ -43,7 +43,7 @@ const cellClass = (key: string) => key === "sachverhalt" || key === "dokumente"
   ? "min-w-[22rem] max-w-[32rem] align-top text-xs whitespace-normal [overflow-wrap:anywhere]"
   : "align-top text-xs whitespace-nowrap";
 
-export function ArcaWorkspace({ tables }: { tables: ArcaTables }) {
+export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; terminalUrl: string }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
   const [preview, setPreview] = useState<ArcaPreview | null>(null);
@@ -194,9 +194,9 @@ export function ArcaWorkspace({ tables }: { tables: ArcaTables }) {
         {message && <span className="bg-light-green text-dark-green rounded-md px-2 py-0.5 text-xs">{message}</span>}
       </div>
 
-      <Widget title="Claude" description="claude-CLI · einziger Datenzugang: Arca-MCP (nur visible.db, nur SELECT), keine Built-in-Tools">
+      <Widget title="Claude" description="claude-CLI mit deinem eigenen Claude-Abo (beim ersten Start anmelden) · einziger Datenzugang: Arca-MCP (nur visible.db, nur SELECT), keine Built-in-Tools">
         {tables.released ? (
-          <Terminal ref={terminal} />
+          <Terminal ref={terminal} url={terminalUrl} />
         ) : (
           <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
             <Lock className="h-5 w-5" aria-hidden />

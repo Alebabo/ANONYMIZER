@@ -1,0 +1,14 @@
+# Nur für deploy/arca.Dockerfile (Build-Kontext = Repo-Root). Alles außer dem Nötigen ausschließen.
+*
+!packages/core/pyproject.toml
+!packages/core/README.md
+!packages/core/src
+!packages/core/models/cato-1.1
+!arca/pyproject.toml
+!arca/src
+!arca/mcp/server.py
+!arca/terminal/server.mjs
+!arca/terminal/package.json
+!arca/terminal/package-lock.json
+!deploy/arca-entrypoint.sh
+**/__pycache__

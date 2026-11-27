@@ -25,13 +25,17 @@ jobs:
           cache-dependency-path: packages/core/pyproject.toml
       - name: Install
         run: |
-          pip install -e "packages/core[dev]" -e "sdk/python[dev]"
+          sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr tesseract-ocr-deu
+          pip install -e "packages/core[dev,ocr]" -e "sdk/python[dev]" -e "arca[dev]"
           python -m spacy download en_core_web_lg
       - name: Test core
         working-directory: packages/core
         run: pytest -q
       - name: Test SDK
         working-directory: sdk/python
+        run: pytest -q
+      - name: Test Arca
+        working-directory: arca
         run: pytest -q
       - name: Corpus evaluation
         working-directory: packages/core
@@ -47,4 +51,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Test Arca-Terminal
+        run: npm --prefix arca/terminal ci && npm --prefix arca/terminal test
       - run: npx next build

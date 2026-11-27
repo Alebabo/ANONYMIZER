@@ -13,6 +13,8 @@ services:
     environment:
       ANONYMIZER_API_URL: http://api:8080
       ANONYMIZER_PUBLIC_API_URL: https://openanonymizer.tma-it-solution.de
+      ARCA_API_URL: http://arca:8100
+      ARCA_TERMINAL_URL: /arca/terminal
     read_only: true
     tmpfs:
       - /tmp
@@ -23,9 +25,33 @@ services:
       - ALL
     restart: unless-stopped
 
+  # Arca-Prototyp: Service + Claude-Terminal (jede Person mit eigenem Claude-Abo, Login über das Dashboard).
+  # Kein veröffentlichter Port. ARCA_SECRET steht in der .env auf dem Server (Deploy legt ihn an).
+  arca:
+    image: anonymizer-arca:latest
+    pull_policy: never
+    depends_on: [api]
+    environment:
+      ARCA_SECRET: ${ARCA_SECRET:?ARCA_SECRET fehlt in .env}
+      ARCA_AUTH_API_URL: http://api:8080
+      ARCA_SERVICE_URL: http://127.0.0.1:8100
+      ARCA_ALLOWED_ORIGINS: https://openanonymizer.tma-it-solution.de
+      # Docker erlaubt kein unshare --net: OCR läuft lokal im Container, aber ohne eigene Netztrennung.
+      ARCA_OCR_ISOLATION: auto
+    volumes:
+      - arca-data:/data/arca
+      - arca-claude:/data/claude
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
   caddy:
     image: caddy:2.8-alpine
-    depends_on: [api, dashboard]
+    depends_on: [api, dashboard, arca]
     command: ["caddy", "run", "--config", "/etc/caddy-conf/Caddyfile", "--adapter", "caddyfile"]
     environment:
       ANONYMIZER_DOMAIN: openanonymizer.tma-it-solution.de
@@ -42,5 +68,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  arca-data:
+  arca-claude:
   caddy-data:
   caddy-config:

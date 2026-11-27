@@ -1,4 +1,5 @@
 import "server-only";
+import { api, isDemo } from "@/lib/anonymizer-api";
 
 /**
  * Server-side access to the local Arca service (arca/src/arca/service.py). The service is the only component
@@ -25,7 +26,21 @@ export type ArcaTables = {
 
 export class ArcaError extends Error {}
 
+/**
+ * Login check for the Arca tab and every Arca action. In live mode (ANONYMIZER_API_URL set) the session
+ * token is validated by the API (GET /v1/auth/me); a missing or expired session redirects to /login. The
+ * middleware alone only checks that a cookie exists. Demo mode (local development) has no login.
+ */
+export async function requireArcaUser(): Promise<void> {
+  if (isDemo()) return;
+  await api<unknown>("/v1/auth/me");
+}
+
+/** WebSocket URL of the terminal. Relative (e.g. "/arca/terminal") = same host as the dashboard, via Caddy. */
+export const ARCA_TERMINAL_URL = process.env.ARCA_TERMINAL_URL || "ws://127.0.0.1:8101";
+
 export async function arca<T>(path: string, body?: unknown): Promise<T> {
+  await requireArcaUser();
   let res: Response;
   const form = body instanceof FormData;
   try {

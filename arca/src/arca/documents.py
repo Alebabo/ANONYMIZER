@@ -1,7 +1,9 @@
 """Dokumente zu einem Mandat: Text (bei Scans per lokalem OCR) wird nur in vault.db gespeichert.
 
 * Nutzt die Extraktion und das OCR von anonymizer-core (``anonymizer.documents``, ``anonymizer.ocr``).
-* Arca verlangt Netzwerk-Isolation für OCR (``require``): ohne ``unshare --net`` wird kein Scan gelesen.
+* Arca verlangt standardmäßig Netzwerk-Isolation für OCR (``ARCA_OCR_ISOLATION=require``): ohne
+  ``unshare --net`` wird kein Scan gelesen. In Docker (kein unshare) wird ``auto`` gesetzt; dann ist die
+  Netzwerkkonfiguration des Containers die Grenze.
 * Gespeichert werden Text, Dateiname, Format und SHA-256, nicht die Originaldatei (Datenminimierung).
 * Der Text erscheint in Spalte "Dokumente" (Freitext) und geht nur über Vorschau und Freigabe nach A.
 """
@@ -9,6 +11,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 import time
 
@@ -25,7 +28,7 @@ class UploadError(ValueError):
 
 def ocr_engine() -> TesseractOCR | None:
     try:
-        engine = TesseractOCR(isolation="require")
+        engine = TesseractOCR(isolation=os.environ.get("ARCA_OCR_ISOLATION") or "require")
     except OCRError:
         return None
     return engine if engine.available() else None

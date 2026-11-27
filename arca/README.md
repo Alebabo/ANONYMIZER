@@ -77,6 +77,24 @@ visible.db leer angelegt (beides in `arca/data/`, gitignoriert).
 Konfiguration: `ARCA_DATA_DIR`, `ARCA_API_URL` (Dashboard → Service), `NEXT_PUBLIC_ARCA_TERMINAL_URL`,
 `ARCA_TERMINAL_PORT`, `ARCA_ALLOWED_ORIGINS`, `ARCA_CLAUDE_BIN`, `ARCA_PYTHON`.
 
+## Betrieb auf dem Server
+
+Deploy über `.github/workflows/deploy.yml` (bei grüner CI auf main): Image `deploy/arca.Dockerfile` (Ubuntu 24.04,
+Tesseract, Cato, claude-CLI) wird in GitHub Actions gebaut und geladen, Container `arca` in
+`deploy/docker-compose.prod.yml`. Erreichbar unter https://openanonymizer.tma-it-solution.de/arca
+(cato.tma-it-solution.de/arca leitet dorthin weiter, siehe Repo tma-it-solutions, `vercel.json`).
+
+- **Login:** Seite und alle Aktionen prüfen die Dashboard-Sitzung bei der API (`/v1/auth/me`), der
+  Terminal-WebSocket (`/arca/terminal`, über Caddy) ebenso, plus Origin-Prüfung.
+- **Eigenes Claude-Abo:** kein API-Key auf dem Server; `ANTHROPIC_*` wird aus Claudes Umgebung entfernt. Jede
+  Person meldet sich im Terminal einmal mit ihrem Claude-Konto an; die Anmeldung liegt in einem eigenen
+  Verzeichnis pro Dashboard-Nutzer (Volume `arca-claude`).
+- **Vereinfachte Abschottung (bewusst gewählt):** Service, Terminal und Claude laufen in einem Container mit
+  gemeinsamem Datenverzeichnis; die Trennung B/A hängt am Code (keine Built-in-Tools, MCP nur auf visible.db),
+  nicht an Volumes. OCR läuft lokal im Container, aber ohne eigene Netztrennung (Docker erlaubt kein unshare).
+- `ARCA_SECRET` legt der Deploy einmalig in der Server-`.env` an. Sichern: ohne ihn ändern sich alle Tokens.
+- Ein Datenbestand für alle angemeldeten Personen (keine Trennung nach Organisation).
+
 ## Komponenten
 
 | Pfad | Aufgabe |

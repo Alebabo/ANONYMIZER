@@ -6,10 +6,14 @@ import "@xterm/xterm/css/xterm.css";
 
 export type TerminalHandle = { selection: () => string };
 
-const URL = process.env.NEXT_PUBLIC_ARCA_TERMINAL_URL || "ws://127.0.0.1:8101";
+/** Relative URLs ("/arca/terminal") use the dashboard's host: wss:// behind HTTPS, so the session cookie is sent. */
+function resolve(url: string): string {
+  if (/^wss?:\/\//.test(url)) return url;
+  return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${url}`;
+}
 
 /** xterm.js an den Arca-Terminal-Server (arca/terminal/server.mjs). Der Server startet claude erst nach Freigabe. */
-export function Terminal({ ref }: { ref?: Ref<TerminalHandle> }) {
+export function Terminal({ ref, url }: { ref?: Ref<TerminalHandle>; url: string }) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<XTerm | null>(null);
   useImperativeHandle(ref, () => ({ selection: () => term.current?.getSelection() ?? "" }), []);
@@ -22,12 +26,16 @@ export function Terminal({ ref }: { ref?: Ref<TerminalHandle> }) {
     t.open(box.current);
     fit.fit();
     term.current = t;
-    const ws = new WebSocket(URL);
+    const target = resolve(url);
+    const ws = new WebSocket(target);
     const send = (msg: object) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify(msg));
     ws.onopen = () => send({ type: "resize", cols: t.cols, rows: t.rows });
     ws.onmessage = e => t.write(typeof e.data === "string" ? e.data : "");
-    ws.onerror = () => t.write(`\r\n\x1b[31mTerminal-Server nicht erreichbar (${URL}). Start: npm --prefix arca/terminal start\x1b[0m\r\n`);
-    ws.onclose = e => e.code === 4001 && t.write("\r\n\x1b[33mErst freigeben.\x1b[0m\r\n");
+    ws.onerror = () => t.write(`\r\n\x1b[31mTerminal-Server nicht erreichbar (${target}).\x1b[0m\r\n`);
+    ws.onclose = e => {
+      if (e.code === 4001) t.write("\r\n\x1b[33mErst freigeben.\x1b[0m\r\n");
+      if (e.code === 4003) t.write("\r\n\x1b[31mNicht angemeldet. Seite neu laden und einloggen.\x1b[0m\r\n");
+    };
     const input = t.onData(data => send({ type: "input", data }));
     const onResize = () => { fit.fit(); send({ type: "resize", cols: t.cols, rows: t.rows }); };
     window.addEventListener("resize", onResize);
@@ -38,7 +46,7 @@ export function Terminal({ ref }: { ref?: Ref<TerminalHandle> }) {
       t.dispose();
       term.current = null;
     };
-  }, []);
+  }, [url]);
 
   return <div ref={box} className="h-[28rem] w-full overflow-hidden rounded-md bg-[#111111] p-2" />;
 }

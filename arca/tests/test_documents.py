@@ -9,6 +9,8 @@ import sqlite3
 import pytest
 
 from arca import vault_db
+from anonymizer.ocr import TesseractOCR
+
 from arca.documents import UploadError, add_document, ocr_engine
 from arca.release import release
 
@@ -80,8 +82,11 @@ def test_scan_rejected_without_ocr(vault):
 
 
 def test_arca_requires_network_isolation(monkeypatch):
+    monkeypatch.delenv("ARCA_OCR_ISOLATION", raising=False)
     monkeypatch.setattr("anonymizer.ocr._unshare_works", lambda: False)
     assert ocr_engine() is None
+    monkeypatch.setenv("ARCA_OCR_ISOLATION", "auto")  # Docker: bewusst gelockert
+    assert (ocr_engine() is not None) == (TesseractOCR(isolation="auto").available())
 
 
 def test_text_upload_and_errors(vault):

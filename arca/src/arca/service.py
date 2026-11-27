@@ -130,4 +130,7 @@ def create_app(config: Config | None = None, anonymizer: ArcaAnonymizer | None =
 def run() -> None:  # pragma: no cover
     import uvicorn
 
-    uvicorn.run(create_app(), host="127.0.0.1", port=8100)
+    import os
+
+    # Lokal nur 127.0.0.1; im Container 0.0.0.0, aber nur im internen Docker-Netz erreichbar (kein Port nach außen).
+    uvicorn.run(create_app(), host=os.environ.get("ARCA_HOST", "127.0.0.1"), port=int(os.environ.get("ARCA_PORT", 8100)))

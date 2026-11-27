@@ -13,7 +13,8 @@ name: Deploy
 #
 # Beim ersten Lauf installiert der Job Docker (falls fehlend) und legt eine .env
 # mit zufälligen Schlüsseln an. Die .env bleibt ausschließlich auf dem Server und
-# wird nie überschrieben. ANONYMIZER_VAULT_KEY daraus extern sichern.
+# wird nie überschrieben (nur fehlende Schlüssel wie ARCA_SECRET werden ergänzt).
+# ANONYMIZER_VAULT_KEY und ARCA_SECRET daraus extern sichern.
 on:
   workflow_run:
     workflows: [CI]
@@ -41,6 +42,10 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           lfs: true  # German NER model Cato (packages/core/models/cato-1.1), copied into the API image
+
+      # Vor allen Änderungen am Server: scheitert der Build, bleibt die Produktion unverändert.
+      - name: Arca-Image bauen
+        run: docker build -f deploy/arca.Dockerfile -t anonymizer-arca:latest .
 
       - name: SSH einrichten
         env:
@@ -111,6 +116,9 @@ jobs:
           docker build -f deploy/dashboard.Dockerfile -t anonymizer-dashboard:latest .
           docker save anonymizer-dashboard:latest | gzip | ssh "$USER@$HOST" 'gunzip | docker load'
 
+      - name: Arca-Image übertragen
+        run: docker save anonymizer-arca:latest | gzip | ssh "$USER@$HOST" 'gunzip | docker load'
+
       - name: .env beim ersten Mal anlegen
         run: |
           ssh "$USER@$HOST" "DEST='$DEST' bash -s" <<'EOF'
@@ -124,6 +132,12 @@ jobs:
               echo "ANONYMIZER_VAULT_KEY=$(openssl rand -base64 32)"
             } > .env
             echo ".env neu angelegt"
+          fi
+          # Arca: HMAC-Schlüssel für Tokens, einmalig erzeugt, nie überschrieben
+          if ! grep -q '^ARCA_SECRET=' .env; then
+            umask 077
+            echo "ARCA_SECRET=$(openssl rand -hex 32)" >> .env
+            echo "ARCA_SECRET ergänzt"
           fi
           EOF
 
@@ -156,6 +170,13 @@ jobs:
           done
           [ -n "$ok" ] || { echo "API-Health-Check fehlgeschlagen"; docker compose logs --tail 100 api; exit 1; }
           echo "API ok"
+          ok=""
+          for i in $(seq 1 30); do
+            if docker compose exec -T arca python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/status')" </dev/null >/dev/null 2>&1; then ok=1; break; fi
+            sleep 5
+          done
+          [ -n "$ok" ] || { echo "Arca-Health-Check fehlgeschlagen"; docker compose logs --tail 60 arca; exit 1; }
+          echo "Arca ok"
           DOMAIN=openanonymizer.tma-it-solution.de
           for i in $(seq 1 24); do
             code=$(curl -ks -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/login" || true)
