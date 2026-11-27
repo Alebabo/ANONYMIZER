@@ -11,6 +11,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Local OCR for scanned PDFs and images (Tesseract with German data, offline; see src/anonymizer/ocr.py).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu \
+ && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first for layer caching.
 COPY pyproject.toml README.md ./
 COPY src ./src
@@ -21,7 +26,7 @@ RUN --mount=type=secret,id=ca_bundle,required=false \
     if [ -f /run/secrets/ca_bundle ]; then \
       export PIP_CERT=/run/secrets/ca_bundle REQUESTS_CA_BUNDLE=/run/secrets/ca_bundle SSL_CERT_FILE=/run/secrets/ca_bundle; \
     fi \
- && pip install . \
+ && pip install ".[ocr]" \
  && python -m spacy download en_core_web_lg
 
 # German NER: Cato 1.1, a standalone spaCy pipeline (about 43 MB).

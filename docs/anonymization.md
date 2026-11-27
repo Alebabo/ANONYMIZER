@@ -100,12 +100,19 @@ anonymizer restore answer.txt --vault vault.json --namespace matter-17
 - **Size and zip bombs:** uploads are size-limited. DOCX is checked for zip bombs before parsing.
 - **Into review:** these situations go to review (`review`), because they can't be anonymized safely:
   - comments, tracked changes and embedded objects in DOCX;
-  - PDF pages without a text layer (scans, OCR missing).
+  - PDF pages without a text layer (scans): read by local OCR and flagged for review; without OCR reported as unreadable.
+  - Images (PNG, JPEG, TIFF): OCR only, always flagged for review.
 - **Independent check:** after rewriting a DOCX, its text is extracted again and checked for remaining original values.
 - **Images in DOCX** stay unchanged and are not inspected (`notes`).
 
 ### Limitations
 
-- **No OCR.** Scanned PDFs are not processed.
+- **OCR is local Tesseract (German).** Scanned PDF pages and images are rendered and recognized on the machine
+  (`anonymizer/ocr.py`): input via stdin, no temporary files, minimal environment, and on Linux in a network
+  namespace without network (`ANONYMIZER_OCR_ISOLATION=auto|require|off`). Docker blocks unprivileged
+  namespaces by default; there the container's network policy is the barrier. Recognition errors
+  ("Mustermarm") can hide names from detection, so every OCR page is a document warning and goes to review
+  under policies that review uncertain documents. Handwriting and poor scans are read badly.
+  Install: `apt-get install tesseract-ocr tesseract-ocr-deu` and `pip install -e "packages/core[ocr]"`.
 - **PDF output is plain text.** A visually redacted PDF would need a PDF library with real content removal. The common option, PyMuPDF, is AGPL-licensed and therefore deliberately not used.
 - **Hyperlinks and fields in DOCX:** if an affected paragraph contains them, it is rebuilt as a single run. Inline formatting of that one paragraph is lost.

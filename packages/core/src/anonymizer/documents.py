@@ -1,4 +1,4 @@
-"""Document formats: TXT/MD, DOCX (anonymized in place) and PDF (text only).
+"""Document formats: TXT/MD, DOCX (anonymized in place), PDF (text only) and images (OCR).
 
 Security notes
 * Inputs are untrusted. Uploads are size-limited, the format is checked by
@@ -9,10 +9,13 @@ Security notes
   tracked changes and embedded objects cannot be anonymized reliably; their
   presence is reported as a warning, which makes the classification
   degraded (never "low") and puts the document into review.
-* PDF: only the text layer is extracted; the result is anonymized plain
-  text, not a redacted PDF. Pages without a text layer (scans) are reported:
-  OCR is not part of OpenAnonymizer yet, so such documents must not be treated as
-  clean.
+* PDF: the text layer is extracted; the result is anonymized plain
+  text, not a redacted PDF. Pages without a text layer (scans) are read with
+  local, offline OCR (:mod:`anonymizer.ocr`, Tesseract) when it is installed.
+  OCR pages are always reported as a warning (recognition errors can hide
+  names from detection), so such documents go to review. Without OCR they are
+  reported as unreadable and must not be treated as clean.
+* Images (PNG, JPEG, TIFF): OCR only, same warning.
 """
 
 from __future__ import annotations
@@ -27,7 +30,11 @@ from anonymizer.anonymize import OpenAnonymizer
 from anonymizer.detect import Detector
 from anonymizer.models import ScanResult
 
-Format = Literal["text", "docx", "pdf"]
+Format = Literal["text", "docx", "pdf", "image"]
+
+IMAGE_MAGIC = (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"II*\x00", b"MM\x00*")
+OCR_LOW_CONFIDENCE = 70.0
+_DEFAULT = object()  # "use the configured OCR engine"
 
 MAX_UNCOMPRESSED = 200 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 100
@@ -42,6 +49,8 @@ def sniff(data: bytes, filename: str | None = None) -> Format:
     """Detect the format from content; the file name is only a tie-breaker."""
     if data.startswith(b"%PDF-"):
         return "pdf"
+    if data.startswith(IMAGE_MAGIC):
+        return "image"
     if data.startswith(b"PK\x03\x04"):
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -53,8 +62,8 @@ def sniff(data: bytes, filename: str | None = None) -> Format:
     try:
         data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise DocumentError("unsupported format (expected PDF, DOCX or UTF-8 text)") from exc
-    if filename and filename.lower().endswith((".pdf", ".docx")):
+        raise DocumentError("unsupported format (expected PDF, DOCX, image or UTF-8 text)") from exc
+    if filename and filename.lower().endswith((".pdf", ".docx", ".png", ".jpg", ".jpeg", ".tif", ".tiff")):
         raise DocumentError("file content does not match its extension")
     return "text"
 
@@ -72,7 +81,39 @@ class Extracted:
 # PDF
 # ---------------------------------------------------------------------------
 
-def extract_pdf(data: bytes, min_chars_per_page: int = 20) -> Extracted:
+def _engine(ocr):
+    if ocr is _DEFAULT:
+        from anonymizer.ocr import default_engine
+        return default_engine()
+    return ocr
+
+
+def _ocr_warnings(results: dict, label: str) -> tuple[list[str], list[str]]:
+    pages = sorted(results)
+    warnings = [f"{label} read by OCR, check for recognition errors: {_ranges(pages)}"]
+    low = [n for n in pages if results[n].confidence is not None and results[n].confidence < OCR_LOW_CONFIDENCE]
+    if low:
+        warnings.append(f"low OCR confidence (< {OCR_LOW_CONFIDENCE:.0f}): {_ranges(low)}")
+    isolated = all(r.isolated for r in results.values())
+    notes = ["OCR ran locally" + (" without network access" if isolated else "")]
+    return warnings, notes
+
+
+def extract_image(data: bytes, ocr=_DEFAULT) -> Extracted:
+    from anonymizer.ocr import OCRError
+
+    engine = _engine(ocr)
+    if engine is None:
+        raise DocumentError("image requires OCR, which is not available (install tesseract-ocr-deu)")
+    try:
+        page = engine.image(data)
+    except OCRError as exc:
+        raise DocumentError(str(exc)) from exc
+    warnings, notes = _ocr_warnings({1: page}, "image")
+    return Extracted("image", page.text, warnings, pages=1, notes=notes)
+
+
+def extract_pdf(data: bytes, min_chars_per_page: int = 20, ocr=_DEFAULT) -> Extracted:
     from pypdf import PdfReader
     from pypdf.errors import PdfReadError
 
@@ -83,12 +124,24 @@ def extract_pdf(data: bytes, min_chars_per_page: int = 20) -> Extracted:
         pages = [page.extract_text() or "" for page in reader.pages]
     except PdfReadError as exc:
         raise DocumentError("unreadable PDF") from exc
-    warnings = []
+    warnings: list[str] = []
+    notes: list[str] = []
     empty = [i + 1 for i, p in enumerate(pages) if len(p.strip()) < min_chars_per_page]
-    if empty:
+    texts = [_clean_pdf_text(p) for p in pages]
+    engine = _engine(ocr) if empty else None
+    if empty and engine is not None:
+        from anonymizer.ocr import OCRError
+        try:
+            results = engine.pdf_pages(data, empty)
+        except OCRError as exc:
+            raise DocumentError(str(exc)) from exc
+        for number, page in results.items():
+            texts[number - 1] = page.text
+        warnings, notes = _ocr_warnings(results, "pages")
+    elif empty:
         warnings.append(f"pages without text layer (scan? OCR required): {_ranges(empty)}")
-    text = "\f".join(_clean_pdf_text(p) for p in pages)  # \f = page break
-    return Extracted("pdf", text, warnings, pages=len(pages))
+    text = "\f".join(texts)  # \f = page break
+    return Extracted("pdf", text, warnings, pages=len(pages), notes=notes)
 
 
 def _clean_pdf_text(text: str) -> str:
@@ -262,6 +315,8 @@ def extract(data: bytes, filename: str | None = None) -> Extracted:
         return extract_pdf(data)
     if fmt == "docx":
         return extract_docx(data)
+    if fmt == "image":
+        return extract_image(data)
     return Extracted("text", data.decode("utf-8"))
 
 

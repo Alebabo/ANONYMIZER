@@ -80,8 +80,9 @@ def test_sniff_by_content_not_name():
     assert sniff("Hallo".encode(), "brief.txt") == "text"
     with pytest.raises(DocumentError):
         sniff("Hallo".encode(), "brief.pdf")  # extension lies
+    assert sniff(b"\x89PNG\r\n\x1a\n\x00\x00", "bild.txt") == "image"  # images go to local OCR
     with pytest.raises(DocumentError):
-        sniff(b"\x89PNG\r\n\x1a\n\x00\x00", "bild.png")
+        sniff("Hallo".encode(), "bild.png")  # extension lies
 
 
 def test_zip_that_is_not_docx_is_rejected():

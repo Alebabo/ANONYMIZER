@@ -126,3 +126,11 @@ from 500,000 to 20,000 rows (`packages/core/scripts/ner_prune_base.py`), parser,
 string store emptied (`packages/core/scripts/ner_compact.py`), NER component fine-tuned. The tok2vec, tagger,
 morphologizer and attribute_ruler components and the remaining vectors are unchanged from the original. The MIT
 licence text: https://github.com/explosion/spacy-models/blob/master/LICENSE.
+
+## OCR: Tesseract, pdfium, xterm.js, node-pty
+
+- Tesseract OCR and its German language data (`tesseract-ocr`, `tesseract-ocr-deu`), Apache-2.0,
+  https://github.com/tesseract-ocr/tesseract. Installed as a system package, not redistributed in this repository.
+- pypdfium2 (Apache-2.0 / BSD-3-Clause) with PDFium (BSD-3-Clause/Apache-2.0), used to render scanned PDF pages.
+- Pillow (MIT-CMU / HPND), image conversion for OCR.
+- Arca prototype: xterm.js (`@xterm/xterm`, `@xterm/addon-fit`, MIT), node-pty (MIT), ws (MIT).
