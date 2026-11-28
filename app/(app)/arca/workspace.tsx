@@ -64,9 +64,18 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const short = (key: string, v: string) =>
     key === "dokumente" && v.length > 280 ? `${v.slice(0, 280)} …` : v;
   const visible = tables.visible;
+  // Vorschläge für den Chat: einer mit einem Klarnamen aus B, damit die Pseudonymisierung sichtbar wird.
+  const firstClient = String(tables.vault[0]?.mandant ?? "").trim();
+  const suggestions = [
+    "Welche Mandate haben den höchsten Streitwert? Nenne die drei größten.",
+    firstClient ? `Fasse das Mandat von ${firstClient} in drei Sätzen zusammen.` : "Fasse das erste Mandat in drei Sätzen zusammen.",
+    "Welche Fristen, Termine oder offenen Risiken stehen in den freigegebenen Daten?",
+  ];
+
   return (
-    <>
-      <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+     <div className="min-w-0 space-y-4">
+      <div className="space-y-4">
         <Widget title="B · Vertraulich" description="vault.db · Originaldaten. Spalten anhaken, die nach A sollen.">
           <TableScroll minWidth={0}>
             <Table className="table-auto">
@@ -206,15 +215,6 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
         </Widget>
       )}
 
-      <Widget title="Claude" description="Chat mit deinem eigenen Claude-Abo. Fragen werden vor dem Senden pseudonymisiert; du siehst, was an Claude geht und welche Abfragen Claude auf visible.db macht.">
-        {tables.released ? <Chat url={terminalUrl} /> : (
-          <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
-            <Lock className="h-5 w-5" aria-hidden />
-            Erst freigeben
-          </div>
-        )}
-      </Widget>
-
       <Widget title="Audit-Log" description="vault.db · Freigaben, Widerrufe, Uploads und jede Frage an Claude (pseudonymisiert), mit Person">
           <ul className="space-y-1 text-xs">
             {tables.audit.map(e => (
@@ -237,6 +237,17 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
             {!tables.audit.length && <li className="text-muted-foreground">Noch keine Freigabe</li>}
           </ul>
       </Widget>
-    </>
+     </div>
+
+      <Widget title="Claude" className="lg:sticky lg:top-4 lg:h-[calc(100vh-9rem)] lg:self-start"
+              description="Eigenes Claude-Abo. Fragen werden vor dem Senden pseudonymisiert; sichtbar ist, was an Claude geht und welche Abfragen Claude auf A macht.">
+        {tables.released ? <Chat url={terminalUrl} suggestions={suggestions} /> : (
+          <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
+            <Lock className="h-5 w-5" aria-hidden />
+            Erst Spalten anonymisieren und freigeben
+          </div>
+        )}
+      </Widget>
+    </div>
   );
 }

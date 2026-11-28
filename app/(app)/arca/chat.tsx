@@ -102,7 +102,7 @@ function AssistantBubble({ item, onToggle }: { item: Extract<Item, { kind: "assi
   );
 }
 
-export function Chat({ url }: { url: string }) {
+export function Chat({ url, suggestions = [] }: { url: string; suggestions?: string[] }) {
   const socket = useRef<WebSocket | null>(null);
   const list = useRef<HTMLDivElement | null>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -184,8 +184,8 @@ export function Chat({ url }: { url: string }) {
     return () => clearTimeout(timer);
   }, [input]);
 
-  const ask = () => {
-    const text = input.trim();
+  const ask = (preset?: string) => {
+    const text = (preset ?? input).trim();
     if (!text || busy || !connected || !auth?.loggedIn) return;
     push({ kind: "user", original: text });
     send({ type: "chat", text });
@@ -209,7 +209,7 @@ export function Chat({ url }: { url: string }) {
 
   const loggedOut = auth && !auth.loggedIn;
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-[30rem] flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className={cn("rounded-md px-2 py-0.5", connected ? "bg-light-green text-dark-green" : "bg-muted text-muted-foreground")}>
           {connected ? "verbunden" : "nicht verbunden"}
@@ -260,10 +260,10 @@ export function Chat({ url }: { url: string }) {
         </div>
       )}
 
-      <div ref={list} className="bg-background h-[28rem] space-y-3 overflow-y-auto rounded-md border p-3" aria-live="polite">
+      <div ref={list} className="bg-background min-h-[16rem] flex-1 space-y-3 overflow-y-auto rounded-md border p-3" aria-live="polite">
         {!items.length && (
-          <p className="text-muted-foreground py-12 text-center text-sm">
-            Frag Claude etwas zu den freigegebenen Daten, z. B. „Welche Mandate haben einen Streitwert über 1 Mio. €?“
+          <p className="text-muted-foreground py-8 text-center text-sm">
+            Frag Claude etwas zu den freigegebenen Daten oder nimm einen Vorschlag unten.
           </p>
         )}
         {items.map((item, i) => {
@@ -291,6 +291,18 @@ export function Chat({ url }: { url: string }) {
       </div>
 
       <div className="space-y-2">
+        {suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" aria-label="Fragevorschläge">
+            {suggestions.map(q => (
+              <button key={q} type="button" onClick={() => ask(q)}
+                      disabled={busy || !connected || !auth?.loggedIn}
+                      title="Wird wie jede Frage vor dem Senden pseudonymisiert"
+                      className="border-border-contrast hover:bg-accent rounded-full border px-3 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50">
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea value={input} onChange={e => setInput(e.target.value)} rows={3}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }}
                   disabled={!connected || !!loggedOut}
@@ -302,7 +314,7 @@ export function Chat({ url }: { url: string }) {
               <Square className="mr-1 h-3.5 w-3.5" aria-hidden />Stopp
             </Button>
           ) : (
-            <Button size="sm" onClick={ask} disabled={!input.trim() || !connected || !auth?.loggedIn}>
+            <Button size="sm" onClick={() => ask()} disabled={!input.trim() || !connected || !auth?.loggedIn}>
               <Send className="mr-1 h-3.5 w-3.5" aria-hidden />Senden
             </Button>
           )}
