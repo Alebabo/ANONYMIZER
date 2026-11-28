@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Bot, ChevronRight, Database, LogIn, RotateCcw, Send, Square, User } from "lucide-react";
+import { ArrowUp, ChevronRight, Database, LogIn, RotateCcw, Square, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ArcaSpan } from "@/lib/arca-api";
 import { cn } from "@/lib/utils";
@@ -38,44 +38,76 @@ function pretty(text: string): string {
   try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
 }
 
-function toolSummary(item: Extract<Item, { kind: "tool" }>): string {
-  if (typeof item.input.sql === "string") return item.input.sql;
-  if (typeof item.input.table === "string") return item.input.table;
-  return Object.keys(item.input).length ? JSON.stringify(item.input) : "";
+/** Tabellen, die ein Tool-Aufruf liest: aus dem SQL (FROM/JOIN), aus "table" oder aus dem Ergebnis von list_tables. */
+export function toolTables(name: string, input: Record<string, unknown>, result?: string): string[] {
+  const out = new Set<string>();
+  if (typeof input.table === "string") out.add(input.table);
+  if (typeof input.sql === "string") {
+    for (const m of input.sql.matchAll(/\b(?:from|join)\s+["`\[]?([A-Za-z_][\w]*)/gi)) {
+      if (!/^(pragma_|sqlite_|select$)/i.test(m[1]!)) out.add(m[1]!);
+    }
+  }
+  if (name === "list_tables") {
+    try { for (const t of JSON.parse(result ?? "").tables ?? []) out.add(String(t)); } catch { /* kein JSON */ }
+  }
+  return [...out];
 }
 
-function rowCount(result?: string): string | null {
+function toolFacts(item: Extract<Item, { kind: "tool" }>): { columns: string[]; rows: number | null; truncated: boolean; error: string | null } {
   try {
-    const r = JSON.parse(result ?? "");
-    if (Array.isArray(r.rows)) return `${r.rows.length} Zeile(n)${r.truncated ? ", gekürzt" : ""}`;
-    if (Array.isArray(r.tables)) return `${r.tables.length} Tabelle(n)`;
-    if (r.error) return "abgelehnt";
-  } catch { /* kein JSON */ }
-  return null;
+    const r = JSON.parse(item.result ?? "");
+    return {
+      columns: Array.isArray(r.columns) ? r.columns.map(String).filter((c: string) => c !== "zeile") : [],
+      rows: Array.isArray(r.rows) ? r.rows.length : typeof r.rows === "number" ? r.rows : null,
+      truncated: !!r.truncated,
+      error: typeof r.error === "string" ? r.error : null,
+    };
+  } catch {
+    return { columns: [], rows: null, truncated: false, error: null };
+  }
 }
+
+const TOOL_LABEL: Record<string, string> = {
+  list_tables: "Tabellen aufgelistet", describe_table: "Tabelle angesehen", query: "Daten abgefragt",
+};
 
 function ToolCard({ item }: { item: Extract<Item, { kind: "tool" }> }) {
-  const count = rowCount(item.result);
+  const tables = toolTables(item.name, item.input, item.result);
+  const facts = toolFacts(item);
+  const failed = item.isError || !!facts.error;
+  const status = item.result === undefined ? "läuft …"
+    : failed ? "abgelehnt"
+    : facts.rows != null ? `${facts.rows} Zeile(n)${facts.truncated ? ", gekürzt" : ""}` : "fertig";
   return (
-    <details className="border-border bg-card group rounded-md border text-xs">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2">
+    <details className="group text-xs">
+      <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1 py-0.5">
         <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" aria-hidden />
         <Database className="text-dark-violet h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="font-medium">Tool: {item.name}</span>
-        <code className="text-muted-foreground truncate font-mono">{toolSummary(item)}</code>
-        <span className={cn("ml-auto shrink-0", item.isError ? "text-dark-red" : "text-muted-foreground")}>
-          {item.result === undefined ? "läuft …" : item.isError ? "Fehler" : count ?? "fertig"}
-        </span>
+        <span>{TOOL_LABEL[item.name] ?? item.name}</span>
+        {tables.map(t => (
+          <span key={t} className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono">
+            <Table2 className="h-3 w-3" aria-hidden />{t}
+          </span>
+        ))}
+        {facts.columns.length > 0 && <span>· Spalten: {facts.columns.join(", ")}</span>}
+        <span className={cn(failed && "text-dark-red")}>· {status}</span>
       </summary>
-      <div className="space-y-2 border-t px-3 py-2">
-        <div>
-          <p className="text-muted-foreground mb-1">Eingabe (von Claude)</p>
-          <pre className="bg-muted overflow-x-auto rounded p-2 font-mono whitespace-pre-wrap">{JSON.stringify(item.input, null, 2)}</pre>
-        </div>
+      <div className="border-border mt-1 ml-5 space-y-2 border-l pl-3">
+        {typeof item.input.sql === "string" ? (
+          <div>
+            <p className="text-muted-foreground mb-1">SQL von Claude</p>
+            <pre className="bg-muted overflow-x-auto rounded-md p-2 font-mono whitespace-pre-wrap">{item.input.sql}</pre>
+          </div>
+        ) : Object.keys(item.input).length > 0 && (
+          <div>
+            <p className="text-muted-foreground mb-1">Eingabe von Claude</p>
+            <pre className="bg-muted overflow-x-auto rounded-md p-2 font-mono whitespace-pre-wrap">{JSON.stringify(item.input, null, 2)}</pre>
+          </div>
+        )}
         {item.result !== undefined && (
           <div>
-            <p className="text-muted-foreground mb-1">Ergebnis (aus visible.db, so an Claude gegeben)</p>
-            <pre className="bg-muted max-h-72 overflow-auto rounded p-2 font-mono whitespace-pre-wrap">{pretty(item.result)}</pre>
+            <p className="text-muted-foreground mb-1">Ergebnis aus visible.db (so hat Claude es bekommen)</p>
+            <ResultView text={item.result} />
           </div>
         )}
       </div>
@@ -83,21 +115,44 @@ function ToolCard({ item }: { item: Extract<Item, { kind: "tool" }> }) {
   );
 }
 
-function AssistantBubble({ item, onToggle }: { item: Extract<Item, { kind: "assistant" }>; onToggle: () => void }) {
+/** Abfrageergebnis als schlichte Tabelle; alles andere als JSON. */
+function ResultView({ text }: { text: string }) {
+  let data: { columns?: unknown; rows?: unknown } | null = null;
+  try { data = JSON.parse(text); } catch { /* kein JSON */ }
+  if (data && Array.isArray(data.columns) && Array.isArray(data.rows)) {
+    const cols = data.columns.map(String);
+    const rows = data.rows as unknown[][];
+    const cell = "border-border border px-1.5 py-0.5 text-left align-top font-normal whitespace-nowrap";
+    return (
+      <div className="border-border max-h-72 overflow-auto border">
+        <table className="w-max min-w-full border-collapse font-mono text-xs">
+          <thead className="bg-muted sticky top-0"><tr>{cols.map((c, i) => <th key={i} className={cell}>{c}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>{r.map((v, j) => (
+                <td key={j} title={String(v ?? "")} className={cn(cell, "max-w-[20rem] overflow-hidden text-ellipsis")}>{String(v ?? "")}</td>
+              ))}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  return <pre className="bg-muted max-h-72 overflow-auto rounded-md p-2 font-mono whitespace-pre-wrap">{pretty(text)}</pre>;
+}
+
+function AssistantMessage({ item, onToggle }: { item: Extract<Item, { kind: "assistant" }>; onToggle: () => void }) {
   const shown = item.plain ?? { text: item.text, spans: tokenSpans(item.text) };
   return (
-    <div className="flex gap-2">
-      <Bot className="text-muted-foreground mt-1 h-4 w-4 shrink-0" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <div className="bg-muted rounded-lg px-3 py-2 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">
-          <Highlighted value={shown.text} spans={shown.spans} markdown />
-        </div>
-        {tokenSpans(item.text).length > 0 && (
-          <button type="button" onClick={onToggle} className="text-link hover:text-link-hover mt-1 text-xs">
-            {item.plain ? "Tokens anzeigen (wie von Claude)" : "Klarnamen anzeigen (nur hier, lokal)"}
-          </button>
-        )}
+    <div className="text-[15px] leading-7">
+      <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">
+        <Highlighted value={shown.text} spans={shown.spans} markdown />
       </div>
+      {tokenSpans(item.text).length > 0 && (
+        <button type="button" onClick={onToggle} className="text-muted-foreground hover:text-foreground mt-1 text-xs underline-offset-2 hover:underline">
+          {item.plain ? "Tokens anzeigen (wie von Claude)" : "Klarnamen anzeigen (nur hier, lokal)"}
+        </button>
+      )}
     </div>
   );
 }
@@ -208,123 +263,126 @@ export function Chat({ url, suggestions = [] }: { url: string; suggestions?: str
   };
 
   const loggedOut = auth && !auth.loggedIn;
+  const canSend = connected && !!auth?.loggedIn && !busy;
+  const dot = (ok: boolean) => <span className={cn("inline-block h-1.5 w-1.5 rounded-full", ok ? "bg-dark-green" : "bg-dark-yellow")} />;
   return (
-    <div className="flex h-full min-h-[30rem] flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className={cn("rounded-md px-2 py-0.5", connected ? "bg-light-green text-dark-green" : "bg-muted text-muted-foreground")}>
-          {connected ? "verbunden" : "nicht verbunden"}
-        </span>
-        {auth && (
-          <span className={cn("rounded-md px-2 py-0.5", auth.loggedIn ? "bg-light-green text-dark-green" : "bg-light-yellow text-dark-yellow")}>
-            {auth.loggedIn ? "bei Claude angemeldet" : "bei Claude nicht angemeldet"}
-          </span>
-        )}
-        {mcp && <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5">Arca-Daten: {mcp === "connected" ? "verbunden" : mcp}</span>}
-        <span className="text-muted-foreground">Claude sieht nur visible.db (nur SELECT), keine weiteren Werkzeuge.</span>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={() => send({ type: "reset" })} disabled={!connected || busy}>
-          <RotateCcw className="mr-1 h-3.5 w-3.5" aria-hidden />Neues Gespräch
-        </Button>
+    <div className="flex h-full min-h-[30rem] flex-col">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-2 text-xs">
+        <span className="inline-flex items-center gap-1.5">{dot(connected)}{connected ? "verbunden" : "nicht verbunden"}</span>
+        {auth && <span className="inline-flex items-center gap-1.5">{dot(auth.loggedIn)}{auth.loggedIn ? "bei Claude angemeldet" : "nicht angemeldet"}</span>}
+        {mcp && <span className="inline-flex items-center gap-1.5">{dot(mcp === "connected")}Arca-Daten {mcp === "connected" ? "verbunden" : mcp}</span>}
+        <button type="button" onClick={() => send({ type: "reset" })} disabled={!connected || busy}
+                className="hover:text-foreground ml-auto inline-flex items-center gap-1 disabled:opacity-50">
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden />Neues Gespräch
+        </button>
       </div>
 
-      {closed && <p className="bg-light-yellow text-dark-yellow rounded-md px-3 py-2 text-xs">{closed}</p>}
+      <div ref={list} className="min-h-0 flex-1 overflow-y-auto" aria-live="polite">
+        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+          {closed && <p className="bg-light-yellow text-dark-yellow rounded-xl px-3 py-2 text-xs">{closed}</p>}
 
-      {loggedOut && (
-        <div className="border-dark-blue bg-light-blue/40 space-y-2 rounded-md border p-3 text-xs">
-          <p className="font-medium">Mit deinem eigenen Claude-Konto anmelden (einmalig)</p>
-          {!login?.started ? (
-            <>
-              <Button size="sm" onClick={() => { setLogin({ url: null, started: true }); send({ type: "login_start" }); }}>
-                <LogIn className="mr-1 h-3.5 w-3.5" aria-hidden />Anmeldung starten
-              </Button>
-              {login?.message && <p className="text-dark-red">{login.message}</p>}
-            </>
-          ) : (
-            <>
-              <p>
-                1.{" "}
-                {login.url
-                  ? <a href={login.url} target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover underline">Anmeldeseite öffnen</a>
-                  : "Anmeldeseite wird vorbereitet …"}
-                , anmelden und den angezeigten Code kopieren.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <span>2.</span>
-                <input value={code} onChange={e => setCode(e.target.value)} placeholder="Code hier einfügen" autoComplete="off"
-                       spellCheck={false} className="border-input bg-background h-8 min-w-[18rem] flex-1 rounded-md border px-2 font-mono" />
-                <Button size="sm" disabled={!login.url || code.trim().length < 20 || /\s/.test(code.trim())}
-                        onClick={() => { send({ type: "auth_code", text: code }); setCode(""); }}>Code senden</Button>
-              </div>
-              <p className="text-muted-foreground">Jeder neue Anmeldeversuch macht den vorherigen Code ungültig. Die Anmeldung bleibt für dich gespeichert.</p>
-            </>
+          {loggedOut && (
+            <div className="border-border space-y-2 rounded-2xl border p-4 text-sm">
+              <p className="font-medium">Mit deinem eigenen Claude-Konto anmelden (einmalig)</p>
+              {!login?.started ? (
+                <>
+                  <Button size="sm" onClick={() => { setLogin({ url: null, started: true }); send({ type: "login_start" }); }}>
+                    <LogIn className="mr-1 h-3.5 w-3.5" aria-hidden />Anmeldung starten
+                  </Button>
+                  {login?.message && <p className="text-dark-red text-xs">{login.message}</p>}
+                </>
+              ) : (
+                <>
+                  <p className="text-xs">
+                    1.{" "}
+                    {login.url
+                      ? <a href={login.url} target="_blank" rel="noopener noreferrer" className="text-link hover:text-link-hover underline">Anmeldeseite öffnen</a>
+                      : "Anmeldeseite wird vorbereitet …"}
+                    , anmelden und den angezeigten Code kopieren.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span>2.</span>
+                    <input value={code} onChange={e => setCode(e.target.value)} placeholder="Code hier einfügen" autoComplete="off"
+                           spellCheck={false} className="border-input bg-background h-8 min-w-[14rem] flex-1 rounded-lg border px-2 font-mono" />
+                    <Button size="sm" disabled={!login.url || code.trim().length < 20 || /\s/.test(code.trim())}
+                            onClick={() => { send({ type: "auth_code", text: code }); setCode(""); }}>Code senden</Button>
+                  </div>
+                  <p className="text-muted-foreground text-xs">Jeder neue Anmeldeversuch macht den vorherigen Code ungültig. Die Anmeldung bleibt für dich gespeichert.</p>
+                </>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      <div ref={list} className="bg-background min-h-[16rem] flex-1 space-y-3 overflow-y-auto rounded-md border p-3" aria-live="polite">
-        {!items.length && (
-          <p className="text-muted-foreground py-8 text-center text-sm">
-            Frag Claude etwas zu den freigegebenen Daten oder nimm einen Vorschlag unten.
-          </p>
-        )}
-        {items.map((item, i) => {
-          if (item.kind === "user") return (
-            <div key={i} className="flex justify-end gap-2">
-              <div className="max-w-[80%] space-y-1">
-                <div className="bg-light-blue/50 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">{item.original}</div>
-                <p className="text-muted-foreground text-right text-xs">
+          {!items.length && !loggedOut && (
+            <div className="space-y-6 pt-[8vh] text-center">
+              <h2 className="text-2xl font-medium">Was möchtest du über die freigegebenen Mandate wissen?</h2>
+              <p className="text-muted-foreground text-sm">Namen darfst du normal schreiben. Claude bekommt sie nur als Tokens und sieht ausschließlich Tabelle A.</p>
+              {suggestions.length > 0 && (
+                <div className="grid gap-2 text-left sm:grid-cols-3" aria-label="Fragevorschläge">
+                  {suggestions.map(q => (
+                    <button key={q} type="button" onClick={() => ask(q)} disabled={!canSend}
+                            className="border-border hover:bg-muted rounded-2xl border p-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {items.map((item, i) => {
+            if (item.kind === "user") return (
+              <div key={i} className="flex flex-col items-end gap-1">
+                <div className="bg-muted max-w-[85%] rounded-3xl px-4 py-2.5 text-[15px] whitespace-pre-wrap">{item.original}</div>
+                <p className="text-muted-foreground max-w-[85%] text-right text-xs">
                   {item.sent === undefined ? "wird pseudonymisiert …" : (
-                    <>An Claude gesendet: <span className="font-mono"><Highlighted value={item.sent} spans={tokenSpans(item.sent)} /></span>
+                    <>an Claude: <span className="font-mono"><Highlighted value={item.sent} spans={tokenSpans(item.sent)} /></span>
                       {item.hints?.length ? <span className="text-dark-yellow"> · Prüfhinweis: {item.hints.join(", ")}</span> : null}</>
                   )}
                 </p>
               </div>
-              <User className="text-muted-foreground mt-1 h-4 w-4 shrink-0" aria-hidden />
-            </div>
-          );
-          if (item.kind === "tool") return <div key={i} className="pl-6"><ToolCard item={item} /></div>;
-          if (item.kind === "assistant") return <AssistantBubble key={i} item={item} onToggle={() => toggle(i)} />;
-          return (
-            <p key={i} className={cn("pl-6 text-xs", item.tone === "error" ? "text-dark-red" : "text-muted-foreground")}>{item.text}</p>
-          );
-        })}
-        {busy && <p className="text-muted-foreground pl-6 text-xs">Claude arbeitet …</p>}
+            );
+            if (item.kind === "tool") return <ToolCard key={i} item={item} />;
+            if (item.kind === "assistant") return <AssistantMessage key={i} item={item} onToggle={() => toggle(i)} />;
+            return <p key={i} className={cn("text-xs", item.tone === "error" ? "text-dark-red" : "text-muted-foreground")}>{item.text}</p>;
+          })}
+          {busy && <p className="text-muted-foreground animate-pulse text-sm">Claude denkt nach …</p>}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        {suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5" aria-label="Fragevorschläge">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-2">
+        {items.length > 0 && suggestions.length > 0 && !busy && (
+          <div className="mb-2 flex gap-1.5 overflow-x-auto" aria-label="Fragevorschläge">
             {suggestions.map(q => (
-              <button key={q} type="button" onClick={() => ask(q)}
-                      disabled={busy || !connected || !auth?.loggedIn}
-                      title="Wird wie jede Frage vor dem Senden pseudonymisiert"
-                      className="border-border-contrast hover:bg-accent rounded-full border px-3 py-1 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50">
-                {q}
-              </button>
+              <button key={q} type="button" onClick={() => ask(q)} disabled={!canSend}
+                      className="border-border hover:bg-muted shrink-0 rounded-full border px-3 py-1 text-xs disabled:opacity-50">{q}</button>
             ))}
           </div>
         )}
-        <textarea value={input} onChange={e => setInput(e.target.value)} rows={3}
-                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }}
-                  disabled={!connected || !!loggedOut}
-                  placeholder={loggedOut ? "Erst bei Claude anmelden" : "Frage an Claude, gern mit Klarnamen. Enter sendet, Umschalt+Enter neue Zeile."}
-                  className="border-input bg-background w-full rounded-md border p-2 text-sm disabled:opacity-60" />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="border-border bg-background focus-within:border-border-contrast flex items-end gap-2 rounded-3xl border px-4 py-2 shadow-sm">
+          <textarea value={input} onChange={e => setInput(e.target.value)} rows={1}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }}
+                    disabled={!connected || !!loggedOut}
+                    placeholder={loggedOut ? "Erst bei Claude anmelden" : "Frage an Claude …"}
+                    className="field-sizing-content max-h-48 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none disabled:opacity-60" />
           {busy ? (
-            <Button size="sm" variant="destructive-secondary" onClick={() => send({ type: "stop" })}>
-              <Square className="mr-1 h-3.5 w-3.5" aria-hidden />Stopp
-            </Button>
+            <button type="button" onClick={() => send({ type: "stop" })} aria-label="Stopp"
+                    className="bg-foreground text-background mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+              <Square className="h-3.5 w-3.5" aria-hidden />
+            </button>
           ) : (
-            <Button size="sm" onClick={() => ask()} disabled={!input.trim() || !connected || !auth?.loggedIn}>
-              <Send className="mr-1 h-3.5 w-3.5" aria-hidden />Senden
-            </Button>
-          )}
-          {preview && preview.source === input && (
-            <span className="text-muted-foreground min-w-0 flex-1 text-xs">
-              Claude bekommt: <span className="font-mono"><Highlighted value={preview.text} spans={preview.spans} /></span>
-              {preview.hints.length > 0 && <span className="text-dark-yellow"> · Prüfhinweis: {preview.hints.join(", ")}</span>}
-            </span>
+            <button type="button" onClick={() => ask()} disabled={!input.trim() || !canSend} aria-label="Senden"
+                    className="bg-foreground text-background mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full disabled:opacity-30">
+              <ArrowUp className="h-4 w-4" aria-hidden />
+            </button>
           )}
         </div>
+        <p className="text-muted-foreground min-h-5 px-2 pt-1.5 pb-1 text-xs">
+          {preview && preview.source === input ? (
+            <>Claude bekommt: <span className="font-mono"><Highlighted value={preview.text} spans={preview.spans} /></span>
+              {preview.hints.length > 0 && <span className="text-dark-yellow"> · Prüfhinweis: {preview.hints.join(", ")}</span>}</>
+          ) : "Enter sendet, Umschalt+Enter neue Zeile. Claude sieht nur Tabelle A (nur lesend)."}
+        </p>
       </div>
     </div>
   );

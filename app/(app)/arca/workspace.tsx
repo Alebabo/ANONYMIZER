@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { FileUp, Lock } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { Columns2, FileUp, Lock, MessageSquare, Table2 } from "lucide-react";
 import { Widget, stamp } from "@/components/widgets";
 import { Button } from "@/components/ui/button";
 import type { ArcaOptions, ArcaPreview, ArcaTables } from "@/lib/arca-api";
@@ -51,6 +51,14 @@ function Grid({ head, rows, titles, selected }: {
   );
 }
 
+type View = "data" | "chat" | "split";
+const VIEWS: { key: View; label: string; icon: typeof Table2 }[] = [
+  { key: "data", label: "Daten", icon: Table2 },
+  { key: "chat", label: "Chat", icon: MessageSquare },
+  { key: "split", label: "Geteilt", icon: Columns2 },
+];
+const VIEW_KEY = "arca-view";
+
 export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; terminalUrl: string }) {
   const router = useRouter();
   const [selected, setSelected] = useState<string[]>([]);
@@ -60,6 +68,18 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   const [pending, start] = useTransition();
   const [options, setOptions] = useState<ArcaOptions>({ dates: "month", money: "range" });
   const [confirmed, setConfirmed] = useState(false);
+  // Ansicht merken (nur im Browser; ohne Speicher Standard: Daten, nach Freigabe Chat).
+  const [view, setView] = useState<View>(tables.released ? "chat" : "data");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "data" || saved === "chat" || saved === "split") setView(saved);
+    } catch { /* kein Speicher: Standard */ }
+  }, []);
+  const choose = (v: View) => {
+    setView(v);
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ }
+  };
 
   const label = (key: string) => tables.columns.find(c => c.key === key)?.label ?? key;
   const toggle = (key: string) =>
@@ -98,8 +118,18 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
   ];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-     <div className="min-w-0 space-y-4">
+    <div className="space-y-4">
+    <div role="tablist" aria-label="Ansicht" className="bg-muted inline-flex rounded-lg p-1 text-sm">
+      {VIEWS.map(v => (
+        <button key={v.key} type="button" role="tab" aria-selected={view === v.key} onClick={() => choose(v.key)}
+                className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1",
+                  view === v.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+          <v.icon className="h-4 w-4" aria-hidden />{v.label}
+        </button>
+      ))}
+    </div>
+    <div className={cn("grid gap-4", view === "split" && "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]")}>
+     <div className={cn("min-w-0 space-y-4", view === "chat" && "hidden")}>
       <div className="space-y-4">
         <Widget title="B · Vertraulich" description="vault.db · Originaldaten. Spalten anhaken, die nach A sollen.">
           <Grid
@@ -226,15 +256,20 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
       </Widget>
      </div>
 
-      <Widget title="Claude" className="lg:sticky lg:top-4 lg:h-[calc(100vh-9rem)] lg:self-start"
-              description="Eigenes Claude-Abo. Fragen werden vor dem Senden pseudonymisiert; sichtbar ist, was an Claude geht und welche Abfragen Claude auf A macht.">
+      {/* Der Chat bleibt beim Umschalten eingehängt (nur ausgeblendet), damit das Gespräch erhalten bleibt. */}
+      <section aria-label="Claude"
+               className={cn("bg-card min-w-0 rounded-xl border py-3",
+                 view === "data" && "hidden",
+                 view === "chat" && "h-[calc(100vh-11rem)] min-h-[32rem]",
+                 view === "split" && "h-[calc(100vh-11rem)] min-h-[32rem] lg:sticky lg:top-4 lg:self-start")}>
         {tables.released ? <Chat url={terminalUrl} suggestions={suggestions} /> : (
-          <div className="bg-muted text-muted-foreground flex h-64 flex-col items-center justify-center gap-2 rounded-md text-sm">
+          <div className="text-muted-foreground flex h-full min-h-64 flex-col items-center justify-center gap-2 text-sm">
             <Lock className="h-5 w-5" aria-hidden />
-            Erst Spalten anonymisieren und freigeben
+            Erst in „Daten“ Spalten anonymisieren und freigeben
           </div>
         )}
-      </Widget>
+      </section>
+    </div>
     </div>
   );
 }
