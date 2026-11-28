@@ -2,10 +2,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { FileUp, Lock } from "lucide-react";
-import { TableScroll } from "@/components/app-shell";
 import { Widget, stamp } from "@/components/widgets";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ArcaOptions, ArcaPreview, ArcaTables } from "@/lib/arca-api";
 import { cn } from "@/lib/utils";
 import { arcaPreview, arcaRelease, arcaRevoke, arcaUpload } from "./actions";
@@ -19,10 +17,39 @@ const ACTIONS: Record<string, [string, string]> = {
   terminal_unlock: ["Direkteingabe freigeschaltet", "text-dark-red"], terminal_lock: ["Direkteingabe gesperrt", "text-dark-green"],
 };
 
-/** Freitext breit und umbrechend, kurze Werte in einer Zeile; die Tabelle scrollt seitlich. */
-const cellClass = (key: string) => key === "sachverhalt" || key === "dokumente"
-  ? "min-w-[22rem] max-w-[32rem] align-top text-xs whitespace-normal [overflow-wrap:anywhere]"
-  : "align-top text-xs whitespace-nowrap";
+/**
+ * Schlichtes Tabellenraster wie in Excel: Linien um jede Zelle, eine Zeile pro Datensatz, lange Werte mit "…"
+ * abgeschnitten (voller Text beim Darüberfahren), graue Kopfzeile und Zeilennummern, scrollt in beide Richtungen.
+ */
+function Grid({ head, rows, titles, selected }: {
+  head: React.ReactNode[]; rows: React.ReactNode[][]; titles?: string[][]; selected?: boolean[];
+}) {
+  const cell = "border-border border px-1.5 py-0.5 text-left align-top font-normal whitespace-nowrap";
+  return (
+    <div className="max-h-[22rem] overflow-auto border-border border">
+      <table className="w-max min-w-full border-collapse text-xs">
+        <thead className="bg-muted sticky top-0 z-10">
+          <tr>
+            <th className={cn(cell, "text-muted-foreground w-8 text-right")} />
+            {head.map((h, i) => <th key={i} className={cn(cell, selected?.[i] && "bg-accent")}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r}>
+              <td className={cn(cell, "bg-muted text-muted-foreground text-right tabular-nums")}>{r + 1}</td>
+              {row.map((v, c) => (
+                <td key={c} title={titles?.[r]?.[c]} className={cn(cell, "max-w-[16rem] overflow-hidden text-ellipsis", selected?.[c] && "bg-accent/40")}>
+                  {v}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; terminalUrl: string }) {
   const router = useRouter();
@@ -61,8 +88,6 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
     setMessage(`${d.dateiname}: ${d.chars} Zeichen${d.ocr ? " per lokalem OCR" : ""} in vault.db gespeichert`);
     router.refresh();
   });
-  const short = (key: string, v: string) =>
-    key === "dokumente" && v.length > 280 ? `${v.slice(0, 280)} …` : v;
   const visible = tables.visible;
   // Vorschläge für den Chat: einer mit einem Klarnamen aus B, damit die Pseudonymisierung sichtbar wird.
   const firstClient = String(tables.vault[0]?.mandant ?? "").trim();
@@ -77,34 +102,18 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
      <div className="min-w-0 space-y-4">
       <div className="space-y-4">
         <Widget title="B · Vertraulich" description="vault.db · Originaldaten. Spalten anhaken, die nach A sollen.">
-          <TableScroll minWidth={0}>
-            <Table className="table-auto">
-              <TableHeader>
-                <TableRow>
-                  {tables.columns.map(c => (
-                    <TableHead key={c.key} className="text-xs">
-                      <label className="inline-flex cursor-pointer items-center gap-1.5">
-                        <input type="checkbox" checked={selected.includes(c.key)} onChange={() => toggle(c.key)}
-                               aria-label={`${c.label} nach A übernehmen`} />
-                        {c.label}
-                      </label>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tables.vault.map(row => (
-                  <TableRow key={String(row.id)}>
-                    {tables.columns.map(c => (
-                      <TableCell key={c.key} className={cn(cellClass(c.key), selected.includes(c.key) && "bg-muted/60")}>
-                        {short(c.key, String(row[c.key] ?? ""))}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableScroll>
+          <Grid
+            head={tables.columns.map(c => (
+              <label key={c.key} className="inline-flex cursor-pointer items-center gap-1">
+                <input type="checkbox" checked={selected.includes(c.key)} onChange={() => toggle(c.key)}
+                       aria-label={`${c.label} nach A übernehmen`} />
+                {c.label}
+              </label>
+            ))}
+            selected={tables.columns.map(c => selected.includes(c.key))}
+            rows={tables.vault.map(row => tables.columns.map(c => String(row[c.key] ?? "")))}
+            titles={tables.vault.map(row => tables.columns.map(c => String(row[c.key] ?? "")))}
+          />
         </Widget>
 
         <Widget title="A · KI-sichtbar"
@@ -116,39 +125,17 @@ export function ArcaWorkspace({ tables, terminalUrl }: { tables: ArcaTables; ter
                 ? <span className="bg-light-green text-dark-green rounded-md px-2 py-0.5 text-xs">freigegeben</span>
                 : <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">leer</span>}
           </div>
-          <TableScroll minWidth={0}>
-            {preview ? (
-              <Table className="table-auto">
-                <TableHeader>
-                  <TableRow>{preview.columns.map(c => <TableHead key={c} className="text-xs">{label(c)}</TableHead>)}</TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.rows.map(r => (
-                    <TableRow key={r.zeile}>
-                      {preview.columns.map(c => (
-                        <TableCell key={c} className={cellClass(c)}><Highlighted {...r.cells[c]!} /></TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : visible.columns.length ? (
-              <Table className="table-auto">
-                <TableHeader>
-                  <TableRow>{visible.columns.map(c => <TableHead key={c} className="text-xs">{c === "zeile" ? "#" : label(c)}</TableHead>)}</TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visible.rows.map(r => (
-                    <TableRow key={String(r[0])}>
-                      {r.map((v, i) => <TableCell key={i} className={cellClass(visible.columns[i]!)}>{String(v ?? "")}</TableCell>)}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="text-muted-foreground py-8 text-center text-xs">Noch nichts freigegeben. visible.db ist leer.</p>
-            )}
-          </TableScroll>
+          {preview ? (
+            <Grid head={preview.columns.map(label)}
+                  rows={preview.rows.map(r => preview.columns.map(c => <Highlighted key={c} {...r.cells[c]!} />))}
+                  titles={preview.rows.map(r => preview.columns.map(c => r.cells[c]!.value))} />
+          ) : visible.columns.length ? (
+            <Grid head={visible.columns.slice(1).map(label)}
+                  rows={visible.rows.map(r => r.slice(1).map(v => String(v ?? "")))}
+                  titles={visible.rows.map(r => r.slice(1).map(v => String(v ?? "")))} />
+          ) : (
+            <p className="text-muted-foreground py-8 text-center text-xs">Noch nichts freigegeben. visible.db ist leer.</p>
+          )}
         </Widget>
       </div>
 
